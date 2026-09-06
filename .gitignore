@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Env / secrets
+.env
+.env.*
+*.pem
+
+# AWS CDK
+infra/cdk.out/
+infra/.cdk.staging/
+
+# Node / dashboard
+dashboard/node_modules/
+dashboard/.next/
+dashboard/.vercel/
+
+# Eval results (regenerated, not source of truth)
+evals/results/*.json
+
+# Local data artifacts
+*.pkl
+*.pickle
+
+# OS
+.DS_Store
