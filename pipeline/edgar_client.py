@@ -147,7 +147,15 @@ def store_filing(
 
 
 def ingest_company(s3_client: BaseClient, bucket: str, ticker: str) -> list[str]:
-    """Download and store all target filings for one company.
+    """Download and store all target filings for one company (S3 only).
+
+    Standalone convenience wrapper for one-off/manual ingestion of a single
+    company. scripts/bootstrap_corpus.py does NOT call this -- it inlines
+    the same cik/list/download/store sequence itself because it needs the
+    downloaded HTML content (to process/chunk/embed per filing, not just
+    the S3 key) and per-filing fault isolation (continue past one bad
+    filing instead of aborting the whole ticker), neither of which this
+    function's narrower S3-keys-only contract supports.
 
     Args:
         s3_client: A boto3 S3 client.
