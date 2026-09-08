@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant U as MCP Client (Claude Desktop)
+    participant M as server/main.py (FastAPI + MCP)
+    participant S as search_filings.py
+    participant PC as Pinecone (finrag-filings)
+    participant T as Bedrock Titan Embeddings V2
+
+    U->>M: call search_sec_filings(query)
+    M->>S: build_search_filings_answer(query)
+    S->>T: embed_fn(query)
+    T-->>S: query embedding vector
+    S->>PC: query(vector, top_k=5, include_metadata=True)
+    PC-->>S: top 5 matches with metadata
+    S->>S: format citations {ticker, filing_type, period, page}
+    S-->>M: {answer, citations, cost_usd=0.0, latency_ms}
+    M-->>U: response rendered in chat
+
+    Note over S,PC: Week 1 scope: direct retrieval only.<br/>No query rewriting, hybrid BM25, reranking,<br/>generation model, or numerical verification yet -- Week 2.

@@ -1,0 +1,32 @@
+sequenceDiagram
+    participant U as MCP Client (Claude Desktop / Cursor)
+    participant GW as API Gateway
+    participant Cog as cognito_validator.py
+    participant Q as query_rewriter.py
+    participant BM as BM25 (in-memory index)
+    participant PC as Pinecone
+    participant R as reranker.py (CrossEncoder, container Lambda)
+    participant G as answer_generator.py
+    participant V as numerical_verifier.py
+    participant L as logger.py
+
+    U->>GW: call search_sec_filings (JSON-RPC over HTTP/SSE) + Bearer token
+    GW->>Cog: forward request
+    Cog->>Cog: fetch JWKS, validate signature/expiry/scope
+    Cog-->>GW: 401 if invalid
+    Cog->>Q: forward validated query
+    Q->>Q: Haiku rewrite (expand tickers, extract dates)
+    par parallel retrieval
+        Q->>BM: keyword search -> top 10
+        Q->>PC: dense search on rewritten query embedding -> top 10
+    end
+    Q->>Q: merge + dedupe by chunk_id -> up to 20 candidates
+    Q->>R: (query, chunk_text) pairs
+    R-->>Q: top 5 chunks by true relevance
+    Q->>G: top 5 chunks + original query
+    G->>G: Sonnet Converse API, cite every claim
+    G->>V: draft answer with citations
+    V->>V: extract numbers, verify against source chunks verbatim
+    V-->>U: verified answer + citations + cost_usd + latency_ms
+    V->>L: log stage-by-stage breakdown
+    L->>L: write to DynamoDB + CloudWatch

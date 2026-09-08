@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant EB as EventBridge (weekly cron)
+    participant E as edgar_client.py
+    participant S3R as S3 (finrag-raw-filings)
+    participant H as html_processor.py
+    participant S3P as S3 (finrag-processed-filings)
+    participant C as chunker.py
+    participant Sy as sync_pinecone.py
+    participant T as Bedrock Titan Embeddings V2
+    participant PC as Pinecone (finrag-filings index)
+
+    EB->>E: trigger ingestion
+    E->>E: GET sec.gov/files/company_tickers.json (ticker -> CIK)
+    E->>E: GET data.sec.gov/submissions/CIK{cik}.json (list filings)
+    E->>E: GET sec.gov/Archives/edgar/data/... (download HTML)
+    E->>S3R: store {ticker}/{filing_type}/{date}.htm
+    H->>S3R: read filing HTML
+    H->>H: BeautifulSoup text block extraction
+    H->>H: pandas.read_html table extraction
+    H->>S3P: store {text_blocks, tables, metadata}.json
+    C->>S3P: read processed JSON
+    C->>C: hierarchical chunk (parent 1500w / child 400w / table)
+    Sy->>C: read chunks
+    Sy->>T: embed chunk text (InvokeModel)
+    T-->>Sy: embedding vector (1024-dim)
+    Sy->>PC: upsert(id, vector, metadata)
+    Note over PC: corpus ready for queries
