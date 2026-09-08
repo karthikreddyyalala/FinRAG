@@ -1,0 +1,8 @@
+{
+  "app": "python -m infra.app",
+  "watch": {
+    "include": ["infra/**"],
+    "exclude": ["infra/cdk.out/**"]
+  },
+  "context": {}
+}
