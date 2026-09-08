@@ -7,7 +7,8 @@ tool proves the retrieval -> citation plumbing works end to end first.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from mcp.server import MCPServer
 

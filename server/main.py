@@ -6,10 +6,10 @@ query rewriting, hybrid search, reranking, or generation model yet.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from functools import lru_cache, partial
-from typing import Any, Callable
+from typing import Any
 
 import boto3
 from fastapi import FastAPI
