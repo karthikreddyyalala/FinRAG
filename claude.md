@@ -385,12 +385,18 @@ Flow:   metadata lookup + brief summarization, no full RAG pipeline
 
 ## Phase 6: Target Corpus
 
-Start with 20 companies in Week 1. Expand to 50 by Week 2.
+Start with 20 companies in Week 1. Expanded to 50 in Week 2.
 
 Tech (5): NVDA, AAPL, MSFT, GOOGL, META
 EV/Auto (5): TSLA, F, GM, RIVN, LCID
 Finance (5): JPM, BAC, GS, MS, V
 Healthcare (5): JNJ, PFE, UNH, ABBV, MRK
+Energy (5): XOM, CVX, COP, SLB, OXY
+Consumer Retail (5): WMT, COST, HD, TGT, LOW
+Industrials (5): BA, CAT, GE, HON, UPS
+Telecom (5): T, VZ, TMUS, CMCSA, CHTR
+Media (5): DIS, NFLX, WBD, PARA, SPOT
+Semiconductors (5): AMD, INTC, QCOM, TXN, AVGO
 
 Per company ingest:
 - Last 4 quarters of 10-Q (quarterly reports)
@@ -422,13 +428,13 @@ STOP after Week 1. Verify Claude Desktop returns answers before starting Week 2.
 ### Week 2: Retrieval Quality
 
 Tasks in order:
-- [ ] query_rewriter.py: Haiku-powered query expansion
-- [ ] hybrid_retriever.py: parallel BM25 + Pinecone with merge/dedup
-- [ ] reranker.py: CrossEncoder top 20 → top 5
-- [ ] numerical_verifier.py: number extraction + source verification
-- [ ] citation formatter in answer_generator.py
-- [ ] Expand corpus to 50 companies
-- [ ] Test 20 manual financial questions, check citation accuracy
+- [x] query_rewriter.py: Haiku-powered query expansion
+- [x] hybrid_retriever.py: parallel BM25 + Pinecone with merge/dedup
+- [x] reranker.py: CrossEncoder top 20 → top 5
+- [x] numerical_verifier.py: number extraction + source verification
+- [x] citation formatter in answer_generator.py
+- [x] Expand corpus to 50 companies
+- [ ] Test 20 manual financial questions, check citation accuracy (Task 9 -- manual, needs live deploy)
 
 ### Week 3: Eval Harness
 
@@ -558,14 +564,21 @@ If any service approaches $10, stop and investigate before continuing.
 ## Phase 11: Current State (Update Every Session)
 
 ```
-Current week: 1
-Last completed: repo init, GitHub push, plan written
-Next task: Task 1 (project scaffolding) of docs/superpowers/plans/2026-09-06-week1-foundation.md
-Blockers: none
-Eval scores: not yet available
+Current week: 2 (code complete, push pending)
+Last completed: all 8 automated Week 2 tasks -- query_rewriter, hybrid BM25+Pinecone,
+  CrossEncoder reranker, numerical_verifier, answer_generator, wired into search_filings,
+  50-company corpus expansion (bootstrap_corpus.py) + BM25 index built at end of bootstrap
+Branch: week2-retrieval-quality (8 commits ahead of origin, push pending)
+Next task: Task 9 (manual) -- deploy reranker container Lambda, run bootstrap_corpus.py
+  against live AWS/Pinecone, then test 20 manual financial questions in Claude Desktop
+Blockers: none (code complete; needs live AWS deploy to run Task 9)
+Eval scores: not yet available (Week 3)
 Latest ragas faithfulness: N/A
 Latest numerical_accuracy: N/A
 Cost per query: N/A
+Test status: 32 unit tests passing; 3 tests skipped due to missing local deps
+  (mangum, responses, aws_cdk -- pre-existing env issue, not regressions)
+New diagram: diagrams/week2-query-sequence.mmd (full four-stage pipeline)
 ```
 
 ---

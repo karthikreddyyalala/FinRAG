@@ -1,7 +1,8 @@
+import os
 from unittest.mock import MagicMock, patch
 
 from pipeline.edgar_client import FilingMetadata
-from scripts.bootstrap_corpus import TARGET_TICKERS, bootstrap_ticker
+from scripts.bootstrap_corpus import TARGET_TICKERS, bootstrap_ticker, main
 
 
 @patch("scripts.bootstrap_corpus.sync_chunks_to_pinecone")
@@ -29,14 +30,31 @@ def test_bootstrap_ticker_runs_full_pipeline_per_filing(
     mock_chunk.return_value = [{"chunk_id": "c1", "text": "x"}]
     mock_sync.return_value = 1
 
-    total = bootstrap_ticker(MagicMock(), MagicMock(), MagicMock(), "NVDA")
+    total, chunks = bootstrap_ticker(MagicMock(), MagicMock(), MagicMock(), "NVDA")
 
     assert total == 1
+    assert chunks == [{"chunk_id": "c1", "text": "x"}]
     mock_list.assert_called_once_with("NVDA", 1045810)
     mock_download.assert_called_once_with(filing)
     mock_sync.assert_called_once()
 
 
-def test_target_tickers_has_exactly_twenty_companies():
-    assert len(TARGET_TICKERS) == 20
-    assert len(set(TARGET_TICKERS)) == 20  # no duplicates
+def test_target_tickers_has_exactly_fifty_companies():
+    assert len(TARGET_TICKERS) == 50
+    assert len(set(TARGET_TICKERS)) == 50  # no duplicates
+
+
+@patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
+@patch("scripts.bootstrap_corpus.bootstrap_ticker")
+@patch("scripts.bootstrap_corpus.get_pinecone_index")
+@patch("scripts.bootstrap_corpus.boto3")
+def test_main_builds_bm25_index_after_all_tickers(
+    mock_boto3, mock_get_index, mock_bootstrap_ticker, mock_build_bm25
+):
+    mock_bootstrap_ticker.return_value = (5, [{"chunk_id": "c1", "text": "x"}])
+    os.environ["PINECONE_API_KEY"] = "test-key"
+
+    main()
+
+    assert mock_bootstrap_ticker.call_count == len(TARGET_TICKERS)
+    mock_build_bm25.assert_called_once()

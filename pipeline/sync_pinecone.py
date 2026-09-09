@@ -5,9 +5,11 @@ Uses the `pinecone` package (not the deprecated `pinecone-client`).
 from __future__ import annotations
 
 import json
+import pickle
 from typing import Any
 
 from pinecone import Pinecone
+from rank_bm25 import BM25Okapi
 
 TITAN_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSIONS = 1024
@@ -93,3 +95,47 @@ def get_pinecone_index(api_key: str, index_name: str) -> Any:
     """
     pc = Pinecone(api_key=api_key)
     return pc.Index(index_name)
+
+
+def build_and_store_bm25_index(
+    s3_client: Any, bucket: str, key: str, chunks: list[dict[str, Any]]
+) -> None:
+    """Build a BM25 keyword index from chunk text and pickle it to S3.
+
+    BM25Okapi has no persistence of its own, so the index and its source
+    chunks are pickled together -- a BM25 hit resolves straight to full
+    chunk metadata without a second lookup at query time.
+
+    Args:
+        s3_client: A boto3 S3 client.
+        bucket: Destination bucket (finrag-processed-filings).
+        key: S3 key to store the pickled index at.
+        chunks: All chunks across the corpus, from chunker.chunk_filing().
+    """
+    # ponytail: basic whitespace tokenization (no stemming/stopwords);
+    # upgrade to spacy/nltk in Week 3 if query quality metrics warrant
+    tokenized = [c["text"].lower().split() for c in chunks]
+    bm25 = BM25Okapi(tokenized)
+    # pickle is safe here: only ever written by this project's own ingestion
+    # pipeline and read back by its own query-time code -- no untrusted data path
+    payload = pickle.dumps({"bm25": bm25, "chunks": chunks})
+    s3_client.put_object(Bucket=bucket, Key=key, Body=payload)
+
+
+def load_bm25_index(
+    s3_client: Any, bucket: str, key: str
+) -> tuple[BM25Okapi, list[dict[str, Any]]]:
+    """Load a pickled BM25 index and its source chunks from S3.
+
+    Args:
+        s3_client: A boto3 S3 client.
+        bucket: Bucket the index was stored in.
+        key: S3 key the index was stored at.
+
+    Returns:
+        (bm25_index, chunks) -- chunks[i] is the source chunk for the i-th
+        entry in bm25_index's internal corpus, in the same order.
+    """
+    obj = s3_client.get_object(Bucket=bucket, Key=key)
+    payload = pickle.loads(obj["Body"].read())
+    return payload["bm25"], payload["chunks"]
