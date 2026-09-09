@@ -1,0 +1,56 @@
+sequenceDiagram
+    participant U as MCP Client (Claude Desktop / Cursor)
+    participant M as server/main.py (FastAPI + MCP)
+    participant S as search_filings.py
+    participant QR as query_rewriter.py
+    participant HR as hybrid_retriever.py
+    participant BM as BM25 (in-memory, S3-loaded)
+    participant PC as Pinecone (finrag-filings)
+    participant RR as reranker.py
+    participant AG as answer_generator.py
+    participant NV as numerical_verifier.py
+    participant BH as Bedrock (Haiku 4.5)
+    participant BS as Bedrock (Sonnet 4.5)
+    participant T as Bedrock Titan Embeddings V2
+
+    U->>M: call search_sec_filings(query)
+    M->>S: search_filings_answer(query, ...)
+
+    S->>QR: rewrite_query(query)
+    QR->>BH: Converse API -- expand tickers, extract time constraints
+    BH-->>QR: rewritten query
+    QR-->>S: expanded query string
+
+    par Hybrid Retrieval (parallel threads)
+        S->>HR: hybrid_retrieve(query, expanded_query, ...)
+        HR->>BM: BM25.get_scores(tokenised query) -- top 10
+        BM-->>HR: BM25 hits (chunk dicts + scores)
+        HR->>T: embed_fn(expanded_query)
+        T-->>HR: 1024-dim embedding vector
+        HR->>PC: index.query(vector, top_k=10, include_metadata=True)
+        PC-->>HR: dense hits with metadata
+        HR->>HR: merge + deduplicate by chunk_id (up to 20 unique)
+        HR-->>S: 20 candidate chunks
+    end
+
+    S->>RR: rerank(query, chunks, top_k=5)
+    RR->>RR: CrossEncoder score each (query, chunk_text) pair
+    RR-->>S: top 5 chunks ranked by relevance
+
+    S->>AG: generate_answer(query, top_chunks)
+    AG->>BS: Converse API -- cite every claim [TICKER filing_type period p.N]
+    BS-->>AG: answer draft with inline citations
+    AG-->>S: {answer, citations}
+
+    S->>NV: verify(answer, top_chunks)
+    NV->>NV: extract all numbers (regex); normalise formats
+    NV->>NV: check each number appears in source chunks
+    NV-->>S: verified answer (ungrounded numbers replaced with qualifier)
+
+    S-->>M: {answer, citations, cost_usd, latency_ms}
+    M-->>U: response rendered with citations in chat
+
+    Note over QR,BH: Haiku -- cheap, fast query expansion
+    Note over AG,BS: Sonnet -- best financial reasoning + citation formatting
+    Note over NV: Catches hallucinated numbers before they reach the user
+    Note over HR: BM25 index loaded once at Lambda startup from S3 (bm25/index.pkl)
