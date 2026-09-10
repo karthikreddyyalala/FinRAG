@@ -564,21 +564,26 @@ If any service approaches $10, stop and investigate before continuing.
 ## Phase 11: Current State (Update Every Session)
 
 ```
-Current week: 2 (code complete, push pending)
-Last completed: all 8 automated Week 2 tasks -- query_rewriter, hybrid BM25+Pinecone,
-  CrossEncoder reranker, numerical_verifier, answer_generator, wired into search_filings,
-  50-company corpus expansion (bootstrap_corpus.py) + BM25 index built at end of bootstrap
-Branch: week2-retrieval-quality (8 commits ahead of origin, push pending)
-Next task: Task 9 (manual) -- deploy reranker container Lambda, run bootstrap_corpus.py
-  against live AWS/Pinecone, then test 20 manual financial questions in Claude Desktop
-Blockers: none (code complete; needs live AWS deploy to run Task 9)
-Eval scores: not yet available (Week 3)
+Current week: 3 (eval harness code complete)
+Last completed: Week 3 eval harness -- evals/ skeleton, ragas_metrics.py (lazy imports
+  to bypass Python 3.13 vertexai import bug), numerical_accuracy.py (custom metric),
+  financebench download script, custom_150.json (150 questions), run_ci_eval.py (30Q CI),
+  run_eval.py (full 300Q), .github/workflows/ci.yml (lint + test + 30Q eval + PR comment),
+  diagrams/week3-eval-sequence.mmd; pyproject.toml: disabled broken phoenix pytest plugin
+Branch: week2-retrieval-quality (still on this branch; need to push + open PR)
+Next task (manual, needs bootstrap):
+  1. Run: caffeinate -i python3 scripts/bootstrap_corpus.py
+  2. Run: python3 scripts/download_financebench.py
+  3. Verify custom_150.json ground truths against live data (replace VERIFY_AFTER_BOOTSTRAP)
+  4. Run: python3 evals/run_ci_eval.py (first live eval)
+  5. Push branch + open PR to main
+Blockers: bootstrap not yet run (user will run at home)
+Eval scores: not yet available (needs live bootstrap)
 Latest ragas faithfulness: N/A
 Latest numerical_accuracy: N/A
 Cost per query: N/A
-Test status: 32 unit tests passing; 3 tests skipped due to missing local deps
-  (mangum, responses, aws_cdk -- pre-existing env issue, not regressions)
-New diagram: diagrams/week2-query-sequence.mmd (full four-stage pipeline)
+Test status: 40 unit tests passing (8 new numerical_accuracy tests; phoenix plugin disabled)
+New diagrams: diagrams/week2-query-sequence.mmd, diagrams/week3-eval-sequence.mmd
 ```
 
 ---
