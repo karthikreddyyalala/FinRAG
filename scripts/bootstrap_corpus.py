@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import multiprocessing as mp
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,21 @@ PROCESSED_BUCKET = "finrag-processed-filings"
 BM25_INDEX_KEY = "bm25/index.pkl"
 CHUNK_CACHE = Path(__file__).parent.parent / "evals" / "results" / "chunk_cache"
 
+# Companies FinanceBench asks about. They get deep history; the rest of the
+# corpus exists for breadth and keeps the cheap default depth.
+BENCHMARK_TICKERS = {
+    "MMM", "ATVI", "ADBE", "AES", "AMZN", "AMCR", "AMD", "AXP", "AWK", "BBY",
+    "SQ", "BA", "KO", "GLW", "COST", "CVS", "FL", "GIS", "JNJ", "JPM", "KHC",
+    "LMT", "MGM", "MSFT", "NFLX", "NKE", "PYPL", "PEP", "PFE", "ULTA", "VZ",
+    "WMT",
+}
+
+# A 10-K filed in early 2019 reports FY2018, so 8 annual reports reach back
+# roughly a decade -- the span FinanceBench actually asks about (2015-2024).
+# Ingesting only the last 2 left the corpus holding 2025-2026 filings, which
+# could not answer 147 of the 150 questions.
+BENCHMARK_FORM_LIMITS = {"10-K": 8, "10-Q": 12, "8-K": 8}
+
 
 def bootstrap_ticker(
     s3_client: Any, bedrock_client: Any, pinecone_index: Any, ticker: str
@@ -70,10 +86,12 @@ def bootstrap_ticker(
         once after every ticker is done.
     """
     cik = get_cik_for_ticker(ticker)
-    filings = list_filings(ticker, cik)
+    limits = BENCHMARK_FORM_LIMITS if ticker in BENCHMARK_TICKERS else None
+    filings = list_filings(ticker, cik, form_limits=limits)
 
     total_chunks = 0
     all_chunks: list[dict[str, Any]] = []
+    failures: list[str] = []
     for filing in filings:
         try:
             html = download_filing(filing).decode("utf-8", errors="ignore")
@@ -91,8 +109,17 @@ def bootstrap_ticker(
             )
             all_chunks.extend(chunks)
         except Exception as e:
-            print(f"{ticker} {filing.accession_number}: failed - {e}")
+            print(f"{ticker} {filing.accession_number}: failed - {e}", flush=True)
+            failures.append(filing.accession_number)
             continue
+
+    if failures:
+        # Raise rather than return partial data: main() caches whatever comes
+        # back and treats a cached ticker as done, so a silent partial result
+        # is indistinguishable from a complete one on the next run.
+        raise RuntimeError(
+            f"{ticker}: {len(failures)}/{len(filings)} filings failed ({failures})"
+        )
 
     return total_chunks, all_chunks
 
@@ -116,6 +143,7 @@ def main() -> None:
         api_key=os.environ["PINECONE_API_KEY"], index_name="finrag-filings"
     )
 
+    failed_tickers: list[str] = []
     for i, ticker in enumerate(TARGET_TICKERS, 1):
         cache_file = CHUNK_CACHE / f"{ticker}.json"
         if cache_file.exists():
@@ -124,7 +152,14 @@ def main() -> None:
             continue
 
         print(f"[{i}/{len(TARGET_TICKERS)}] {ticker}: ingesting ...", flush=True)
-        count, chunks = bootstrap_ticker(s3_client, bedrock_client, pinecone_index, ticker)
+        try:
+            count, chunks = bootstrap_ticker(s3_client, bedrock_client, pinecone_index, ticker)
+        except Exception as e:
+            # No cache file on failure -- the next run must retry this ticker
+            # rather than skip it as already done.
+            failed_tickers.append(ticker)
+            print(f"[{i}/{len(TARGET_TICKERS)}] {ticker}: FAILED - {e}", flush=True)
+            continue
         cache_file.write_text(json.dumps(chunks))
         print(f"[{i}/{len(TARGET_TICKERS)}] {ticker}: synced {count} chunks", flush=True)
 
@@ -139,11 +174,28 @@ def main() -> None:
 
     covered = {c.get("ticker") for c in corpus_chunks}
     missing = set(TARGET_TICKERS) - covered
-    if missing:
-        print(f"WARNING: no chunks for {sorted(missing)} -- BM25 will not cover them")
 
-    build_and_store_bm25_index(s3_client, PROCESSED_BUCKET, BM25_INDEX_KEY, corpus_chunks)
-    print(f"BM25 index built from {len(corpus_chunks)} chunks across {len(covered)} companies")
+    # Publishing an index built from a partial run REPLACES the good one in
+    # S3, silently shrinking retrieval coverage -- a failed run would leave
+    # the corpus worse than before it started. Only publish on a full pass.
+    if failed_tickers:
+        print(
+            f"\nSkipping BM25 publish: {len(failed_tickers)} ticker(s) failed, so an "
+            f"index built now would cover only {len(covered)} companies and would "
+            f"overwrite the existing one in S3."
+        )
+    else:
+        build_and_store_bm25_index(s3_client, PROCESSED_BUCKET, BM25_INDEX_KEY, corpus_chunks)
+        print(f"BM25 index built from {len(corpus_chunks)} chunks across {len(covered)} companies")
+
+    if failed_tickers:
+        print(f"\nFAILED ({len(failed_tickers)}): {sorted(failed_tickers)}")
+        print("Re-run to retry them -- cached tickers are skipped.")
+    if missing:
+        print(f"NOT IN CORPUS ({len(missing)}): {sorted(missing)}")
+    if failed_tickers or missing:
+        sys.exit(1)
+    print(f"\nComplete: all {len(TARGET_TICKERS)} tickers ingested.")
 
 
 if __name__ == "__main__":

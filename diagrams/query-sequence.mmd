@@ -1,32 +1,68 @@
+%% Query pipeline as actually implemented. Supersedes week2-query-sequence.mmd,
+%% which predates the OpenAI embedding switch and the reranker rewrite.
 sequenceDiagram
+    autonumber
     participant U as MCP Client (Claude Desktop / Cursor)
-    participant GW as API Gateway
-    participant Cog as cognito_validator.py
-    participant Q as query_rewriter.py
-    participant BM as BM25 (in-memory index)
-    participant PC as Pinecone
-    participant R as reranker.py (CrossEncoder, container Lambda)
-    participant G as answer_generator.py
-    participant V as numerical_verifier.py
-    participant L as logger.py
+    participant M as server/main.py (FastAPI + MCP)
+    participant S as search_filings.py
+    participant QR as query_rewriter.py
+    participant HR as hybrid_retriever.py
+    participant BM as BM25 (in-memory, loaded from S3)
+    participant OA as OpenAI (embeddings + gpt-4o-mini fallback)
+    participant PC as Pinecone (finrag-filings, 1536-dim)
+    participant RR as reranker.py
+    participant AG as answer_generator.py
+    participant NV as numerical_verifier.py
+    participant BR as Bedrock (Haiku 4.5 / Sonnet 4.5)
 
-    U->>GW: call search_sec_filings (JSON-RPC over HTTP/SSE) + Bearer token
-    GW->>Cog: forward request
-    Cog->>Cog: fetch JWKS, validate signature/expiry/scope
-    Cog-->>GW: 401 if invalid
-    Cog->>Q: forward validated query
-    Q->>Q: Haiku rewrite (expand tickers, extract dates)
-    par parallel retrieval
-        Q->>BM: keyword search -> top 10
-        Q->>PC: dense search on rewritten query embedding -> top 10
+    U->>M: call search_sec_filings(query)
+    M->>S: build_search_filings_answer(query, ...)
+
+    S->>QR: rewrite_query(query)
+    QR->>BR: Converse -- expand tickers, extract time constraints
+    alt Bedrock throttled or model not enabled
+        QR->>OA: gpt-4o-mini fallback
     end
-    Q->>Q: merge + dedupe by chunk_id -> up to 20 candidates
-    Q->>R: (query, chunk_text) pairs
-    R-->>Q: top 5 chunks by true relevance
-    Q->>G: top 5 chunks + original query
-    G->>G: Sonnet Converse API, cite every claim
-    G->>V: draft answer with citations
-    V->>V: extract numbers, verify against source chunks verbatim
-    V-->>U: verified answer + citations + cost_usd + latency_ms
-    V->>L: log stage-by-stage breakdown
-    L->>L: write to DynamoDB + CloudWatch
+    QR-->>S: expanded query string
+
+    par Hybrid retrieval (two threads)
+        S->>HR: hybrid_search(rewritten, ...)
+        HR->>BM: get_scores(tokenised query) -- top 10
+        BM-->>HR: keyword hits
+    and
+        HR->>OA: embed(rewritten) -- text-embedding-3-small
+        OA-->>HR: 1536-dim vector
+        HR->>PC: query(vector, top_k=10, include_metadata=True)
+        PC-->>HR: semantic hits
+    end
+
+    HR->>HR: merge INTERLEAVED by rank, dedup by chunk_id
+    Note over HR: interleaving is load-bearing -- concatenating BM25<br/>then dense meant rerank's top-k slice was always<br/>100% BM25 and every dense hit was discarded
+    HR-->>S: up to 20 candidates
+
+    S->>RR: rerank(ORIGINAL query, candidates, top_k=5)
+    alt CrossEncoder available (Lambda)
+        RR->>RR: ms-marco-MiniLM-L-6-v2 scores each (query, chunk) pair
+    else macOS + Python 3.13
+        RR->>RR: lexical overlap scorer
+        Note over RR: torch deadlocks on a mutex during the first<br/>forward pass locally; blind chunks[:k] is NOT a<br/>valid fallback since BM25 and cosine scores<br/>are not comparable across sources
+    end
+    RR-->>S: top 5 by relevance
+
+    S->>AG: generate_answer(query, top_chunks)
+    AG->>BR: Converse (Sonnet) -- cite every claim
+    alt Bedrock throttled
+        AG->>OA: gpt-4o-mini, retry w/ backoff on 429
+    end
+    AG-->>S: answer with inline [TICKER form period p.N] citations
+
+    S->>NV: verify_answer(answer, source_texts)
+    NV->>NV: regex-extract every number
+    NV->>NV: boundary-aware grounding check per number
+    Note over NV: "$1,234" is a substring of "$1,234.56" -- a naive<br/>`in` test passes fabricated figures. Replacement<br/>works by match span so an ungrounded number<br/>cannot corrupt a grounded one.
+    NV-->>S: verified answer (ungrounded figures qualified)
+
+    S-->>M: {answer, citations[{ticker,form,period,page,text}], cost_usd, latency_ms}
+    M-->>U: cited answer rendered in chat
+
+    Note over S: citations carry `text` -- the eval harness reads it<br/>as ragas `contexts`; omitting it scores every<br/>context metric as 0 against empty strings

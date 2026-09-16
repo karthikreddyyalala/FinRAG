@@ -16,7 +16,44 @@ TITAN_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSIONS = 1536
 OPENAI_EMBED_MODEL = "text-embedding-3-small"  # 1536 dims, fast, $0.02/1M tokens
 
+# OpenAI embeddings request limits. The API's ceiling is 300k tokens per
+# request, but its server-side accounting runs well above what tiktoken
+# reports for the same payload -- a batch measured at 249,174 tokens with
+# cl100k_base (the encoding the model actually uses) was rejected as 308,368,
+# a factor of 1.24. The budget therefore carries ~2x headroom rather than
+# trusting the local count. Extra requests are cheap; a rejected batch
+# silently drops a whole filing from the corpus.
+MAX_TOKENS_PER_REQUEST = 150_000
+MAX_ITEMS_PER_REQUEST = 2048
+MAX_CHARS_PER_TEXT = 6000
+
+# Observed ratio of OpenAI's server-side count to tiktoken's. Used by tests
+# to assert the budget keeps real requests under the API cap.
+OBSERVED_SERVER_TOKEN_RATIO = 1.24
+
 _openai_client = None
+_encoder = None
+
+
+def _count_tokens(text: str) -> int:
+    """Exact token count via tiktoken, with a pessimistic fallback.
+
+    Counted, not estimated: a chars/4 heuristic assumes 0.25 tokens/char, but
+    digit-dense financial tables measure up to 0.63 -- so a batch "estimated"
+    at 250k tokens really carried 613k and the API rejected the whole request.
+    tiktoken ships with the openai SDK, so this costs no new dependency.
+    """
+    global _encoder
+    if _encoder is None:
+        try:
+            import tiktoken
+
+            _encoder = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            _encoder = False  # fall back permanently rather than retry per call
+    if _encoder is False:
+        return len(text) // 2 + 1  # assume the worst-observed density
+    return len(_encoder.encode(text))
 
 
 def _get_openai_client():
@@ -36,12 +73,45 @@ def embed_text_openai(text: str) -> list[float]:
 
 
 def embed_texts_openai(texts: list[str]) -> list[list[float]]:
-    """Batch embed up to 2048 texts in one OpenAI API call."""
+    """Embed texts via OpenAI, splitting into requests that fit the API limits.
+
+    Splitting is required, not an optimization: a single large 10-K produces
+    enough chunks to exceed the 300k-token request cap, and OpenAI rejects
+    the entire call with a 400. Callers ingest filing-by-filing and swallow
+    exceptions, so an unsplit batch shows up as a company silently missing
+    from the corpus rather than as an error.
+
+    Returns one vector per input, in input order.
+    """
     client = _get_openai_client()
-    # 8191 token limit; use 6000 chars (~1500 tokens) to stay safe on dense numeric content
-    safe = [t[:6000] for t in texts]
-    resp = client.embeddings.create(input=safe, model=OPENAI_EMBED_MODEL)
-    return [item.embedding for item in sorted(resp.data, key=lambda x: x.index)]
+    # Per-input cap is 8191 tokens; 6000 chars (~1500 tokens) stays clear of
+    # it even for dense numeric tables, which tokenize far worse than prose.
+    safe = [t[:MAX_CHARS_PER_TEXT] for t in texts]
+
+    vectors: list[list[float]] = []
+    batch: list[str] = []
+    batch_tokens = 0
+
+    def flush() -> None:
+        nonlocal batch, batch_tokens
+        if not batch:
+            return
+        resp = client.embeddings.create(input=batch, model=OPENAI_EMBED_MODEL)
+        vectors.extend(item.embedding for item in sorted(resp.data, key=lambda x: x.index))
+        batch = []
+        batch_tokens = 0
+
+    for text in safe:
+        est = _count_tokens(text)
+        over_tokens = batch and batch_tokens + est > MAX_TOKENS_PER_REQUEST
+        over_items = len(batch) >= MAX_ITEMS_PER_REQUEST
+        if over_tokens or over_items:
+            flush()
+        batch.append(text)
+        batch_tokens += est
+
+    flush()
+    return vectors
 
 
 def embed_text(bedrock_client: Any, text: str, max_retries: int = 8) -> list[float]:

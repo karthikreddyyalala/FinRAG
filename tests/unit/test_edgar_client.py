@@ -76,7 +76,7 @@ def test_list_filings_selects_only_target_forms_up_to_limits():
         status=200,
     )
 
-    filings = list_filings("NVDA", 1045810, max_10q=1, max_10k=1)
+    filings = list_filings("NVDA", 1045810, form_limits={"10-Q": 1, "10-K": 1})
 
     forms = [f.form_type for f in filings]
     assert forms == ["10-Q", "10-K"]
