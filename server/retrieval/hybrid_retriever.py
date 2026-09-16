@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from itertools import zip_longest
 from typing import Any
 
 from rank_bm25 import BM25Okapi
@@ -44,17 +45,22 @@ def merge_and_dedup(
             (each a {"id", "metadata"} dict, normalized here to chunk shape).
 
     Returns:
-        Deduplicated chunks, BM25 results first, then new Pinecone results,
-        original relative order preserved within each source.
+        Deduplicated chunks interleaved by rank (BM25 #1, dense #1, BM25 #2,
+        ...). Interleaving -- rather than concatenating -- is load-bearing:
+        downstream rerank() truncates to top_k, so a concatenated list would
+        drop every dense result whenever BM25 alone fills the slice.
     """
     normalized_pinecone = [_normalize_pinecone_match(m) for m in pinecone_matches]
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
-    for chunk in [*bm25_chunks, *normalized_pinecone]:
-        chunk_id = chunk["chunk_id"]
-        if chunk_id not in seen:
-            seen.add(chunk_id)
-            merged.append(chunk)
+    for pair in zip_longest(bm25_chunks, normalized_pinecone):
+        for chunk in pair:
+            if chunk is None:
+                continue
+            chunk_id = chunk["chunk_id"]
+            if chunk_id not in seen:
+                seen.add(chunk_id)
+                merged.append(chunk)
     return merged
 
 

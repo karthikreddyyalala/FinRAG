@@ -1,4 +1,6 @@
-from evals.metrics.numerical_accuracy import numerical_accuracy, _normalise, _extract_numbers
+from pytest import approx as pytest_approx
+
+from evals.metrics.numerical_accuracy import _extract_numbers, _normalise, numerical_accuracy
 
 
 def test_normalise_billion():
@@ -40,7 +42,3 @@ def test_numerical_accuracy_format_normalisation():
     answers = ["Revenue was $26.4 billion"]
     contexts = [["Revenue was 26,400 million."]]
     assert numerical_accuracy(answers, contexts) == 1.0
-
-
-import pytest
-from pytest import approx as pytest_approx

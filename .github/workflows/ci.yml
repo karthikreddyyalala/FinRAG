@@ -49,6 +49,9 @@ jobs:
       - name: Run 30-question CI eval
         env:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          # Embeddings, ragas judging, and the Bedrock-throttle fallback all
+          # route through OpenAI -- the eval cannot run without this.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1

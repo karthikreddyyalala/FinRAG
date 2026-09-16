@@ -16,19 +16,44 @@ SYSTEM_PROMPT = (
 )
 
 
+def _is_bedrock_unavailable(exc: Exception) -> bool:
+    """True when Bedrock is throttling or the model is not enabled on this account."""
+    text = str(exc)
+    return (
+        "Throttling" in text
+        or "throttl" in text.lower()
+        or "ResourceNotFoundException" in text
+    )
+
+
+def _rewrite_openai(query: str) -> str:
+    import os
+
+    from openai import OpenAI
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    r = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": query},
+        ],
+    )
+    return r.choices[0].message.content.strip()
+
+
 def rewrite_query(bedrock_client: Any, query: str) -> str:
     """Rewrite a user query for better financial document retrieval.
 
-    Args:
-        bedrock_client: A boto3 bedrock-runtime client.
-        query: The original user query.
-
-    Returns:
-        The rewritten query text.
+    Falls back to OpenAI gpt-4o-mini if Bedrock is throttled.
     """
-    response = bedrock_client.converse(
-        modelId=HAIKU_MODEL_ID,
-        system=[{"text": SYSTEM_PROMPT}],
-        messages=[{"role": "user", "content": [{"text": query}]}],
-    )
-    return response["output"]["message"]["content"][0]["text"].strip()
+    try:
+        response = bedrock_client.converse(
+            modelId=HAIKU_MODEL_ID,
+            system=[{"text": SYSTEM_PROMPT}],
+            messages=[{"role": "user", "content": [{"text": query}]}],
+        )
+        return response["output"]["message"]["content"][0]["text"].strip()
+    except Exception as e:
+        if _is_bedrock_unavailable(e):
+            return _rewrite_openai(query)
+        raise

@@ -1,35 +1,30 @@
-"""Download FinanceBench CSV and convert to evals/datasets/financebench_150.json."""
-import csv
+"""Download FinanceBench JSONL and convert to evals/eval_data/financebench_150.json."""
 import json
-import os
-import sys
-import urllib.request
 from pathlib import Path
 
+import requests
+
 URL = (
-    "https://raw.githubusercontent.com/patronusai/financebench/main/"
-    "financebench_open_source.csv"
+    "https://huggingface.co/datasets/PatronusAI/financebench/resolve/main/"
+    "financebench_merged.jsonl"
 )
-OUT = Path(__file__).parent.parent / "evals" / "datasets" / "financebench_150.json"
+OUT = Path(__file__).parent.parent / "evals" / "eval_data" / "financebench_150.json"
 
 
 def main() -> None:
-    print(f"Downloading FinanceBench from {URL} ...")
-    with urllib.request.urlopen(URL) as resp:
-        lines = resp.read().decode("utf-8").splitlines()
-
-    reader = csv.DictReader(lines)
-    rows = list(reader)
+    print("Downloading FinanceBench from HuggingFace ...")
+    resp = requests.get(URL, timeout=30)
+    resp.raise_for_status()
+    rows = [json.loads(line) for line in resp.text.strip().splitlines()]
     print(f"  {len(rows)} rows found")
 
-    # Take first 150; keep only the fields we need
     subset = [
         {
             "question": r["question"],
             "ground_truth": r["answer"],
-            "ticker": r.get("ticker", ""),
+            "ticker": r.get("company", ""),
             "filing_type": r.get("doc_type", ""),
-            "period": r.get("period_of_report", ""),
+            "period": r.get("doc_period", ""),
         }
         for r in rows[:150]
     ]
