@@ -1,27 +1,63 @@
+%% Ingestion pipeline as actually implemented (scripts/bootstrap_corpus.py).
+%% Embeddings are OpenAI text-embedding-3-small (1536-dim), not Titan: the
+%% local fastembed/ONNX path was ~100x slower and Titan's dimensions do not
+%% match the 1536-dim Pinecone index.
 sequenceDiagram
+    autonumber
     participant EB as EventBridge (weekly cron)
+    participant B as bootstrap_corpus.py
+    participant CC as chunk_cache/ (local, per-ticker)
     participant E as edgar_client.py
     participant S3R as S3 (finrag-raw-filings)
     participant H as html_processor.py
-    participant S3P as S3 (finrag-processed-filings)
     participant C as chunker.py
     participant Sy as sync_pinecone.py
-    participant T as Bedrock Titan Embeddings V2
-    participant PC as Pinecone (finrag-filings index)
+    participant OA as OpenAI (text-embedding-3-small)
+    participant PC as Pinecone (finrag-filings, 1536-dim)
+    participant S3P as S3 (finrag-processed-filings)
 
-    EB->>E: trigger ingestion
-    E->>E: GET sec.gov/files/company_tickers.json (ticker -> CIK)
-    E->>E: GET data.sec.gov/submissions/CIK{cik}.json (list filings)
-    E->>E: GET sec.gov/Archives/edgar/data/... (download HTML)
-    E->>S3R: store {ticker}/{filing_type}/{date}.htm
-    H->>S3R: read filing HTML
-    H->>H: BeautifulSoup text block extraction
-    H->>H: pandas.read_html table extraction
-    H->>S3P: store {text_blocks, tables, metadata}.json
-    C->>S3P: read processed JSON
-    C->>C: hierarchical chunk (parent 1500w / child 400w / table)
-    Sy->>C: read chunks
-    Sy->>T: embed chunk text (InvokeModel)
-    T-->>Sy: embedding vector (1024-dim)
-    Sy->>PC: upsert(id, vector, metadata)
-    Note over PC: corpus ready for queries
+    EB->>B: trigger ingestion
+
+    loop for each of 72 tickers
+        B->>CC: cache hit for {ticker}.json?
+        alt already ingested
+            CC-->>B: cached chunks (skip -- makes the run resumable)
+        else not yet ingested
+            B->>E: get_cik_for_ticker(ticker)
+            E->>E: GET sec.gov/files/company_tickers.json
+            Note over E: lists CURRENT registrants only; acquired or<br/>renamed firms (SQ->XYZ, ATVI, FL) fall back<br/>to CIK_OVERRIDES so their filings stay reachable
+            E->>E: GET data.sec.gov/submissions/CIK{cik}.json
+
+            loop for each 10-K / 10-Q
+                E->>E: GET sec.gov/Archives/edgar/data/...
+                E->>S3R: store {ticker}/{form}/{date}.htm
+                E-->>H: filing HTML
+                H->>H: BeautifulSoup (lxml) text blocks
+                H->>H: pandas table extraction (structure preserved)
+                H-->>C: {text_blocks, tables, metadata}
+                C->>C: chunk parent 1500w / child 400w / one per table
+                C->>C: chunk_id = sha256(ticker|form|period|type|section|text)[:32]
+                Note over C: content-addressed, NOT uuid4 -- re-ingest must<br/>overwrite rather than duplicate, and BM25 ids<br/>must equal Pinecone ids for merge dedup to work
+                C-->>Sy: chunks
+                Sy->>Sy: split into <=150k-token, <=2048-item batches
+                Note over Sy: token count via tiktoken, not chars/4.<br/>OpenAI bills ~1.24x the local count, so an<br/>unsplit batch 400s and drops a whole filing
+                Sy->>OA: embeddings.create(batch)
+                OA-->>Sy: 1536-dim vectors
+                Sy->>PC: upsert(id, vector, metadata)
+            end
+
+            alt every filing succeeded
+                B->>CC: write {ticker}.json
+            else any filing failed
+                B->>B: record failure, write NO cache file
+                Note over B: a partial cache would read as "done" on the<br/>next run -- this is how 20 filings went missing
+            end
+        end
+    end
+
+    B->>CC: read every cached ticker
+    Note over B: BM25 is built over the WHOLE corpus, not just the<br/>tickers seen this run -- building from one run's<br/>chunks is what left the index covering 29 of 50
+    B->>B: BM25Okapi(tokenised corpus)
+    B->>S3P: put bm25/index.pkl {bm25, chunks}
+    B->>B: exit 1 if any ticker failed or is uncovered
+    Note over PC,S3P: corpus ready: 83,081 chunks / 71 companies

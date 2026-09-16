@@ -564,26 +564,61 @@ If any service approaches $10, stop and investigate before continuing.
 ## Phase 11: Current State (Update Every Session)
 
 ```
-Current week: 3 (eval harness code complete)
-Last completed: Week 3 eval harness -- evals/ skeleton, ragas_metrics.py (lazy imports
-  to bypass Python 3.13 vertexai import bug), numerical_accuracy.py (custom metric),
-  financebench download script, custom_150.json (150 questions), run_ci_eval.py (30Q CI),
-  run_eval.py (full 300Q), .github/workflows/ci.yml (lint + test + 30Q eval + PR comment),
-  diagrams/week3-eval-sequence.mmd; pyproject.toml: disabled broken phoenix pytest plugin
-Branch: week2-retrieval-quality (still on this branch; need to push + open PR)
-Next task (manual, needs bootstrap):
-  1. Run: caffeinate -i python3 scripts/bootstrap_corpus.py
-  2. Run: python3 scripts/download_financebench.py
-  3. Verify custom_150.json ground truths against live data (replace VERIFY_AFTER_BOOTSTRAP)
-  4. Run: python3 evals/run_ci_eval.py (first live eval)
-  5. Push branch + open PR to main
-Blockers: bootstrap not yet run (user will run at home)
-Eval scores: not yet available (needs live bootstrap)
-Latest ragas faithfulness: N/A
-Latest numerical_accuracy: N/A
-Cost per query: N/A
-Test status: 40 unit tests passing (8 new numerical_accuracy tests; phoenix plugin disabled)
-New diagrams: diagrams/week2-query-sequence.mmd, diagrams/week3-eval-sequence.mmd
+Current week: 3 -> 5 (deployment prioritized ahead of Week 4 observability)
+Branch: week3-eval-harness (1 commit ahead of main, not yet merged)
+Test status: 76 unit tests passing, ruff clean
+Corpus: 72 tickers, 83,081 chunks, 71 companies in BM25 (SPOT files 20-F, not
+  10-K/10-Q, so it has nothing to ingest -- expected, not a FinanceBench company)
+Eval scores: PENDING -- corpus rebuilt, eval not yet re-run
+```
+
+### Priority order (deployment before observability)
+
+Rationale: nothing is deployed yet, so resume bullet 3 ("Deployed AWS
+serverless... Cognito... CloudWatch") has nothing behind it. A live demo is
+worth more at a career fair than cost metrics, and Lambda also re-enables the
+real CrossEncoder reranker (torch deadlocks on macOS + Python 3.13, so it
+currently falls back to a lexical scorer locally).
+
+```
+NOW -- finish Week 3
+  [ ] Verify BM25 ids match Pinecone ids (proves hybrid dedup works)
+  [ ] SMOKE: a 3M question must return MMM chunks, not another company
+  [ ] Run full 150Q eval -> real ragas + numerical_accuracy scores
+  [ ] Update this section + README with the real numbers
+  [ ] Push branch, open PR to main
+
+NEXT -- Week 5 deployment (pulled forward)
+  [ ] infra/stacks/mcp_server_stack.py -- Lambda + API Gateway
+  [ ] Package reranker as container-image Lambda (torch > 250MB zip limit)
+  [ ] Deploy, connect Claude Desktop to the live endpoint, test 5 queries
+  [ ] Re-enable CrossEncoder on Lambda, re-run eval, compare to lexical baseline
+  [ ] mcp_tools: get_company_financials, compare_companies, get_latest_filing
+      (currently 1 of 4 tools exists)
+  [ ] auth/cognito_validator.py -- OAuth 2.1 + PKCE, JWKS validation
+  [ ] EventBridge weekly refresh -> scripts/weekly_refresh.py
+
+THEN -- Week 4 observability (deferred)
+  [ ] observability/logger.py -- per-stage cost/latency/tokens to DynamoDB
+  [ ] Bedrock prompt caching; query result caching in DynamoDB
+  [ ] Model tier routing (simple -> Haiku, comparison -> Sonnet)
+  [ ] Measure real before/after cost per query for the README claim
+  [ ] Vercel dashboard: eval scores, cost/query, latency breakdown
+
+THEN -- Week 6 polish
+  [ ] Demo video, landing page, blog post, MCP registry submission
+```
+
+### Known gaps / debt
+
+```
+- custom_150.json ground truths are placeholders (VERIFY_AFTER_BOOTSTRAP);
+  full eval currently scores FinanceBench 150 only, not the planned 300
+- CrossEncoder disabled locally (macOS + Python 3.13 torch deadlock); the
+  lexical fallback in reranker.py is a stopgap until Lambda deployment
+- infra/ has only storage_stack.py; mcp_server/pinecone/observability stacks
+  do not exist
+- Nothing is deployed to AWS; the system runs on a laptop only
 ```
 
 ---

@@ -2,6 +2,8 @@ import json
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from pipeline.edgar_client import FilingMetadata
 from scripts.bootstrap_corpus import TARGET_TICKERS, bootstrap_ticker, main
 
@@ -35,7 +37,8 @@ def test_bootstrap_ticker_runs_full_pipeline_per_filing(
 
     assert total == 1
     assert chunks == [{"chunk_id": "c1", "text": "x"}]
-    mock_list.assert_called_once_with("NVDA", 1045810)
+    # NVDA is not a FinanceBench company, so it keeps the default shallow depth
+    mock_list.assert_called_once_with("NVDA", 1045810, form_limits=None)
     mock_download.assert_called_once_with(filing)
     mock_sync.assert_called_once()
 
@@ -98,6 +101,32 @@ def test_main_builds_bm25_index_after_all_tickers(
     # BM25 must be built over every ticker's chunks, not just the last one's
     chunks_arg = mock_build_bm25.call_args[0][3]
     assert len(chunks_arg) == len(TARGET_TICKERS)
+
+
+@patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
+@patch("scripts.bootstrap_corpus.bootstrap_ticker")
+@patch("scripts.bootstrap_corpus.get_pinecone_index")
+@patch("scripts.bootstrap_corpus.boto3")
+def test_partial_run_does_not_publish_bm25(
+    mock_boto3, mock_get_index, mock_bootstrap_ticker, mock_build_bm25, tmp_path
+):
+    """Publishing an index from a partial run overwrites the good one in S3
+    and silently shrinks retrieval coverage."""
+    failing = TARGET_TICKERS[0]
+
+    def maybe_fail(s3, br, idx, ticker):
+        if ticker == failing:
+            raise RuntimeError("simulated network drop")
+        return 1, [{"chunk_id": f"{ticker}-c1", "text": "x", "ticker": ticker}]
+
+    mock_bootstrap_ticker.side_effect = maybe_fail
+    os.environ["PINECONE_API_KEY"] = "test-key"
+
+    with patch("scripts.bootstrap_corpus.CHUNK_CACHE", tmp_path / "chunks"):
+        with pytest.raises(SystemExit):
+            main()
+
+    mock_build_bm25.assert_not_called()
 
 
 @patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
