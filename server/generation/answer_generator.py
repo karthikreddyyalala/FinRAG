@@ -29,6 +29,16 @@ USER_MESSAGE_TEMPLATE = """Context:
 Question: {query}"""
 
 
+def _is_bedrock_unavailable(exc: Exception) -> bool:
+    """True when Bedrock is throttling or the model is not enabled on this account."""
+    text = str(exc)
+    return (
+        "Throttling" in text
+        or "throttl" in text.lower()
+        or "ResourceNotFoundException" in text
+    )
+
+
 def format_citation(chunk: dict[str, Any]) -> str:
     """Format a chunk's metadata as a CLAUDE.md-style inline citation.
 
@@ -69,9 +79,40 @@ def generate_answer(
         context="\n\n".join(context_blocks), query=query
     )
 
-    response = bedrock_client.converse(
-        modelId=SONNET_MODEL_ID,
-        system=[{"text": system_prompt}],
-        messages=[{"role": "user", "content": [{"text": user_message}]}],
-    )
-    return response["output"]["message"]["content"][0]["text"]
+    def _call_openai() -> str:
+        import os
+        import time
+
+        from openai import OpenAI
+
+        openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        for attempt in range(8):
+            try:
+                r = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                )
+                return r.choices[0].message.content
+            except Exception as oe:
+                if "429" in str(oe) or "rate_limit" in str(oe).lower():
+                    wait = 15 * (attempt + 1)
+                    print(f"    [rate limit] waiting {wait}s ...", flush=True)
+                    time.sleep(wait)
+                else:
+                    raise
+        raise RuntimeError("OpenAI rate limit: exhausted retries")
+
+    try:
+        response = bedrock_client.converse(
+            modelId=SONNET_MODEL_ID,
+            system=[{"text": system_prompt}],
+            messages=[{"role": "user", "content": [{"text": user_message}]}],
+        )
+        return response["output"]["message"]["content"][0]["text"]
+    except Exception as e:
+        if _is_bedrock_unavailable(e):
+            return _call_openai()
+        raise

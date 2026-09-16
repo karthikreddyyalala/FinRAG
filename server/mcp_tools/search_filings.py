@@ -59,6 +59,7 @@ def build_search_filings_answer(
             "filing_type": chunk.get("filing_type"),
             "period": chunk.get("period"),
             "page": chunk.get("page_number"),
+            "text": chunk.get("text", ""),
         }
         for chunk in top_chunks
     ]

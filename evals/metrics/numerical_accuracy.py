@@ -1,7 +1,6 @@
 """Custom metric: % of numbers in an answer that appear in source chunks."""
 import re
 
-
 _NUMBER_RE = re.compile(
     r"\$?\d[\d,]*\.?\d*\s*(?:[BMKTbmkt](?:illion|rillion)?)?\b|"
     r"\d+\.?\d*\s*%"

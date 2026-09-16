@@ -11,7 +11,9 @@ from __future__ import annotations
 import re
 
 NUMBER_PATTERN = re.compile(
-    r"\$[\d,]+(?:\.\d+)?\s?(?:billion|million|thousand|B|M|K)?"  # dollar amounts
+    # Dollar amounts. The digit run may not end on a comma -- `[\d,]+` would
+    # otherwise swallow the sentence comma in "$1,234, and costs ...".
+    r"\$\d[\d,]*(?:\.\d+)?(?:\s?(?:billion|million|thousand|B|M|K))?\b"
     r"|\d+(?:\.\d+)?%"  # percentages
     r"|\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b"  # large comma-separated numbers
 )
@@ -29,6 +31,24 @@ def extract_numbers(text: str) -> list[str]:
     return NUMBER_PATTERN.findall(text)
 
 
+def _is_grounded(number: str, sources: str) -> bool:
+    """True if `number` appears in `sources` as a whole number, not a prefix.
+
+    Plain substring matching is unsafe here: a hallucinated "$1,234" is a
+    substring of a legitimate "$1,234.56", so the check would pass and the
+    fabricated figure would reach the user. Requiring that the match not be
+    followed by a digit (or a decimal point starting more digits) closes that.
+    """
+    for match in re.finditer(re.escape(number), sources):
+        tail = sources[match.end() : match.end() + 2]
+        if tail[:1].isdigit():
+            continue
+        if tail[:1] == "." and tail[1:2].isdigit():
+            continue
+        return True
+    return False
+
+
 def verify_answer(answer: str, source_chunks: list[str]) -> str:
     """Remove any number in the answer that doesn't appear in a source chunk.
 
@@ -42,13 +62,17 @@ def verify_answer(answer: str, source_chunks: list[str]) -> str:
         note is appended -- the qualifier appears at each occurrence.
     """
     combined_sources = " ".join(source_chunks)
-    numbers = extract_numbers(answer)
-    ungrounded = [n for n in numbers if n not in combined_sources]
 
-    verified = answer
-    for number in ungrounded:
-        verified = verified.replace(
-            number, "[exact figure unavailable in retrieved context]"
+    # Rewrite right-to-left by match span so earlier offsets stay valid, and
+    # so a replacement never touches text outside the matched number. A
+    # str.replace() of "$9,999" would also corrupt a grounded "$9,999.99".
+    out = answer
+    for match in reversed(list(NUMBER_PATTERN.finditer(answer))):
+        if _is_grounded(match.group(), combined_sources):
+            continue
+        out = (
+            out[: match.start()]
+            + "[exact figure unavailable in retrieved context]"
+            + out[match.end() :]
         )
-
-    return verified
+    return out
