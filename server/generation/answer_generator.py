@@ -76,6 +76,11 @@ def format_citation(chunk: dict[str, Any]) -> str:
     return f"{base}]"
 
 
+# temperature=0 on every call in this module and in query_rewriter.py.
+# Without it, the same question through the identical pipeline produced a
+# correct, cited answer on one run and "the context does not provide this
+# figure" on the next -- financial extraction has one right answer, and
+# nothing here should be creative.
 def generate_answer(
     bedrock_client: Any, query: str, chunks: list[dict[str, Any]]
 ) -> str:
@@ -111,6 +116,7 @@ def generate_answer(
             try:
                 r = openai_client.chat.completions.create(
                     model="gpt-4o-mini",
+                    temperature=0,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message},
@@ -131,6 +137,7 @@ def generate_answer(
             modelId=SONNET_MODEL_ID,
             system=[{"text": system_prompt}],
             messages=[{"role": "user", "content": [{"text": user_message}]}],
+            inferenceConfig={"temperature": 0},
         )
         return response["output"]["message"]["content"][0]["text"]
     except Exception as e:
