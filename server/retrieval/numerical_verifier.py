@@ -31,22 +31,47 @@ def extract_numbers(text: str) -> list[str]:
     return NUMBER_PATTERN.findall(text)
 
 
-def _is_grounded(number: str, sources: str) -> bool:
-    """True if `number` appears in `sources` as a whole number, not a prefix.
+_NUMERIC_TOKEN = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
-    Plain substring matching is unsafe here: a hallucinated "$1,234" is a
-    substring of a legitimate "$1,234.56", so the check would pass and the
-    fabricated figure would reach the user. Requiring that the match not be
-    followed by a digit (or a decimal point starting more digits) closes that.
+
+def _numeric_value(token: str) -> float | None:
+    """Parse a formatted figure to its magnitude, or None if unparseable.
+
+    Magnitude, not signed value: financial tables wrap negatives in
+    parentheses -- "(1,577)" is 1,577 of cash outflow -- and an answer
+    correctly reporting the amount spent writes "$1,577".
     """
-    for match in re.finditer(re.escape(number), sources):
-        tail = sources[match.end() : match.end() + 2]
-        if tail[:1].isdigit():
-            continue
-        if tail[:1] == "." and tail[1:2].isdigit():
-            continue
-        return True
-    return False
+    digits = _NUMERIC_TOKEN.search(token)
+    if not digits:
+        return None
+    try:
+        return float(digits.group().replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _source_values(sources: str) -> set[float]:
+    """Every numeric magnitude appearing anywhere in the source chunks."""
+    values: set[float] = set()
+    for match in _NUMERIC_TOKEN.finditer(sources):
+        value = _numeric_value(match.group())
+        if value is not None:
+            values.add(value)
+    return values
+
+
+def _is_grounded(number: str, source_values: set[float]) -> bool:
+    """True if `number` matches a figure in the sources by value.
+
+    Compared numerically rather than as text. Table cells split the currency
+    symbol from the value ("$ | (1,577)") and wrap negatives in parentheses,
+    so a correct answer saying "$1,577 million" shares no literal substring
+    with its own source. Comparing values also preserves the property that
+    matching by substring lost: 1234 != 1234.56, so a fabricated "$1,234" is
+    still caught when the source only holds "$1,234.56".
+    """
+    value = _numeric_value(number)
+    return value is not None and value in source_values
 
 
 def verify_answer(answer: str, source_chunks: list[str]) -> str:
@@ -61,14 +86,14 @@ def verify_answer(answer: str, source_chunks: list[str]) -> str:
         "[exact figure unavailable in retrieved context]". No summary
         note is appended -- the qualifier appears at each occurrence.
     """
-    combined_sources = " ".join(source_chunks)
+    source_values = _source_values(" ".join(source_chunks))
 
     # Rewrite right-to-left by match span so earlier offsets stay valid, and
     # so a replacement never touches text outside the matched number. A
     # str.replace() of "$9,999" would also corrupt a grounded "$9,999.99".
     out = answer
     for match in reversed(list(NUMBER_PATTERN.finditer(answer))):
-        if _is_grounded(match.group(), combined_sources):
+        if _is_grounded(match.group(), source_values):
             continue
         out = (
             out[: match.start()]

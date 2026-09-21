@@ -18,10 +18,31 @@ from typing import Any
 
 SONNET_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
-SYSTEM_PROMPT_TEMPLATE = """Cite every claim with the exact citation format shown below.
-Never state a number not present verbatim in the provided context.
-If context is insufficient, say so explicitly. Do not guess.
-Format citations inline as shown, e.g. {example_citation}"""
+# Grounding is the hard rule; the equivalence and sign guidance exist because
+# without them the model refuses figures it has actually found. On
+# FinanceBench Q1 it retrieved "Purchases of property, plant and equipment
+# (PP&E) $(1,577)" and still answered that it could not determine capital
+# expenditure -- they are the same line item, and the parentheses are the
+# accounting sign convention, not part of the value.
+SYSTEM_PROMPT_TEMPLATE = """Answer the question using only the provided context.
+
+Grounding rules:
+- Never state a number that does not appear verbatim in the context.
+- If the context genuinely lacks the figure, say so. Do not guess.
+- Cite every claim inline, e.g. {example_citation}
+
+Reading financial statements:
+- Filings label figures with their GAAP line item, not the analyst's term for
+  them. Treat these as the same figure and answer directly:
+    capital expenditures  = "Purchases of property, plant and equipment (PP&E)"
+    revenue / top line    = "Net sales" / "Total revenues"
+    COGS                  = "Cost of sales"
+    operating cash flow   = "Net cash provided by operating activities"
+- Parentheses around a number denote a negative or a cash outflow. For a
+  question asking "how much was spent", report the magnitude: $(1,577) in a
+  cash flow statement means $1,577 million of spending.
+- Report the figure in the units the question asks for, converting between
+  millions and billions where the context states its own units."""
 
 USER_MESSAGE_TEMPLATE = """Context:
 {context}

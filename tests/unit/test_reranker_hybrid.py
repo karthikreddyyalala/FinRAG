@@ -42,6 +42,29 @@ def test_merge_dedups_by_chunk_id():
     assert len(merged) == 1, f"expected dedup to 1, got {len(merged)}"
 
 
+def test_lexical_rerank_can_use_expanded_query():
+    """The lexical fallback scores by term overlap, so it must be able to see
+    the GAAP phrasing. Otherwise it discards the very chunk dense search
+    surfaced: a question says "capital expenditure", the filing says
+    "Purchases of property, plant and equipment", and overlap is zero."""
+    chunks = [
+        {"chunk_id": "noise", "text": "deferred income taxes and other assets"},
+        {
+            "chunk_id": "correct",
+            "text": "Purchases of property, plant and equipment (PP&E) $ (1,577)",
+        },
+    ]
+    natural = "What is the FY2018 capital expenditure amount for 3M?"
+    expanded = natural + " purchases of property plant and equipment PP&E"
+
+    # Without the expansion the correct chunk has no terms in common.
+    assert rerank(natural, chunks, top_k=1)[0]["chunk_id"] != "correct"
+
+    # With it, the correct chunk ranks first.
+    top = rerank(natural, chunks, top_k=1, lexical_query=expanded)
+    assert top[0]["chunk_id"] == "correct", "expanded query did not reach the scorer"
+
+
 def test_merge_handles_uneven_source_lengths():
     """Interleaving must not drop the tail of the longer source."""
     merged = merge_and_dedup(_bm25(3), _pinecone_matches(8))
