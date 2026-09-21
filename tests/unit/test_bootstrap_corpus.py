@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pipeline.edgar_client import FilingMetadata
-from scripts.bootstrap_corpus import TARGET_TICKERS, bootstrap_ticker, main
+from scripts.bootstrap_corpus import (
+    KNOWN_UNAVAILABLE,
+    TARGET_TICKERS,
+    bootstrap_ticker,
+    main,
+)
 
 
 @patch("scripts.bootstrap_corpus.sync_chunks_to_pinecone")
@@ -96,11 +101,12 @@ def test_main_builds_bm25_index_after_all_tickers(
     with patch("scripts.bootstrap_corpus.CHUNK_CACHE", tmp_path / "chunks"):
         main()
 
-    assert mock_bootstrap_ticker.call_count == len(TARGET_TICKERS)
+    expected = len(TARGET_TICKERS) - len(KNOWN_UNAVAILABLE)
+    assert mock_bootstrap_ticker.call_count == expected
     mock_build_bm25.assert_called_once()
     # BM25 must be built over every ticker's chunks, not just the last one's
     chunks_arg = mock_build_bm25.call_args[0][3]
-    assert len(chunks_arg) == len(TARGET_TICKERS)
+    assert len(chunks_arg) == expected
 
 
 @patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
@@ -153,6 +159,10 @@ def test_main_resumes_from_cache_without_reingesting(
     with patch("scripts.bootstrap_corpus.CHUNK_CACHE", cache):
         main()
 
-    assert mock_bootstrap_ticker.call_count == len(TARGET_TICKERS) - 1
+    expected = len(TARGET_TICKERS) - len(KNOWN_UNAVAILABLE) - 1  # -1 for the cached one
+    assert mock_bootstrap_ticker.call_count == expected
     ingested = [c.args[3] for c in mock_bootstrap_ticker.call_args_list]
     assert cached_ticker not in ingested
+    # A known-unavailable ticker must never be attempted -- it would embed
+    # every filing via OpenAI before failing at upsert.
+    assert not (set(ingested) & KNOWN_UNAVAILABLE.keys())

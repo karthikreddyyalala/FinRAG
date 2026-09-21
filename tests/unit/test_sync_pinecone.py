@@ -77,12 +77,17 @@ def test_build_and_store_bm25_index_pickles_index_and_chunks():
 
     build_and_store_bm25_index(s3, "finrag-processed-filings", "bm25/index.pkl", chunks)
 
-    s3.put_object.assert_called_once()
-    call_kwargs = s3.put_object.call_args.kwargs
-    assert call_kwargs["Bucket"] == "finrag-processed-filings"
-    assert call_kwargs["Key"] == "bm25/index.pkl"
-    payload = pickle.loads(call_kwargs["Body"])
-    assert payload["chunks"] == chunks
+    # Streamed upload, not put_object(Body=pickle.dumps(...)) -- see
+    # test_bm25_memory.py for why the payload is never materialised in memory.
+    s3.upload_fileobj.assert_called_once()
+    fileobj, bucket, key = s3.upload_fileobj.call_args[0]
+    assert bucket == "finrag-processed-filings"
+    assert key == "bm25/index.pkl"
+    fileobj.seek(0)
+    payload = pickle.loads(fileobj.read())
+    # Chunks are slimmed to BM25_CHUNK_FIELDS, so compare on what is kept
+    assert [c["chunk_id"] for c in payload["chunks"]] == [c["chunk_id"] for c in chunks]
+    assert [c["text"] for c in payload["chunks"]] == [c["text"] for c in chunks]
     # Verify BM25 is callable and returns scores for all documents
     scores = payload["bm25"].get_scores(["nvidia", "revenue"])
     assert len(scores) == len(chunks)
@@ -97,12 +102,15 @@ def test_load_bm25_index_round_trips_through_pickle():
         {"chunk_id": "c3", "text": "Tesla gross margin expanded in recent quarters"},
     ]
     build_and_store_bm25_index(s3, "bucket", "key", chunks)
-    stored_body = s3.put_object.call_args.kwargs["Body"]
+    fileobj = s3.upload_fileobj.call_args[0][0]
+    fileobj.seek(0)
+    stored_body = fileobj.read()
     s3.get_object.return_value = {"Body": MagicMock(read=lambda: stored_body)}
 
     bm25, loaded_chunks = load_bm25_index(s3, "bucket", "key")
 
-    assert loaded_chunks == chunks
+    assert [c["chunk_id"] for c in loaded_chunks] == [c["chunk_id"] for c in chunks]
+    assert [c["text"] for c in loaded_chunks] == [c["text"] for c in chunks]
     # Verify BM25 is callable and returns scores
     scores = bm25.get_scores(["nvidia"])
     assert len(scores) == len(chunks)

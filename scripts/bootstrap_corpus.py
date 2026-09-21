@@ -20,6 +20,7 @@ from pipeline.chunker import chunk_filing
 from pipeline.edgar_client import download_filing, get_cik_for_ticker, list_filings, store_filing
 from pipeline.html_processor import process_filing
 from pipeline.sync_pinecone import (
+    BM25_CHUNK_FIELDS,
     build_and_store_bm25_index,
     embed_texts_openai,
     get_pinecone_index,
@@ -67,6 +68,15 @@ BENCHMARK_TICKERS = {
 # Ingesting only the last 2 left the corpus holding 2025-2026 filings, which
 # could not answer 147 of the 150 questions.
 BENCHMARK_FORM_LIMITS = {"10-K": 8, "10-Q": 12, "8-K": 8}
+
+# Tickers that cannot currently be ingested, with the reason. The BM25 publish
+# guard tolerates these so one permanently-blocked company does not prevent
+# publishing an otherwise complete index. Remove an entry once it is fixable.
+KNOWN_UNAVAILABLE = {
+    "SPOT": "foreign private issuer -- files 20-F, not 10-K/10-Q",
+    "PYPL": "Pinecone free-tier monthly write-unit cap (2M) exhausted; "
+            "resets monthly. Costs 1 FinanceBench question.",
+}
 
 
 def bootstrap_ticker(
@@ -151,6 +161,17 @@ def main() -> None:
             print(f"[{i}/{len(TARGET_TICKERS)}] {ticker}: cached ({n} chunks)", flush=True)
             continue
 
+        if ticker in KNOWN_UNAVAILABLE:
+            # Skip rather than attempt: a blocked ticker still downloads and
+            # embeds every filing before failing at upsert, so retrying it
+            # each run burns real API spend for a guaranteed failure.
+            print(
+                f"[{i}/{len(TARGET_TICKERS)}] {ticker}: skipped -- "
+                f"{KNOWN_UNAVAILABLE[ticker]}",
+                flush=True,
+            )
+            continue
+
         print(f"[{i}/{len(TARGET_TICKERS)}] {ticker}: ingesting ...", flush=True)
         try:
             count, chunks = bootstrap_ticker(s3_client, bedrock_client, pinecone_index, ticker)
@@ -166,34 +187,49 @@ def main() -> None:
     # BM25 must span the WHOLE corpus. Building it from only the tickers
     # ingested in this run is how the index ended up covering 29 of 50
     # companies after an interrupted bootstrap was resumed as a second run.
+    # Slim each ticker's chunks as it is read, not after the whole corpus is
+    # in memory. The cache is ~800MB of JSON and table chunks carry their
+    # rows twice (once serialised into `text`, once in `table_rows`), so
+    # holding the full objects first is what exhausted RAM on an 8 GB machine.
     corpus_chunks: list[dict[str, Any]] = []
     for ticker in TARGET_TICKERS:
         cache_file = CHUNK_CACHE / f"{ticker}.json"
-        if cache_file.exists():
-            corpus_chunks.extend(json.loads(cache_file.read_text()))
+        if not cache_file.exists():
+            continue
+        raw = json.loads(cache_file.read_text())
+        corpus_chunks.extend({f: c.get(f) for f in BM25_CHUNK_FIELDS} for c in raw)
+        del raw
 
     covered = {c.get("ticker") for c in corpus_chunks}
-    missing = set(TARGET_TICKERS) - covered
 
     # Publishing an index built from a partial run REPLACES the good one in
     # S3, silently shrinking retrieval coverage -- a failed run would leave
-    # the corpus worse than before it started. Only publish on a full pass.
-    if failed_tickers:
+    # the corpus worse than before it started. Only publish when every
+    # remaining gap is a documented, known-unavailable ticker.
+    blocking = [t for t in failed_tickers if t not in KNOWN_UNAVAILABLE]
+    unavailable = sorted(set(TARGET_TICKERS) - covered - set(KNOWN_UNAVAILABLE))
+
+    if blocking or unavailable:
         print(
-            f"\nSkipping BM25 publish: {len(failed_tickers)} ticker(s) failed, so an "
-            f"index built now would cover only {len(covered)} companies and would "
-            f"overwrite the existing one in S3."
+            f"\nSkipping BM25 publish: an index built now would cover only "
+            f"{len(covered)} companies and would overwrite the existing one in S3."
         )
+        if blocking:
+            print(f"  unexpected failures: {sorted(blocking)}")
+        if unavailable:
+            print(f"  uncovered and undocumented: {unavailable}")
     else:
         build_and_store_bm25_index(s3_client, PROCESSED_BUCKET, BM25_INDEX_KEY, corpus_chunks)
         print(f"BM25 index built from {len(corpus_chunks)} chunks across {len(covered)} companies")
+        for ticker in sorted(set(TARGET_TICKERS) - covered):
+            print(f"  NOTE {ticker} absent: {KNOWN_UNAVAILABLE[ticker]}")
 
-    if failed_tickers:
-        print(f"\nFAILED ({len(failed_tickers)}): {sorted(failed_tickers)}")
+    if blocking:
+        print(f"\nFAILED ({len(blocking)}): {sorted(blocking)}")
         print("Re-run to retry them -- cached tickers are skipped.")
-    if missing:
-        print(f"NOT IN CORPUS ({len(missing)}): {sorted(missing)}")
-    if failed_tickers or missing:
+    if unavailable:
+        print(f"NOT IN CORPUS ({len(unavailable)}): {unavailable}")
+    if blocking or unavailable:
         sys.exit(1)
     print(f"\nComplete: all {len(TARGET_TICKERS)} tickers ingested.")
 
