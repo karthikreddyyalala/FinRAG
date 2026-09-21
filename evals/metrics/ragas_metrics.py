@@ -42,6 +42,7 @@ def score_dataset(
         context_recall,
         faithfulness,
     )
+    from ragas.run_config import RunConfig
 
     llm, embeddings = build_ragas_config(bedrock_region)
 
@@ -54,12 +55,21 @@ def score_dataset(
         }
     )
 
+    # ragas defaults to max_workers=16. Each call carries the full question,
+    # answer, and 5 source chunks, so 16 concurrent calls exhausted the
+    # 200K TPM budget within the first ~65 of 600 scoring calls; the
+    # resulting 429 cascaded into connection errors for most of the rest of
+    # the run (398/600 failed). Low concurrency plus patient backoff trades
+    # wall-clock time for actually finishing.
+    run_config = RunConfig(max_workers=3, max_retries=15, max_wait=90, timeout=300)
+
     result = evaluate(
         dataset,
         metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
         llm=llm,
         embeddings=embeddings,
         raise_exceptions=False,
+        run_config=run_config,
     )
     df = result.to_pandas()
     metric_cols = [c for c in df.columns if df[c].dtype != object]
