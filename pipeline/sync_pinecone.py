@@ -4,6 +4,7 @@ Uses the `pinecone` package (not the deprecated `pinecone-client`).
 """
 from __future__ import annotations
 
+import io
 import json
 import pickle
 import time
@@ -26,6 +27,11 @@ OPENAI_EMBED_MODEL = "text-embedding-3-small"  # 1536 dims, fast, $0.02/1M token
 MAX_TOKENS_PER_REQUEST = 150_000
 MAX_ITEMS_PER_REQUEST = 2048
 MAX_CHARS_PER_TEXT = 6000
+
+# The only chunk fields read downstream (rerank, generation, citations, and
+# chunk_id for dedup against Pinecone). Everything else -- table_rows in
+# particular -- is dead weight in the BM25 payload.
+BM25_CHUNK_FIELDS = ("chunk_id", "text", "ticker", "filing_type", "period", "page_number")
 
 # Observed ratio of OpenAI's server-side count to tiktoken's. Used by tests
 # to assert the budget keeps real requests under the API cap.
@@ -247,10 +253,21 @@ def build_and_store_bm25_index(
     # upgrade to spacy/nltk in Week 3 if query quality metrics warrant
     tokenized = [c["text"].lower().split() for c in chunks]
     bm25 = BM25Okapi(tokenized)
-    # pickle is safe here: only ever written by this project's own ingestion
-    # pipeline and read back by its own query-time code -- no untrusted data path
-    payload = pickle.dumps({"bm25": bm25, "chunks": chunks})
-    s3_client.put_object(Bucket=bucket, Key=key, Body=payload)
+    del tokenized  # BM25Okapi keeps its own structures; free the duplicate
+
+    # Store only the fields retrieval reads. Table chunks carry their rows
+    # again in `table_rows` even though `text` already holds the serialised
+    # table, so keeping them roughly doubles the payload for no benefit.
+    slim = [{f: c.get(f) for f in BM25_CHUNK_FIELDS} for c in chunks]
+
+    # Streamed, not pickle.dumps(): a bytes blob allocates the whole payload
+    # a second time on top of the live objects. At corpus scale that is the
+    # difference between finishing and thrashing swap on an 8 GB machine.
+    # pickle is safe here -- written and read only by this project's own code.
+    buffer = io.BytesIO()
+    pickle.dump({"bm25": bm25, "chunks": slim}, buffer, protocol=pickle.HIGHEST_PROTOCOL)
+    buffer.seek(0)
+    s3_client.upload_fileobj(buffer, bucket, key)
 
 
 def load_bm25_index(

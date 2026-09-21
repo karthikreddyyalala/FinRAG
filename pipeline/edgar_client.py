@@ -53,8 +53,10 @@ def _get_with_retry(url: str, timeout: int = 15) -> Any:
     rebuilding the BM25 index over only the companies it reached -- quietly
     shrinking the corpus rather than erroring.
 
-    Only connection-level faults are retried. An HTTP error status is a real
-    answer, not a fault, and retrying it just burns SEC's rate limit.
+    Retried: connection faults, timeouts, 429 (SEC rate-limits at 10 req/s
+    and a corpus build makes hundreds of sequential requests), and 5xx.
+    Not retried: other 4xx -- a 404 is a real answer about the resource, and
+    retrying it only burns rate limit that a 429 will then charge us for.
     """
     delay = 2.0
     for attempt in range(MAX_NETWORK_RETRIES):
@@ -62,12 +64,21 @@ def _get_with_retry(url: str, timeout: int = 15) -> Any:
             response = requests.get(url, headers=_sec_headers(), timeout=timeout)
             response.raise_for_status()
             return response
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
             if attempt == MAX_NETWORK_RETRIES - 1:
                 raise
-            print(f"    network blip, retrying in {delay:.0f}s ...", flush=True)
-            time.sleep(delay)
-            delay = min(delay * 2, 30)
+            reason = type(exc).__name__
+        except requests.exceptions.HTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if not (status == 429 or (status is not None and status >= 500)):
+                raise
+            if attempt == MAX_NETWORK_RETRIES - 1:
+                raise
+            reason = f"HTTP {status}"
+
+        print(f"    {reason}, retrying in {delay:.0f}s ...", flush=True)
+        time.sleep(delay)
+        delay = min(delay * 2, 60)
     raise RuntimeError("unreachable")
 
 

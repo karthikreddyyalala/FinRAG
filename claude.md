@@ -565,12 +565,43 @@ If any service approaches $10, stop and investigate before continuing.
 
 ```
 Current week: 3 -> 5 (deployment prioritized ahead of Week 4 observability)
-Branch: week3-eval-harness (1 commit ahead of main, not yet merged)
-Test status: 76 unit tests passing, ruff clean
-Corpus: 72 tickers, 83,081 chunks, 71 companies in BM25 (SPOT files 20-F, not
-  10-K/10-Q, so it has nothing to ingest -- expected, not a FinanceBench company)
-Eval scores: PENDING -- corpus rebuilt, eval not yet re-run
+Branch: week3-eval-harness (2 commits ahead of main, not yet merged)
+Test status: 86 unit tests passing, ruff clean
+Corpus: IN PROGRESS -- re-ingesting with historical depth. 50/72 tickers
+  cached; the 22 outstanding are all FinanceBench companies. Resume with
+  `python3 scripts/bootstrap_corpus.py` (cached tickers are skipped).
+Eval scores: PENDING -- blocked on the corpus rebuild above
 ```
+
+### Why the corpus is being rebuilt (the bug that invalidated the first eval)
+
+The first eval returned faithfulness 0.96 but ~0.0 on every context metric.
+Four independent defects, each invisible because the pipeline still returned
+fluent, plausible answers:
+
+1. `merge_and_dedup` concatenated BM25-then-dense and `rerank` truncated with
+   `chunks[:top_k]`, so the top-5 was always 100% BM25 -- every dense result
+   was discarded. Hybrid search was keyword-only.
+2. `search_filings` built citations without the chunk `text` the harness reads
+   as ragas `contexts`, so context metrics scored against empty strings.
+3. `numerical_verifier` used a substring test: "$1,234" matches "$1,234.56",
+   so fabricated figures passed the grounding check.
+4. `chunk_id` was `uuid4()`, so re-ingest duplicated every chunk and BM25 ids
+   never matched Pinecone ids -- cross-source dedup could not work.
+
+Then the root cause underneath all of it: `list_filings` defaulted to the last
+2 10-Ks and 4 10-Qs, which in 2026 means 2025-2026 filings, while FinanceBench
+asks about 2015-2024. The corpus held the right companies for the wrong years,
+so 147 of 150 questions were unanswerable and the model correctly said the
+context did not contain the figure. Benchmark companies now ingest
+{10-K: 8, 10-Q: 12, 8-K: 8} -- 28 filings each instead of 6.
+
+Operational lessons now enforced in code, not memory:
+- EDGAR requests retry connection faults (three builds were lost to DNS blips)
+- A partial run refuses to publish BM25; doing so once overwrote a 71-company
+  index in S3 with a 42-company one, leaving the corpus worse than before
+- Guard test fails if BENCHMARK_TICKERS drifts from the dataset
+- Run with `caffeinate -dimsu`; laptop sleep has killed several runs
 
 ### Priority order (deployment before observability)
 
@@ -582,11 +613,22 @@ currently falls back to a lexical scorer locally).
 
 ```
 NOW -- finish Week 3
-  [ ] Verify BM25 ids match Pinecone ids (proves hybrid dedup works)
-  [ ] SMOKE: a 3M question must return MMM chunks, not another company
+  [ ] Finish the corpus rebuild (22 tickers outstanding, all FinanceBench)
+  [ ] Verify: BM25 covers all 72; FY2018-2024 periods present for
+      benchmark companies; BM25 ids match Pinecone ids
+  [ ] SMOKE: the FY2018 3M capex question must retrieve MMM chunks from the
+      10-K filed 2019-02-07 (this is question 1 and it failed three ways)
   [ ] Run full 150Q eval -> real ragas + numerical_accuracy scores
+  [ ] README results table: report covered vs out-of-scope with reasons.
+      Ceiling is 136/150 -- 14 questions ask about earnings-call transcripts,
+      which Phase 6 excludes for copyright. State that rather than quietly
+      scoring 150 and looking worse than the system is.
   [ ] Update this section + README with the real numbers
   [ ] Push branch, open PR to main
+
+  Resume/verify commands:
+    python3 scripts/bootstrap_corpus.py          # skips cached tickers
+    PYTHONPATH=. python3 evals/run_eval.py       # checkpoints per question
 
 NEXT -- Week 5 deployment (pulled forward)
   [ ] infra/stacks/mcp_server_stack.py -- Lambda + API Gateway
