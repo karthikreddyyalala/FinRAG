@@ -97,6 +97,7 @@ def _rewrite_openai(query: str) -> str:
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     r = client.chat.completions.create(
         model="gpt-4o-mini",
+        temperature=0,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": query},
@@ -120,6 +121,7 @@ def rewrite_query(bedrock_client: Any, query: str) -> str:
             modelId=HAIKU_MODEL_ID,
             system=[{"text": SYSTEM_PROMPT}],
             messages=[{"role": "user", "content": [{"text": query}]}],
+            inferenceConfig={"temperature": 0},
         )
         rewritten = response["output"]["message"]["content"][0]["text"].strip()
     except Exception as e:
