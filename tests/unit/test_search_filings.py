@@ -64,7 +64,15 @@ def test_build_search_filings_answer_runs_full_pipeline(mock_rerank):
     # CrossEncoder is trained on natural queries (see reranker.rerank's
     # docstring), so a future refactor swapping in `rewritten` here would
     # be a silent regression without this assertion.
-    mock_rerank.assert_called_once_with(query, [], top_k=5)
+    # CrossEncoder gets the natural query; the lexical fallback gets the
+    # GAAP-expanded rewrite, without which it discards table chunks whose
+    # wording shares no terms with the question.
+    mock_rerank.assert_called_once_with(
+        query,
+        [],
+        top_k=5,
+        lexical_query="NVDA data center revenue Q1 2026 net sales total revenues",
+    )
 
 
 @patch("server.mcp_tools.search_filings.rerank")
