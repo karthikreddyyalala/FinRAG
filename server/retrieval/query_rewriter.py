@@ -6,7 +6,10 @@ invocation without it (verified against AWS Bedrock docs).
 """
 from __future__ import annotations
 
+import socket
 from typing import Any
+
+import botocore.exceptions
 
 HAIKU_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
@@ -81,7 +84,23 @@ def expand_financial_terms(query: str) -> str:
 
 
 def _is_bedrock_unavailable(exc: Exception) -> bool:
-    """True when Bedrock is throttling or the model is not enabled on this account."""
+    """True when Bedrock is throttling, unreachable, or not enabled here.
+
+    Kept in sync with the identical check in answer_generator.py (deliberately
+    duplicated rather than imported across module boundaries -- see that
+    module's comment). A plain network ReadTimeoutError took down a
+    150-question eval run because timeout/connection faults are real
+    botocore/socket exception types, not phrases in the message, and the
+    text-only check did not catch them.
+    """
+    timeout_types = (
+        botocore.exceptions.ReadTimeoutError
+        | botocore.exceptions.ConnectTimeoutError
+        | botocore.exceptions.EndpointConnectionError
+        | socket.timeout
+    )
+    if isinstance(exc, timeout_types):
+        return True
     text = str(exc)
     return (
         "Throttling" in text

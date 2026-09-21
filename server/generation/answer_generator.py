@@ -14,7 +14,10 @@ would defeat that caching entirely.
 """
 from __future__ import annotations
 
+import socket
 from typing import Any
+
+import botocore.exceptions
 
 SONNET_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
@@ -51,7 +54,23 @@ Question: {query}"""
 
 
 def _is_bedrock_unavailable(exc: Exception) -> bool:
-    """True when Bedrock is throttling or the model is not enabled on this account."""
+    """True when Bedrock is throttling, unreachable, or not enabled here.
+
+    A 150-question eval run died on a plain network ReadTimeoutError with
+    99/150 already checkpointed. Throttling and missing-model text checks
+    caught quota faults but not transient network faults -- those are real
+    botocore/socket exception types, not phrases in the message -- so a
+    single slow request took down the whole process instead of falling
+    back to OpenAI the way a throttle already did.
+    """
+    timeout_types = (
+        botocore.exceptions.ReadTimeoutError
+        | botocore.exceptions.ConnectTimeoutError
+        | botocore.exceptions.EndpointConnectionError
+        | socket.timeout
+    )
+    if isinstance(exc, timeout_types):
+        return True
     text = str(exc)
     return (
         "Throttling" in text
