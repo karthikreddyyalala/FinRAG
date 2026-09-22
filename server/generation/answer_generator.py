@@ -128,6 +128,7 @@ def generate_answer(
         import os
         import time
 
+        import openai
         from openai import OpenAI
 
         openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -143,13 +144,22 @@ def generate_answer(
                 )
                 return r.choices[0].message.content
             except Exception as oe:
-                if "429" in str(oe) or "rate_limit" in str(oe).lower():
+                # This is the fallback path itself -- if it also gives up, the
+                # question fails outright. A transient network blip here
+                # killed a 150-question run at question 150 of 150 because
+                # only rate-limit text was retried, not connection errors.
+                retriable = (
+                    isinstance(oe, openai.APIConnectionError | openai.APITimeoutError)
+                    or "429" in str(oe)
+                    or "rate_limit" in str(oe).lower()
+                )
+                if retriable:
                     wait = 15 * (attempt + 1)
-                    print(f"    [rate limit] waiting {wait}s ...", flush=True)
+                    print(f"    [{type(oe).__name__}] waiting {wait}s ...", flush=True)
                     time.sleep(wait)
                 else:
                     raise
-        raise RuntimeError("OpenAI rate limit: exhausted retries")
+        raise RuntimeError("OpenAI fallback: exhausted retries")
 
     try:
         response = bedrock_client.converse(
