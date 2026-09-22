@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Any
 
 import requests
 from botocore.client import BaseClient
@@ -40,6 +41,57 @@ def _sec_headers() -> dict[str, str]:
     return {"User-Agent": SEC_USER_AGENT}
 
 
+MAX_NETWORK_RETRIES = 5
+
+
+def _get_with_retry(url: str, timeout: int = 15) -> Any:
+    """GET a SEC URL, retrying transient network failures with backoff.
+
+    A corpus build makes hundreds of sequential requests over tens of
+    minutes, so a momentary DNS or connection blip is near-certain. Without
+    this, one blip fails every remaining ticker and the run finishes by
+    rebuilding the BM25 index over only the companies it reached -- quietly
+    shrinking the corpus rather than erroring.
+
+    Retried: connection faults, timeouts, 429 (SEC rate-limits at 10 req/s
+    and a corpus build makes hundreds of sequential requests), and 5xx.
+    Not retried: other 4xx -- a 404 is a real answer about the resource, and
+    retrying it only burns rate limit that a 429 will then charge us for.
+    """
+    delay = 2.0
+    for attempt in range(MAX_NETWORK_RETRIES):
+        try:
+            response = requests.get(url, headers=_sec_headers(), timeout=timeout)
+            response.raise_for_status()
+            return response
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            if attempt == MAX_NETWORK_RETRIES - 1:
+                raise
+            reason = type(exc).__name__
+        except requests.exceptions.HTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if not (status == 429 or (status is not None and status >= 500)):
+                raise
+            if attempt == MAX_NETWORK_RETRIES - 1:
+                raise
+            reason = f"HTTP {status}"
+
+        print(f"    {reason}, retrying in {delay:.0f}s ...", flush=True)
+        time.sleep(delay)
+        delay = min(delay * 2, 60)
+    raise RuntimeError("unreachable")
+
+
+# company_tickers.json lists only CURRENT registrants, so a company that was
+# acquired or renamed disappears from it -- while every 10-K and 10-Q it ever
+# filed stays in EDGAR under the same CIK. These are looked up by CIK instead.
+CIK_OVERRIDES = {
+    "SQ": 1512673,    # Block, Inc. -- ticker renamed to XYZ in 2025
+    "ATVI": 718877,   # Activision Blizzard -- acquired by Microsoft, delisted
+    "FL": 850209,     # Foot Locker -- acquired, delisted
+}
+
+
 def get_cik_for_ticker(ticker: str) -> int:
     """Look up a company's CIK number from SEC's official ticker mapping.
 
@@ -52,44 +104,55 @@ def get_cik_for_ticker(ticker: str) -> int:
     Raises:
         ValueError: If the ticker is not found in SEC's mapping.
     """
-    response = requests.get(TICKER_MAP_URL, headers=_sec_headers(), timeout=10)
-    response.raise_for_status()
+    response = _get_with_retry(TICKER_MAP_URL, timeout=10)
     time.sleep(REQUEST_DELAY_SECONDS)
 
     for entry in response.json().values():
         if entry["ticker"].upper() == ticker.upper():
             return int(entry["cik_str"])
 
+    # Checked only after SEC's own mapping, so a live ticker is never shadowed
+    # by a stale hardcoded CIK.
+    if ticker.upper() in CIK_OVERRIDES:
+        return CIK_OVERRIDES[ticker.upper()]
+
     raise ValueError(f"Ticker {ticker!r} not found in SEC company_tickers.json")
 
 
+DEFAULT_FORM_LIMITS = {"10-Q": 4, "10-K": 2}
+
+
 def list_filings(
-    ticker: str, cik: int, max_10q: int = 4, max_10k: int = 2
+    ticker: str, cik: int, form_limits: dict[str, int] | None = None
 ) -> list[FilingMetadata]:
-    """List the most recent 10-Q and 10-K filings for a company.
+    """List a company's most recent filings, per form type.
+
+    Depth matters: a 10-K filed in early 2019 reports fiscal year 2018, so
+    answering questions about older periods requires reaching further back
+    than the default two annual reports.
 
     Args:
         ticker: Stock ticker symbol, used to tag the returned metadata.
         cik: Company CIK number from get_cik_for_ticker().
-        max_10q: Maximum number of recent 10-Q filings to return.
-        max_10k: Maximum number of recent 10-K filings to return.
+        form_limits: {form_type: max_count}, e.g. {"10-K": 8, "8-K": 6}.
+            Forms absent from this mapping are not collected.
+            Defaults to DEFAULT_FORM_LIMITS.
 
     Returns:
-        Filing metadata for up to max_10q 10-Qs and max_10k 10-Ks, most
-        recent first.
+        Filing metadata up to each form's limit, most recent first.
     """
+    limits = dict(form_limits) if form_limits else dict(DEFAULT_FORM_LIMITS)
+
     url = SUBMISSIONS_URL.format(cik=cik)
-    response = requests.get(url, headers=_sec_headers(), timeout=10)
-    response.raise_for_status()
+    response = _get_with_retry(url, timeout=10)
     time.sleep(REQUEST_DELAY_SECONDS)
 
     recent = response.json()["filings"]["recent"]
     filings: list[FilingMetadata] = []
-    counts = {"10-Q": 0, "10-K": 0}
-    limits = {"10-Q": max_10q, "10-K": max_10k}
+    counts = dict.fromkeys(limits, 0)
 
     for i, form in enumerate(recent["form"]):
-        if form not in counts or counts[form] >= limits[form]:
+        if form not in limits or counts[form] >= limits[form]:
             continue
         filings.append(
             FilingMetadata(
@@ -121,8 +184,7 @@ def download_filing(filing: FilingMetadata) -> bytes:
         accession_no_dashes=accession_no_dashes,
         primary_document=filing.primary_document,
     )
-    response = requests.get(url, headers=_sec_headers(), timeout=15)
-    response.raise_for_status()
+    response = _get_with_retry(url, timeout=15)
     time.sleep(REQUEST_DELAY_SECONDS)
     return response.content
 

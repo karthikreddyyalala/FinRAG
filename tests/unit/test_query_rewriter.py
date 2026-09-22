@@ -18,7 +18,12 @@ def test_rewrite_query_calls_haiku_and_returns_text():
 
     result = rewrite_query(client, "How did Nvidia data center revenue change?")
 
-    assert result == "Nvidia Corporation NVDA data center segment revenue Q1 2024 Q1 2026 10-Q"
+    # The LLM rewrite is preserved, then GAAP phrasing is appended -- filings
+    # label this line "net sales", not "revenue".
+    assert result.startswith(
+        "Nvidia Corporation NVDA data center segment revenue Q1 2024 Q1 2026 10-Q"
+    )
+    assert "net sales" in result
     call_kwargs = client.converse.call_args.kwargs
     assert call_kwargs["modelId"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     assert "How did Nvidia data center revenue change?" in str(call_kwargs["messages"])
@@ -29,4 +34,6 @@ def test_rewrite_query_strips_whitespace():
 
     result = rewrite_query(client, "NVDA revenue")
 
-    assert result == "NVDA revenue"
+    assert result.startswith("NVDA revenue")
+    assert not result.startswith(" "), "leading whitespace survived"
+    assert not result.endswith(" "), "trailing whitespace survived"

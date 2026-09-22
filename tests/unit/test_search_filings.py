@@ -48,15 +48,31 @@ def test_build_search_filings_answer_runs_full_pipeline(mock_rerank):
     )
 
     assert "Revenue grew" in result["answer"]
+    # `text` is load-bearing: the eval harness reads citations[].text as the
+    # ragas `contexts` field. Dropping it silently zeroes every context metric.
     assert result["citations"] == [
-        {"ticker": "NVDA", "filing_type": "10-Q", "period": "Q1-2026", "page": None}
+        {
+            "ticker": "NVDA",
+            "filing_type": "10-Q",
+            "period": "Q1-2026",
+            "page": None,
+            "text": "Data center revenue reached $9.06 billion.",
+        }
     ]
     assert isinstance(result["latency_ms"], int)
     # Pin the ORIGINAL query, not the rewritten one, reaching rerank --
     # CrossEncoder is trained on natural queries (see reranker.rerank's
     # docstring), so a future refactor swapping in `rewritten` here would
     # be a silent regression without this assertion.
-    mock_rerank.assert_called_once_with(query, [], top_k=5)
+    # CrossEncoder gets the natural query; the lexical fallback gets the
+    # GAAP-expanded rewrite, without which it discards table chunks whose
+    # wording shares no terms with the question.
+    mock_rerank.assert_called_once_with(
+        query,
+        [],
+        top_k=5,
+        lexical_query="NVDA data center revenue Q1 2026 net sales total revenues",
+    )
 
 
 @patch("server.mcp_tools.search_filings.rerank")

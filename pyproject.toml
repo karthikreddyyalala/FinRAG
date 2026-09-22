@@ -13,3 +13,4 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "-p no:phoenix -p no:langsmith_plugin"

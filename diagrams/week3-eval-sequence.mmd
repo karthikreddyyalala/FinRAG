@@ -1,0 +1,47 @@
+sequenceDiagram
+    participant GH as GitHub Actions CI
+    participant UT as pytest tests/unit/
+    participant DL as download_financebench.py
+    participant CI as run_ci_eval.py
+    participant PL as Full Pipeline (search_filings)
+    participant RA as ragas.evaluate()
+    participant NA as numerical_accuracy()
+    participant GS as GitHub PR Comment
+
+    GH->>UT: pytest tests/unit/ -v
+    UT-->>GH: 32 tests pass
+
+    GH->>DL: python scripts/download_financebench.py
+    DL->>DL: fetch patronusai/financebench CSV (150 rows)
+    DL-->>GH: evals/datasets/financebench_150.json
+
+    GH->>CI: python evals/run_ci_eval.py
+    loop For each of 30 questions
+        CI->>PL: build_search_filings_answer(question)
+        PL->>PL: rewrite → hybrid BM25+Pinecone → rerank → generate → verify
+        PL-->>CI: {answer, citations, cost_usd, latency_ms}
+    end
+
+    CI->>RA: score_dataset(questions, answers, contexts, ground_truths)
+    RA->>RA: faithfulness (LLM-as-judge: is answer supported by context?)
+    RA->>RA: answer_relevancy (LLM: does answer address the question?)
+    RA->>RA: context_precision (LLM: are retrieved chunks relevant?)
+    RA->>RA: context_recall (LLM: did retrieval capture all needed info?)
+    RA-->>CI: {faithfulness, answer_relevancy, context_precision, context_recall}
+
+    CI->>NA: numerical_accuracy(answers, contexts)
+    NA->>NA: extract all numbers from answers (regex)
+    NA->>NA: normalise formats ($26.4B == 26400000000.0)
+    NA->>NA: check each number appears in source chunks
+    NA-->>CI: score 0.0-1.0
+
+    CI->>CI: write evals/results/ci_latest.json
+    CI->>CI: assert faithfulness >= 0.85
+    CI->>CI: assert numerical_accuracy >= 0.90
+    CI-->>GH: pass / fail
+
+    GH->>GS: post scores table as PR comment
+
+    Note over RA: ragas uses Claude Haiku via Bedrock as the LLM judge
+    Note over NA: custom metric -- ragas has no financial number grounding check
+    Note over CI: 30 questions = fast CI gate (~8 min); full 300Q runs weekly
