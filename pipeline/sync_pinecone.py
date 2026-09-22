@@ -271,19 +271,40 @@ def build_and_store_bm25_index(
 
 
 def load_bm25_index(
-    s3_client: Any, bucket: str, key: str
+    s3_client: Any, bucket: str, key: str, max_retries: int = 5
 ) -> tuple[BM25Okapi, list[dict[str, Any]]]:
     """Load a pickled BM25 index and its source chunks from S3.
+
+    The object is ~1GB, read in one get_object().read() call -- a mid-stream
+    ReadTimeoutError killed an eval run before a single question was
+    processed, forcing the whole download to restart from zero. Only
+    ReadTimeoutError is retried; a real error (missing key, bad permissions)
+    fails immediately rather than being masked by blind retrying.
 
     Args:
         s3_client: A boto3 S3 client.
         bucket: Bucket the index was stored in.
         key: S3 key the index was stored at.
+        max_retries: Attempts before giving up.
 
     Returns:
         (bm25_index, chunks) -- chunks[i] is the source chunk for the i-th
         entry in bm25_index's internal corpus, in the same order.
     """
-    obj = s3_client.get_object(Bucket=bucket, Key=key)
-    payload = pickle.loads(obj["Body"].read())
-    return payload["bm25"], payload["chunks"]
+    import time
+
+    import botocore.exceptions
+
+    delay = 5.0
+    for attempt in range(max_retries):
+        try:
+            obj = s3_client.get_object(Bucket=bucket, Key=key)
+            payload = pickle.loads(obj["Body"].read())
+            return payload["bm25"], payload["chunks"]
+        except botocore.exceptions.ReadTimeoutError:
+            if attempt == max_retries - 1:
+                raise
+            print(f"    S3 read timeout, retrying in {delay:.0f}s ...", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 60)
+    raise RuntimeError("unreachable")
