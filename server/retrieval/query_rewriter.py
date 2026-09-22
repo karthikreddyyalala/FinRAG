@@ -110,19 +110,44 @@ def _is_bedrock_unavailable(exc: Exception) -> bool:
 
 
 def _rewrite_openai(query: str) -> str:
-    import os
+    """Rewrite via OpenAI, the fallback when Bedrock is unavailable.
 
+    This is itself the last line of defense for every single question, so a
+    transient connection error here must be retried, not just re-raised --
+    the equivalent gap in answer_generator.py's fallback killed a
+    150-question eval run at the very last question.
+    """
+    import os
+    import time
+
+    import openai
     from openai import OpenAI
+
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    r = client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ],
-    )
-    return r.choices[0].message.content.strip()
+    for attempt in range(8):
+        try:
+            r = client.chat.completions.create(
+                model="gpt-4o-mini",
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": query},
+                ],
+            )
+            return r.choices[0].message.content.strip()
+        except Exception as oe:
+            retriable = (
+                isinstance(oe, openai.APIConnectionError | openai.APITimeoutError)
+                or "429" in str(oe)
+                or "rate_limit" in str(oe).lower()
+            )
+            if retriable:
+                wait = 15 * (attempt + 1)
+                print(f"    [{type(oe).__name__}] waiting {wait}s ...", flush=True)
+                time.sleep(wait)
+            else:
+                raise
+    raise RuntimeError("OpenAI fallback: exhausted retries")
 
 
 def rewrite_query(bedrock_client: Any, query: str) -> str:
