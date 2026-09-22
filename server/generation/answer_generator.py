@@ -14,19 +14,69 @@ would defeat that caching entirely.
 """
 from __future__ import annotations
 
+import socket
 from typing import Any
+
+import botocore.exceptions
 
 SONNET_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
-SYSTEM_PROMPT_TEMPLATE = """Cite every claim with the exact citation format shown below.
-Never state a number not present verbatim in the provided context.
-If context is insufficient, say so explicitly. Do not guess.
-Format citations inline as shown, e.g. {example_citation}"""
+# Grounding is the hard rule; the equivalence and sign guidance exist because
+# without them the model refuses figures it has actually found. On
+# FinanceBench Q1 it retrieved "Purchases of property, plant and equipment
+# (PP&E) $(1,577)" and still answered that it could not determine capital
+# expenditure -- they are the same line item, and the parentheses are the
+# accounting sign convention, not part of the value.
+SYSTEM_PROMPT_TEMPLATE = """Answer the question using only the provided context.
+
+Grounding rules:
+- Never state a number that does not appear verbatim in the context.
+- If the context genuinely lacks the figure, say so. Do not guess.
+- Cite every claim inline, e.g. {example_citation}
+
+Reading financial statements:
+- Filings label figures with their GAAP line item, not the analyst's term for
+  them. Treat these as the same figure and answer directly:
+    capital expenditures  = "Purchases of property, plant and equipment (PP&E)"
+    revenue / top line    = "Net sales" / "Total revenues"
+    COGS                  = "Cost of sales"
+    operating cash flow   = "Net cash provided by operating activities"
+- Parentheses around a number denote a negative or a cash outflow. For a
+  question asking "how much was spent", report the magnitude: $(1,577) in a
+  cash flow statement means $1,577 million of spending.
+- Report the figure in the units the question asks for, converting between
+  millions and billions where the context states its own units."""
 
 USER_MESSAGE_TEMPLATE = """Context:
 {context}
 
 Question: {query}"""
+
+
+def _is_bedrock_unavailable(exc: Exception) -> bool:
+    """True when Bedrock is throttling, unreachable, or not enabled here.
+
+    A 150-question eval run died on a plain network ReadTimeoutError with
+    99/150 already checkpointed. Throttling and missing-model text checks
+    caught quota faults but not transient network faults -- those are real
+    botocore/socket exception types, not phrases in the message -- so a
+    single slow request took down the whole process instead of falling
+    back to OpenAI the way a throttle already did.
+    """
+    timeout_types = (
+        botocore.exceptions.ReadTimeoutError
+        | botocore.exceptions.ConnectTimeoutError
+        | botocore.exceptions.EndpointConnectionError
+        | socket.timeout
+    )
+    if isinstance(exc, timeout_types):
+        return True
+    text = str(exc)
+    return (
+        "Throttling" in text
+        or "throttl" in text.lower()
+        or "ResourceNotFoundException" in text
+    )
 
 
 def format_citation(chunk: dict[str, Any]) -> str:
@@ -45,6 +95,11 @@ def format_citation(chunk: dict[str, Any]) -> str:
     return f"{base}]"
 
 
+# temperature=0 on every call in this module and in query_rewriter.py.
+# Without it, the same question through the identical pipeline produced a
+# correct, cited answer on one run and "the context does not provide this
+# figure" on the next -- financial extraction has one right answer, and
+# nothing here should be creative.
 def generate_answer(
     bedrock_client: Any, query: str, chunks: list[dict[str, Any]]
 ) -> str:
@@ -69,9 +124,52 @@ def generate_answer(
         context="\n\n".join(context_blocks), query=query
     )
 
-    response = bedrock_client.converse(
-        modelId=SONNET_MODEL_ID,
-        system=[{"text": system_prompt}],
-        messages=[{"role": "user", "content": [{"text": user_message}]}],
-    )
-    return response["output"]["message"]["content"][0]["text"]
+    def _call_openai() -> str:
+        import os
+        import time
+
+        import openai
+        from openai import OpenAI
+
+        openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        for attempt in range(8):
+            try:
+                r = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    temperature=0,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                )
+                return r.choices[0].message.content
+            except Exception as oe:
+                # This is the fallback path itself -- if it also gives up, the
+                # question fails outright. A transient network blip here
+                # killed a 150-question run at question 150 of 150 because
+                # only rate-limit text was retried, not connection errors.
+                retriable = (
+                    isinstance(oe, openai.APIConnectionError | openai.APITimeoutError)
+                    or "429" in str(oe)
+                    or "rate_limit" in str(oe).lower()
+                )
+                if retriable:
+                    wait = 15 * (attempt + 1)
+                    print(f"    [{type(oe).__name__}] waiting {wait}s ...", flush=True)
+                    time.sleep(wait)
+                else:
+                    raise
+        raise RuntimeError("OpenAI fallback: exhausted retries")
+
+    try:
+        response = bedrock_client.converse(
+            modelId=SONNET_MODEL_ID,
+            system=[{"text": system_prompt}],
+            messages=[{"role": "user", "content": [{"text": user_message}]}],
+            inferenceConfig={"temperature": 0},
+        )
+        return response["output"]["message"]["content"][0]["text"]
+    except Exception as e:
+        if _is_bedrock_unavailable(e):
+            return _call_openai()
+        raise

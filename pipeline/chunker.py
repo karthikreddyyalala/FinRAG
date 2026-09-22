@@ -11,7 +11,7 @@ Week 2+.
 """
 from __future__ import annotations
 
-import uuid
+import hashlib
 from typing import Any
 
 PARENT_CHUNK_WORDS = 1500
@@ -22,11 +22,32 @@ def _word_count(text: str) -> int:
     return len(text.split())
 
 
+def _chunk_id(text: str, chunk_type: str, section: str, metadata: dict[str, Any]) -> str:
+    """Content-addressed id: same filing chunked twice yields the same ids.
+
+    Deliberately not a random UUID. Re-ingesting a filing must overwrite its
+    existing Pinecone vectors rather than write a second copy under fresh
+    ids, and BM25 ids must line up with Pinecone ids so merge_and_dedup can
+    actually dedup one source against the other.
+    """
+    ident = "|".join(
+        [
+            str(metadata.get("ticker", "")),
+            str(metadata.get("filing_type", "")),
+            str(metadata.get("period", "")),
+            chunk_type,
+            section,
+            text,
+        ]
+    )
+    return hashlib.sha256(ident.encode("utf-8")).hexdigest()[:32]
+
+
 def _new_chunk(
     text: str, chunk_type: str, section: str, metadata: dict[str, Any]
 ) -> dict[str, Any]:
     return {
-        "chunk_id": str(uuid.uuid4()),
+        "chunk_id": _chunk_id(text, chunk_type, section, metadata),
         "text": text,
         "chunk_type": chunk_type,
         "section": section,

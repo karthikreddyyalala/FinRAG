@@ -47,7 +47,9 @@ def build_search_filings_answer(
 
     rewritten = rewrite_query(bedrock_client, query)
     candidates = hybrid_search(rewritten, bm25_index, bm25_chunks, pinecone_index, embed_fn)
-    top_chunks = rerank(query, candidates, top_k=top_k)
+    # The rewritten form carries the GAAP phrasing the lexical fallback needs;
+    # CrossEncoder still sees the natural query it was trained on.
+    top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=rewritten)
 
     raw_answer = generate_answer(bedrock_client, query, top_chunks)
     source_texts = [chunk["text"] for chunk in top_chunks]
@@ -59,6 +61,7 @@ def build_search_filings_answer(
             "filing_type": chunk.get("filing_type"),
             "period": chunk.get("period"),
             "page": chunk.get("page_number"),
+            "text": chunk.get("text", ""),
         }
         for chunk in top_chunks
     ]
