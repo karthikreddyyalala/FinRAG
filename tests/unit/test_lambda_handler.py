@@ -115,6 +115,45 @@ def test_unauthenticated_request_never_triggers_a_cold_start():
     main.get_dependencies.cache_clear()
 
 
+def test_well_known_discovery_bypasses_auth_at_the_handler_level(handler):
+    """Caught live: the FastAPI route's auth bypass never runs, because
+    handler() itself rejects unauthenticated requests before create_app()
+    is ever built (that's the whole point of checking auth before the
+    cold-start work). The discovery endpoint needs its own bypass here,
+    not just in the FastAPI middleware."""
+    event = _event(None, auth=None)
+    event["rawPath"] = "/.well-known/oauth-protected-resource"
+    event.pop("body", None)
+
+    with patch.dict("os.environ", {
+        "COGNITO_USER_POOL_ID": "us-east-1_Test", "AWS_REGION": "us-east-1",
+    }):
+        resp = handler(event, MagicMock())
+
+    assert resp["statusCode"] == 200, resp["body"][:200]
+    body = json.loads(resp["body"])
+    assert body["authorization_servers"] == ["https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Test"]
+
+
+def test_well_known_discovery_never_triggers_a_cold_start():
+    import server.main as main
+
+    main.get_dependencies.cache_clear()
+    event = _event(None, auth=None)
+    event["rawPath"] = "/.well-known/oauth-protected-resource"
+    event.pop("body", None)
+
+    with (
+        patch.object(main, "_build_production_dependencies") as build,
+        patch.object(main, "load_secrets_from_ssm"),
+        patch.dict("os.environ", {"MCP_AUTH_TOKEN": TOKEN}),
+    ):
+        resp = main.handler(event, MagicMock())
+        assert resp["statusCode"] == 404  # Cognito not configured in this test's env
+        build.assert_not_called()
+    main.get_dependencies.cache_clear()
+
+
 def test_handler_accepts_a_valid_cognito_token(handler):
     with (
         patch.dict(
