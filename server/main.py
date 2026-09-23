@@ -109,12 +109,12 @@ def create_app(
             yield
 
     app = FastAPI(lifespan=lifespan)
-    expected = f"Bearer {auth_token}".encode()
 
+    # Also enforced in the app, not only the Lambda handler, so the app is
+    # never open when served any other way (e.g. uvicorn locally).
     @app.middleware("http")
     async def require_bearer_token(request: Request, call_next: Any) -> Any:
-        supplied = request.headers.get("authorization", "").encode()
-        if not hmac.compare_digest(supplied, expected):  # constant-time
+        if not _is_authorized(request.headers.get("authorization"), auth_token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         return await call_next(request)
 
@@ -136,10 +136,10 @@ def create_app(
 
 
 def _build_production_dependencies() -> ProductionDependencies:
-    """Wire up real Bedrock, Pinecone, and keyword-index clients."""
-    load_secrets_from_ssm(
-        boto3.client("ssm"), prefix=os.environ.get("FINRAG_SSM_PREFIX", "/finrag")
-    )
+    """Wire up real Bedrock, Pinecone, and keyword-index clients.
+
+    Expects secrets already in the environment (the handler loads them).
+    """
     bedrock_client = boto3.client("bedrock-runtime")
     s3_client = boto3.client("s3")
     pinecone_index = get_pinecone_index(
@@ -165,7 +165,35 @@ def get_dependencies() -> ProductionDependencies:
     return _build_production_dependencies()
 
 
+def _is_authorized(authorization_header: str | None, token: str) -> bool:
+    """Constant-time check of an Authorization header against the token."""
+    supplied = (authorization_header or "").encode()
+    return hmac.compare_digest(supplied, f"Bearer {token}".encode())
+
+
 def handler(event: Any, context: Any) -> Any:
-    """Lambda entry point: cached dependencies, fresh app per invocation."""
-    app = create_app(*get_dependencies(), auth_token=os.environ.get("MCP_AUTH_TOKEN"))
+    """Lambda entry point: auth first, then cached dependencies, fresh app.
+
+    Auth is checked before get_dependencies(), which downloads a ~900 MB index
+    and connects to Pinecone -- an anonymous scanner hitting the public URL
+    must be turned away before that, or every probe costs a cold start.
+    load_secrets_from_ssm is a no-op once the variables are set, so warm
+    invocations make no SSM call.
+    """
+    load_secrets_from_ssm(
+        boto3.client("ssm"), prefix=os.environ.get("FINRAG_SSM_PREFIX", "/finrag")
+    )
+    token = os.environ.get("MCP_AUTH_TOKEN")
+    if not token:
+        raise RuntimeError("MCP_AUTH_TOKEN unset; refusing to serve an open endpoint")
+
+    headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
+    if not _is_authorized(headers.get("authorization"), token):
+        return {
+            "statusCode": 401,
+            "headers": {"content-type": "application/json"},
+            "body": '{"error": "unauthorized"}',
+        }
+
+    app = create_app(*get_dependencies(), auth_token=token)
     return Mangum(app, lifespan="auto")(event, context)

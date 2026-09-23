@@ -18,7 +18,6 @@ def test_production_query_embedder_is_the_ingestion_model():
         patch.object(main, "boto3", MagicMock()),
         patch.object(main, "get_pinecone_index", MagicMock()),
         patch.object(main, "load_keyword_index", MagicMock()),
-        patch.object(main, "load_secrets_from_ssm", MagicMock()),
         patch.dict("os.environ", {"PINECONE_API_KEY": "k"}),
     ):
         deps = main._build_production_dependencies()

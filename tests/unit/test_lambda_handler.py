@@ -60,6 +60,7 @@ def handler():
     deps = (MagicMock(), MagicMock(), keyword_index, MagicMock(return_value=[0.0]))
     main.get_dependencies.cache_clear()
     with patch.object(main, "_build_production_dependencies", return_value=deps), \
+         patch.object(main, "load_secrets_from_ssm"), \
          patch.dict("os.environ", {"MCP_AUTH_TOKEN": TOKEN}):
         yield main.handler
     main.get_dependencies.cache_clear()
@@ -95,6 +96,23 @@ def test_wrong_token_is_rejected(handler):
 
 def test_token_without_bearer_scheme_is_rejected(handler):
     assert handler(_event(TOOLS_LIST, auth=TOKEN), MagicMock())["statusCode"] == 401
+
+
+def test_unauthenticated_request_never_triggers_a_cold_start():
+    """Loading dependencies downloads a ~900 MB index and connects to
+    Pinecone. An anonymous scanner hitting the public URL must be turned away
+    before any of that -- otherwise each probe costs a full cold start."""
+    import server.main as main
+
+    main.get_dependencies.cache_clear()
+    with patch.object(main, "_build_production_dependencies") as build, \
+         patch.object(main, "load_secrets_from_ssm"), \
+         patch.dict("os.environ", {"MCP_AUTH_TOKEN": TOKEN}):
+        for auth in (None, "Bearer wrong", TOKEN):
+            resp = main.handler(_event(TOOLS_LIST, auth=auth), MagicMock())
+            assert resp["statusCode"] == 401
+        build.assert_not_called()
+    main.get_dependencies.cache_clear()
 
 
 def test_server_refuses_to_start_without_a_token():
