@@ -568,7 +568,7 @@ Current week: 3 DONE, 5 (deployment) IN PROGRESS -- Lambda live with all 4
   MCP tools; Cognito + weekly refresh still open
 Branch: week5-deployment (pushed to origin, not yet merged), off main which
   has week3-eval-harness merged (PRs #3/#4)
-Test status: 182 unit tests passing, ruff clean
+Test status: 203 unit tests passing, ruff clean
 
 DEPLOYED: finrag-mcp-server Lambda + Function URL, us-east-1, arm64,
   2048MB/120s/2GB ephemeral. Bearer auth checked before any cold-start work.
@@ -758,9 +758,37 @@ DONE -- Cognito OAuth 2.1/PKCE (dual-accept, not yet a hard cutover)
     5n9n0e2ugjnklckjlrtc50p9c4, CognitoAuthorizeUrl
     https://finrag-mcp-496158977343.auth.us-east-1.amazoncognito.com
 
+DONE -- EventBridge weekly refresh
+  [x] scripts/weekly_refresh.py -- diffs EDGAR's current filing list against
+      the cache (by filing_date) and ingests only what's new, instead of
+      bootstrap_corpus.py's "cached ticker = skip forever" (wrong for a
+      recurring job) or blindly re-ingesting everything (would re-embed and
+      re-upsert 2000+ unchanged filings weekly, burning OpenAI spend and
+      re-tripping the Pinecone write cap that already cost a FinanceBench
+      question). All-or-nothing per ticker, same discipline as bootstrap.
+  [x] Persisted the chunk cache to S3 (chunk_cache/ prefix in
+      finrag-processed-filings) -- caught before deploying: a weekly Lambda
+      is guaranteed a cold start every invocation, so local /tmp starts
+      empty every time. Without syncing to S3, the diff logic would see
+      zero cache and re-ingest the whole corpus every week regardless.
+  [x] infra/stacks/ingestion_stack.py -- second Lambda (pandas/lxml/bs4/
+      tiktoken the MCP server excludes to stay small; fits at 221MB under
+      the 250MB zip limit, same no-Docker local-pip-bundling as the server),
+      EventBridge rule at rate(7 days), 15-min timeout (Lambda's max, not a
+      margin -- a big filing week could still exceed it; safe no-op if so,
+      next week's run picks up where it left off), IAM scoped to exactly
+      the S3 prefixes/objects it touches
+  [x] Deployed (FinragIngestionStack). Seeded S3 chunk_cache/ from the
+      local corpus's 71 existing cache files -- without this one-time
+      seed, the FIRST scheduled run would still see an empty S3 cache and
+      re-ingest everything once before settling into normal diff behavior
+  [ ] Not live-tested: invoking it would cost real OpenAI/Pinecone spend
+      across 71 tickers just to verify "up to date" logging. Correctness
+      verified via 14 unit tests (diff logic, S3 sync, failure handling,
+      partial-run safety) instead of a live run
+
 NEXT -- Week 5 remainder
   [ ] Human verification of the Cognito login flow above
-  [ ] EventBridge weekly refresh -> scripts/weekly_refresh.py
   [~] CrossEncoder reranker -- deferred: needs a container-image Lambda
       (torch/sentence-transformers too large for the zip bundle), which
       needs Docker/colima/podman locally, none of which are installed.
