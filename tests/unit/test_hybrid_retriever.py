@@ -1,32 +1,18 @@
 from unittest.mock import MagicMock
 
-from rank_bm25 import BM25Okapi
+from pipeline.sync_pinecone import KeywordIndex, build_keyword_index
+from server.retrieval.hybrid_retriever import hybrid_search, merge_and_dedup
 
-from server.retrieval.hybrid_retriever import bm25_search, hybrid_search, merge_and_dedup
 
-
-def _bm25_fixture():
-    # A third, unrelated chunk is included so BM25's idf is meaningful: with
-    # only 2 documents, any term unique to one document gets idf == 0 (df=1
-    # cancels out under BM25Okapi's formula), so "data"/"center" would
-    # contribute nothing and the shared word "revenue" alone (idf < 0,
-    # favoring the longer document) would wrongly rank c2 above c1.
+def _keyword_index(tmp_path):
     chunks = [
         {"chunk_id": "c1", "text": "Nvidia data center revenue grew significantly"},
         {"chunk_id": "c2", "text": "Apple iPhone revenue declined slightly this quarter"},
         {"chunk_id": "c0", "text": "Tesla vehicle deliveries increased in the quarter"},
     ]
-    tokenized = [c["text"].lower().split() for c in chunks]
-    return BM25Okapi(tokenized), chunks
-
-
-def test_bm25_search_returns_top_k_chunks_by_score():
-    bm25, chunks = _bm25_fixture()
-
-    results = bm25_search(bm25, chunks, "Nvidia data center revenue", top_k=1)
-
-    assert len(results) == 1
-    assert results[0]["chunk_id"] == "c1"
+    path = tmp_path / "kw.sqlite"
+    build_keyword_index(path, iter(chunks))
+    return KeywordIndex(path)
 
 
 def test_merge_and_dedup_removes_duplicate_chunk_ids():
@@ -49,8 +35,8 @@ def test_normalize_pinecone_match_handles_missing_metadata():
     assert chunk == {"chunk_id": "c1"}
 
 
-def test_hybrid_search_runs_bm25_and_pinecone_in_parallel_and_merges():
-    bm25, chunks = _bm25_fixture()
+def test_hybrid_search_runs_bm25_and_pinecone_in_parallel_and_merges(tmp_path):
+    keyword_index = _keyword_index(tmp_path)
     pinecone_index = MagicMock()
     pinecone_index.query.return_value = {
         "matches": [{"id": "c3", "metadata": {"text": "Tesla margin fell"}}]
@@ -59,8 +45,7 @@ def test_hybrid_search_runs_bm25_and_pinecone_in_parallel_and_merges():
 
     results = hybrid_search(
         rewritten_query="Nvidia data center revenue",
-        bm25_index=bm25,
-        bm25_chunks=chunks,
+        keyword_index=keyword_index,
         pinecone_index=pinecone_index,
         embed_fn=embed_fn,
         top_k=10,
