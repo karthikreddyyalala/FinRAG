@@ -76,6 +76,7 @@ where `headers.txt` holds one line, `Authorization: Bearer <token>` — a file, 
 | AWS deployment (Lambda + Function URL) | **Done** — see Deployment above |
 | All 4 MCP tools (search, financials, compare, latest filing) | **Done** — live-tested |
 | Cognito OAuth 2.1/PKCE | **Deployed, dual-accept** — see below; needs a human login to confirm |
+| EventBridge weekly refresh | **Deployed** — diffs EDGAR against cache, ingests only what's new |
 | Observability dashboard | Not started |
 
 See `CLAUDE.md` for the full week-by-week build plan and current state.
