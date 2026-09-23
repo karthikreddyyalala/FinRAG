@@ -31,6 +31,9 @@ from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
 from pipeline.sync_pinecone import get_embed_fn, get_pinecone_index, load_keyword_index
+from server.mcp_tools.compare_companies import register_compare_companies_tool
+from server.mcp_tools.get_financials import register_get_financials_tool
+from server.mcp_tools.get_latest_filing import register_get_latest_filing_tool
 from server.mcp_tools.search_filings import register_search_filings_tool
 
 PROCESSED_BUCKET = "finrag-processed-filings"
@@ -102,6 +105,9 @@ def create_app(
 
     mcp = MCPServer("FinRAG")
     register_search_filings_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
+    register_get_financials_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
+    register_compare_companies_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
+    register_get_latest_filing_tool(mcp, bedrock_client, keyword_index)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
