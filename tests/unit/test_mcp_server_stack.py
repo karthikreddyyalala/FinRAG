@@ -67,3 +67,45 @@ def test_logs_expire_so_storage_cost_cannot_grow_unbounded():
     _template().has_resource_properties("AWS::Logs::LogGroup", {
         "RetentionInDays": Match.any_value(),
     })
+
+
+def test_cognito_user_pool_has_no_self_signup():
+    """This is a single-user personal deployment -- the one Cognito user is
+    created by an admin CLI call, not a public sign-up form."""
+    _template().has_resource_properties("AWS::Cognito::UserPool", {
+        "AdminCreateUserConfig": {"AllowAdminCreateUserOnly": True},
+    })
+
+
+def test_cognito_app_client_is_public_with_pkce_auth_code_flow():
+    """No client secret: PKCE (RFC 7636) is what secures a public client's
+    authorization_code flow instead, which is what CLAUDE.md's Phase 3 spec
+    calls for and what mcp-remote's OAuth discovery expects."""
+    _template().has_resource_properties("AWS::Cognito::UserPoolClient", {
+        "GenerateSecret": False,
+        "AllowedOAuthFlows": ["code"],
+        "AllowedOAuthFlowsUserPoolClient": True,
+    })
+
+
+def test_cognito_resource_server_defines_the_invoke_scope():
+    _template().has_resource_properties("AWS::Cognito::UserPoolResourceServer", {
+        "Identifier": "finrag",
+        "Scopes": Match.array_with([Match.object_like({"ScopeName": "invoke"})]),
+    })
+
+
+def test_cognito_hosted_domain_exists():
+    _template().has_resource_properties("AWS::Cognito::UserPoolDomain", {
+        "Domain": Match.any_value(),
+    })
+
+
+def test_lambda_env_has_cognito_ids_but_no_secrets():
+    """User pool ID and client ID are not secrets (they're visible in any
+    OAuth discovery response) -- fine in plaintext env, unlike the API keys
+    in test_no_secret_values_in_lambda_environment above."""
+    fn = next(iter(_template().find_resources("AWS::Lambda::Function").values()))
+    env = fn["Properties"].get("Environment", {}).get("Variables", {})
+    assert "COGNITO_USER_POOL_ID" in env
+    assert "COGNITO_CLIENT_ID" in env
