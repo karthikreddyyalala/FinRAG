@@ -1,13 +1,15 @@
-%% Query pipeline as actually implemented. Supersedes week2-query-sequence.mmd,
-%% which predates the OpenAI embedding switch and the reranker rewrite.
+%% Query pipeline as deployed: Lambda Function URL -> MCP server -> retrieval.
+%% Keyword search is SQLite FTS5 (BM25-ranked), not in-memory rank-bm25.
 sequenceDiagram
     autonumber
     participant U as MCP Client (Claude Desktop / Cursor)
+    participant L as Lambda handler (Function URL)
+    participant SSM as SSM Parameter Store
     participant M as server/main.py (FastAPI + MCP)
     participant S as search_filings.py
     participant QR as query_rewriter.py
     participant HR as hybrid_retriever.py
-    participant BM as BM25 (in-memory, loaded from S3)
+    participant BM as Keyword index (SQLite FTS5 in /tmp)
     participant OA as OpenAI (embeddings + gpt-4o-mini fallback)
     participant PC as Pinecone (finrag-filings, 1536-dim)
     participant RR as reranker.py
@@ -15,8 +17,14 @@ sequenceDiagram
     participant NV as numerical_verifier.py
     participant BR as Bedrock (Haiku 4.5 / Sonnet 4.5)
 
-    U->>M: call search_sec_filings(query)
-    M->>S: build_search_filings_answer(query, ...)
+    U->>L: POST /mcp  Authorization: Bearer <token>
+    L->>SSM: GetParameters /finrag/* (first cold start only)
+    alt missing or wrong token
+        L-->>U: 401 -- before any index download or Pinecone call
+    end
+    Note over L,BM: cold start only: download ~900 MB index to /tmp<br/>(temp name, renamed when complete); warm starts reuse it
+    L->>M: fresh app per invocation (MCP run() is once-per-instance)
+    M->>S: search_sec_filings(query) -- stateless JSON response
 
     S->>QR: rewrite_query(query)
     QR->>BR: Converse -- expand tickers, extract time constraints
@@ -27,7 +35,7 @@ sequenceDiagram
 
     par Hybrid retrieval (two threads)
         S->>HR: hybrid_search(rewritten, ...)
-        HR->>BM: get_scores(tokenised query) -- top 10
+        HR->>BM: MATCH quoted terms ORDER BY bm25() -- top 10
         BM-->>HR: keyword hits
     and
         HR->>OA: embed(rewritten) -- text-embedding-3-small
