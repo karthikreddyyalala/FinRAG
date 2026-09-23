@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -50,6 +51,40 @@ def test_middleware_accepts_a_valid_cognito_token_alongside_the_static_one():
         )
 
     assert resp.status_code == 200
+
+
+def test_oauth_protected_resource_metadata_is_public_and_points_at_cognito():
+    """mcp-remote's OAuth discovery starts by fetching this well-known path
+    with no token at all -- it must not be behind the auth middleware, or
+    discovery can never bootstrap. Without this endpoint a client has no way
+    to find Cognito on its own and silently falls back to the static token."""
+    app = _app()
+
+    with (
+        patch.dict(
+            "os.environ",
+            {"COGNITO_USER_POOL_ID": "us-east-1_Test", "COGNITO_CLIENT_ID": "client-1",
+             "AWS_REGION": "us-east-1"},
+        ),
+        TestClient(app) as client,
+    ):
+        resp = client.get("/.well-known/oauth-protected-resource")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["authorization_servers"] == ["https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Test"]
+
+
+def test_oauth_protected_resource_metadata_absent_without_cognito_configured():
+    app = _app()
+
+    with patch.dict("os.environ"):
+        for key in ("COGNITO_USER_POOL_ID", "COGNITO_CLIENT_ID", "AWS_REGION"):
+            os.environ.pop(key, None)
+        with TestClient(app) as client:
+            resp = client.get("/.well-known/oauth-protected-resource")
+
+    assert resp.status_code == 404
 
 
 def test_middleware_rejects_an_invalid_cognito_token():
