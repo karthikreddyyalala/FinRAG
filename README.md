@@ -6,7 +6,7 @@ The problem: ask Claude or ChatGPT a specific financial question and you get out
 
 ## Architecture
 
-Four-stage retrieval pipeline: query rewriting (Haiku, then a deterministic GAAP line-item expansion) → parallel BM25 + Pinecone dense search → reranking → Bedrock Sonnet generation → numerical grounding verification.
+Four-stage retrieval pipeline: query rewriting (Haiku, then a deterministic GAAP line-item expansion) → parallel keyword (SQLite FTS5, BM25-ranked) + Pinecone dense search → reranking → Bedrock Sonnet generation → numerical grounding verification.
 
 - [`diagrams/ingestion-sequence.mmd`](diagrams/ingestion-sequence.mmd) — corpus build: EDGAR → chunking → embedding → Pinecone/BM25
 - [`diagrams/query-sequence.mmd`](diagrams/query-sequence.mmd) — the retrieval pipeline above, per query
@@ -35,14 +35,29 @@ Scored against [FinanceBench](https://huggingface.co/datasets/PatronusAI/finance
 
 Of the 150 FinanceBench questions: 112 ask about 10-K filings, 15 about 10-Q, 9 about 8-K — all in scope and ingested. **14 ask about earnings-call transcripts**, which this project deliberately does not ingest (third-party transcript copyright — see `CLAUDE.md` Phase 6). Realistic ceiling given current scope: 135/150 (90%), before the PYPL gap.
 
+## Deployment
+
+Live on AWS Lambda behind a Function URL — one MCP-compatible endpoint, no API Gateway (its 29 s integration timeout is too short for a cold-start index download).
+
+- **Runtime:** Python 3.13, arm64/Graviton, 2048 MB, 2 min timeout, 2 GB ephemeral storage for the ~900 MB keyword index in `/tmp`
+- **Auth:** bearer token, checked before any cold-start work (secrets download, Pinecone connect) so an unauthenticated probe costs nothing — interim until Cognito OAuth 2.1/PKCE
+- **Secrets:** SSM Parameter Store SecureStrings, resolved at runtime; only parameter *names* appear in the CDK template, never values
+- **IAM:** scoped to the keyword-index S3 prefix, the `/finrag/*` SSM path, and Anthropic Bedrock models — no wildcards
+- **Bundling:** local pip install for the Lambda platform (no Docker); ships only the server's runtime deps, ~79 MB, well under the 250 MB zip limit
+- **Cost at rest:** $0 — Lambda bills only on invocation, well within the free tier for personal use
+
+Verified end to end: the deployed endpoint returns the same answer as the local pipeline for the canonical FinanceBench capex question, cited to the correct filing.
+
+To connect a client, add to its MCP config: `{"url": "<Function URL>/mcp", "headers": {"Authorization": "Bearer <token>"}}`.
+
 ## What's built vs. what's next
 
 | | Status |
 |---|---|
-| Ingestion pipeline (EDGAR → chunk → embed → Pinecone/BM25) | Done |
+| Ingestion pipeline (EDGAR → chunk → embed → Pinecone/FTS5) | Done |
 | Four-stage retrieval + numerical verification | Done |
 | Eval harness (FinanceBench, ragas, CI gate) | Done |
-| AWS deployment (Lambda, API Gateway) | Not started — runs locally today |
+| AWS deployment (Lambda + Function URL) | **Done** — see Deployment above |
 | Remaining 3 of 4 MCP tools | Not started |
 | Cognito auth, observability dashboard | Not started |
 
