@@ -45,10 +45,24 @@ Live on AWS Lambda behind a Function URL — one MCP-compatible endpoint, no API
 - **IAM:** scoped to the keyword-index S3 prefix, the `/finrag/*` SSM path, and Anthropic Bedrock models — no wildcards
 - **Bundling:** local pip install for the Lambda platform (no Docker); ships only the server's runtime deps, ~79 MB, well under the 250 MB zip limit
 - **Cost at rest:** $0 — Lambda bills only on invocation, well within the free tier for personal use
+- **Known limit:** this AWS account's concurrent-execution ceiling is 10 (below the standard 1000 default — a new-account throttle, same one that capped available EC2 instance types earlier in this project). Two clients invoking at the same instant can trip a transient 429; a Service Quotas increase request was rejected because it only accepts values *above* the service default, not a restore from a below-default account override. Fine for personal/demo use; would need an AWS Support ticket before any real concurrent load.
 
-Verified end to end: the deployed endpoint returns the same answer as the local pipeline for the canonical FinanceBench capex question, cited to the correct filing.
+Verified end to end in a real client (Claude Desktop, not just curl): asked the canonical FinanceBench capex question, got back the correct number, correctly explained the accounting sign convention, and cited the right filing — matching the local pipeline exactly.
 
-To connect a client, add to its MCP config: `{"url": "<Function URL>/mcp", "headers": {"Authorization": "Bearer <token>"}}`.
+**Connecting a client:** clients that support remote HTTP/SSE servers natively (`{"url": ..., "headers": {...}}` in their MCP config) can point straight at the Function URL. Claude Desktop's local build does not — its config only accepts local `command`/`args` (stdio) servers, so remote servers need a bridge. [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) does this:
+
+```json
+{
+  "mcpServers": {
+    "finrag": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "<Function URL>/mcp", "--header-file", "/path/to/headers.txt"]
+    }
+  }
+}
+```
+
+where `headers.txt` holds one line, `Authorization: Bearer <token>` — a file, not `--header` inline, so the token never appears in the process list (`ps`). `mcp-remote` always attempts OAuth discovery first even with static headers; it fails over to the header-only path but that can add real latency on a Lambda cold start.
 
 ## What's built vs. what's next
 
