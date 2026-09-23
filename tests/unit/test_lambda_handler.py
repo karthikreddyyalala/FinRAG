@@ -115,6 +115,41 @@ def test_unauthenticated_request_never_triggers_a_cold_start():
     main.get_dependencies.cache_clear()
 
 
+def test_handler_accepts_a_valid_cognito_token(handler):
+    with (
+        patch.dict(
+            "os.environ",
+            {"COGNITO_USER_POOL_ID": "us-east-1_Test", "COGNITO_CLIENT_ID": "client-1",
+             "AWS_REGION": "us-east-1"},
+        ),
+        patch("server.main.validate_token", return_value={"client_id": "client-1"}),
+        patch("server.main._get_jwks_client", return_value=MagicMock()),
+    ):
+        resp = handler(_event(TOOLS_LIST, auth="Bearer some-cognito-jwt"), MagicMock())
+
+    assert resp["statusCode"] == 200, resp["body"][:200]
+
+
+def test_handler_rejects_an_invalid_cognito_token_without_a_cold_start():
+    import server.main as main
+
+    main.get_dependencies.cache_clear()
+    with (
+        patch.object(main, "_build_production_dependencies") as build,
+        patch.object(main, "load_secrets_from_ssm"),
+        patch.dict("os.environ", {
+            "MCP_AUTH_TOKEN": TOKEN, "COGNITO_USER_POOL_ID": "us-east-1_Test",
+            "COGNITO_CLIENT_ID": "client-1", "AWS_REGION": "us-east-1",
+        }),
+        patch.object(main, "validate_token", side_effect=Exception("bad token")),
+        patch.object(main, "_get_jwks_client", return_value=MagicMock()),
+    ):
+        resp = main.handler(_event(TOOLS_LIST, auth="Bearer not-a-real-jwt"), MagicMock())
+        assert resp["statusCode"] == 401
+        build.assert_not_called()
+    main.get_dependencies.cache_clear()
+
+
 def test_server_refuses_to_start_without_a_token():
     """Fail closed: a missing token must never mean an open endpoint."""
     from server.main import create_app
