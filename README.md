@@ -64,6 +64,8 @@ Verified end to end in a real client (Claude Desktop, not just curl): asked the 
 
 where `headers.txt` holds one line, `Authorization: Bearer <token>` — a file, not `--header` inline, so the token never appears in the process list (`ps`). `mcp-remote` always attempts OAuth discovery first even with static headers; it fails over to the header-only path but that can add real latency on a Lambda cold start.
 
+**Cognito OAuth 2.1/PKCE is deployed but not yet the primary path.** A single-user Cognito pool, a public PKCE app client (no client secret), and the `/.well-known/oauth-protected-resource` discovery endpoint a client needs to find it are all live — the server accepts either a valid Cognito access token or the static bearer token above. It hasn't been switched to Cognito-only yet because confirming the browser OAuth consent screen needs an actual human in an actual MCP client, which this deployment process couldn't do. To try it: drop the `--header-file` flag from the config above (letting `mcp-remote` discover Cognito on its own) and log in with `karthikreddyy386@gmail.com` — first login prompts you to set a permanent password. Once that's confirmed working, the static token path gets retired.
+
 ## What's built vs. what's next
 
 | | Status |
@@ -73,6 +75,7 @@ where `headers.txt` holds one line, `Authorization: Bearer <token>` — a file, 
 | Eval harness (FinanceBench, ragas, CI gate) | Done |
 | AWS deployment (Lambda + Function URL) | **Done** — see Deployment above |
 | All 4 MCP tools (search, financials, compare, latest filing) | **Done** — live-tested |
-| Cognito auth, observability dashboard | Not started |
+| Cognito OAuth 2.1/PKCE | **Deployed, dual-accept** — see below; needs a human login to confirm |
+| Observability dashboard | Not started |
 
 See `CLAUDE.md` for the full week-by-week build plan and current state.
