@@ -64,7 +64,32 @@ Verified end to end in a real client (Claude Desktop, not just curl): asked the 
 
 where `headers.txt` holds one line, `Authorization: Bearer <token>` — a file, not `--header` inline, so the token never appears in the process list (`ps`). `mcp-remote` always attempts OAuth discovery first even with static headers; it fails over to the header-only path but that can add real latency on a Lambda cold start.
 
-**Cognito OAuth 2.1/PKCE is deployed but not yet the primary path.** A single-user Cognito pool, a public PKCE app client (no client secret), and the `/.well-known/oauth-protected-resource` discovery endpoint a client needs to find it are all live — the server accepts either a valid Cognito access token or the static bearer token above. It hasn't been switched to Cognito-only yet because confirming the browser OAuth consent screen needs an actual human in an actual MCP client, which this deployment process couldn't do. To try it: drop the `--header-file` flag from the config above (letting `mcp-remote` discover Cognito on its own) and log in with `karthikreddyy386@gmail.com` — first login prompts you to set a permanent password. Once that's confirmed working, the static token path gets retired.
+**Cognito OAuth 2.1/PKCE is deployed but not yet the primary path.** A single-user Cognito pool, a public PKCE app client (no client secret), and the `/.well-known/oauth-protected-resource` discovery endpoint a client needs to find it are all live — the server accepts either a valid Cognito access token or the static bearer token above.
+
+To try it, replace the `--header-file` args with `--static-oauth-client-info`:
+
+```json
+{
+  "mcpServers": {
+    "finrag": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote",
+        "<Function URL>/mcp",
+        "--static-oauth-client-info", "{\"client_id\":\"5n9n0e2ugjnklckjlrtc50p9c4\"}"
+      ]
+    }
+  }
+}
+```
+
+**Why not just drop `--header-file` and let `mcp-remote` discover everything on its own** (the original plan): `mcp-remote` defaults to OAuth Dynamic Client Registration (RFC 7591), which Cognito doesn't support — it only works with a pre-registered app client, hence `--static-oauth-client-info` pointing at the one this stack creates.
+
+Two more bugs only showed up live, past that first one:
+- Cognito's hosted UI returned a bare "An error was encountered with the requested page" with no explanation. Root cause: `mcp-remote` derives its local OAuth callback port from a hash of the server URL (`11164` for this Function URL, not a fixed default), and the CDK-registered callback URL had a different, guessed port (`8090`). Fixed by reading the actual port from `mcp-remote`'s own log and registering that.
+- Then `invalid_request - invalid_scope`: the app client only allowed our custom `finrag/invoke` scope, but `mcp-remote`'s default authorize request always asks for `openid email phone profile` too, and Cognito rejects the whole request if any requested scope isn't explicitly allowed. Fixed by adding the four standard OIDC scopes to the app client.
+
+First login prompts you to set a permanent password for `karthikreddyy386@gmail.com`. Once you've confirmed it works end to end in Claude Desktop, the static token path gets retired.
 
 ## What's built vs. what's next
 
