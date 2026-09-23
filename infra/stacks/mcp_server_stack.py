@@ -131,7 +131,19 @@ class McpServerStack(Stack):
             generate_secret=False,
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(authorization_code_grant=True),
-                scopes=[cognito.OAuthScope.resource_server(resource_server, invoke_scope)],
+                # mcp-remote's default authorize request always asks for the
+                # standard OIDC scopes alongside whatever the server needs --
+                # Cognito rejects the whole request (invalid_scope) if any
+                # requested scope isn't explicitly allowed for this client,
+                # caught live as "Authorization failed: invalid_request -
+                # invalid_scope" with only the custom scope allowed.
+                scopes=[
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.EMAIL,
+                    cognito.OAuthScope.PHONE,
+                    cognito.OAuthScope.PROFILE,
+                    cognito.OAuthScope.resource_server(resource_server, invoke_scope),
+                ],
                 callback_urls=[OAUTH_CALLBACK_URL],
             ),
         )
