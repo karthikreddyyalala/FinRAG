@@ -118,6 +118,33 @@ def test_ungrounded_figure_is_still_caught():
     assert "unavailable" in result["answer"]
 
 
+def test_cross_ticker_candidates_are_filtered_before_rerank():
+    """Caught live: compare_companies(["TSLA", "F"], "revenue", "2024") cited
+    Ford's revenue to a Pfizer 10-K -- a real number from the wrong company,
+    stated with full confidence. Root cause: "F" is too weak a lexical token
+    to constrain BM25/dense retrieval to Ford, so an unrelated PFE chunk rode
+    along in the candidate set. The ticker is known up front for this tool
+    (unlike search_sec_filings' free-text queries), so candidates must be
+    filtered to it before reranking, not trusted to retrieval alone."""
+    pfizer_chunk = {**CHUNK, "chunk_id": "c2", "ticker": "PFE", "text": "Pfizer revenue $63.6 billion"}
+    bedrock = MagicMock()
+    bedrock.converse.return_value = {"output": {"message": {"content": [{"text": "ok"}]}}}
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = [CHUNK, pfizer_chunk]
+    pinecone_index = MagicMock()
+    pinecone_index.query.return_value = {"matches": []}
+
+    with patch("server.mcp_tools.get_financials.rerank", return_value=[CHUNK]) as mock_rerank:
+        build_financials_answer(
+            ticker="MMM", metric="revenue", period="FY2018",
+            bedrock_client=bedrock, pinecone_index=pinecone_index,
+            keyword_index=keyword_index, embed_fn=lambda t: [0.0],
+        )
+
+    candidates_passed = mock_rerank.call_args.args[1]
+    assert all(c["ticker"] == "MMM" for c in candidates_passed)
+
+
 def test_registers_as_an_mcp_tool():
     from mcp.server import MCPServer
 
