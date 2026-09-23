@@ -21,7 +21,7 @@ from pipeline.edgar_client import download_filing, get_cik_for_ticker, list_fili
 from pipeline.html_processor import process_filing
 from pipeline.sync_pinecone import (
     BM25_CHUNK_FIELDS,
-    build_and_store_bm25_index,
+    build_and_store_keyword_index,
     embed_texts_openai,
     get_pinecone_index,
     sync_chunks_to_pinecone,
@@ -51,7 +51,7 @@ TARGET_TICKERS = [
 
 RAW_BUCKET = "finrag-raw-filings"
 PROCESSED_BUCKET = "finrag-processed-filings"
-BM25_INDEX_KEY = "bm25/index.pkl"
+KEYWORD_INDEX_KEY = "keyword/index.sqlite"
 CHUNK_CACHE = Path(__file__).parent.parent / "evals" / "results" / "chunk_cache"
 
 # Companies FinanceBench asks about. They get deep history; the rest of the
@@ -134,6 +134,23 @@ def bootstrap_ticker(
     return total_chunks, all_chunks
 
 
+def _iter_cached_chunks(cache_dir: Path):
+    """Yield every cached chunk, slimmed to the fields retrieval reads.
+
+    One ticker file in memory at a time; table_rows (already serialised into
+    `text`) is dropped here rather than stored twice in the index. cache_dir
+    is taken as an argument, not read from CHUNK_CACHE inside the loop: a
+    generator runs when consumed, so a global read there binds to whatever
+    CHUNK_CACHE is at consumption time, not when the build was requested.
+    """
+    for ticker in TARGET_TICKERS:
+        cache_file = cache_dir / f"{ticker}.json"
+        if not cache_file.exists():
+            continue
+        for chunk in json.loads(cache_file.read_text()):
+            yield {f: chunk.get(f) for f in BM25_CHUNK_FIELDS}
+
+
 def main() -> None:
     """Bootstrap the full corpus and build one BM25 index over every chunk.
 
@@ -184,23 +201,16 @@ def main() -> None:
         cache_file.write_text(json.dumps(chunks))
         print(f"[{i}/{len(TARGET_TICKERS)}] {ticker}: synced {count} chunks", flush=True)
 
-    # BM25 must span the WHOLE corpus. Building it from only the tickers
-    # ingested in this run is how the index ended up covering 29 of 50
-    # companies after an interrupted bootstrap was resumed as a second run.
-    # Slim each ticker's chunks as it is read, not after the whole corpus is
-    # in memory. The cache is ~800MB of JSON and table chunks carry their
-    # rows twice (once serialised into `text`, once in `table_rows`), so
-    # holding the full objects first is what exhausted RAM on an 8 GB machine.
-    corpus_chunks: list[dict[str, Any]] = []
-    for ticker in TARGET_TICKERS:
-        cache_file = CHUNK_CACHE / f"{ticker}.json"
-        if not cache_file.exists():
-            continue
-        raw = json.loads(cache_file.read_text())
-        corpus_chunks.extend({f: c.get(f) for f in BM25_CHUNK_FIELDS} for c in raw)
-        del raw
-
-    covered = {c.get("ticker") for c in corpus_chunks}
+    # The index must span the WHOLE corpus. Building it from only the tickers
+    # ingested in this run is how it once covered 29 of 50 companies after an
+    # interrupted bootstrap was resumed as a second run. Coverage is read from
+    # the cache itself; chunks are then streamed into the index one ticker
+    # file at a time, so peak memory is one file, not the ~800 MB corpus.
+    covered = {
+        t for t in TARGET_TICKERS
+        if (CHUNK_CACHE / f"{t}.json").exists()
+        and json.loads((CHUNK_CACHE / f"{t}.json").read_text())
+    }
 
     # Publishing an index built from a partial run REPLACES the good one in
     # S3, silently shrinking retrieval coverage -- a failed run would leave
@@ -211,7 +221,7 @@ def main() -> None:
 
     if blocking or unavailable:
         print(
-            f"\nSkipping BM25 publish: an index built now would cover only "
+            f"\nSkipping keyword index publish: an index built now would cover only "
             f"{len(covered)} companies and would overwrite the existing one in S3."
         )
         if blocking:
@@ -219,8 +229,10 @@ def main() -> None:
         if unavailable:
             print(f"  uncovered and undocumented: {unavailable}")
     else:
-        build_and_store_bm25_index(s3_client, PROCESSED_BUCKET, BM25_INDEX_KEY, corpus_chunks)
-        print(f"BM25 index built from {len(corpus_chunks)} chunks across {len(covered)} companies")
+        count = build_and_store_keyword_index(
+            s3_client, PROCESSED_BUCKET, KEYWORD_INDEX_KEY, _iter_cached_chunks(CHUNK_CACHE)
+        )
+        print(f"Keyword index built from {count} chunks across {len(covered)} companies")
         for ticker in sorted(set(TARGET_TICKERS) - covered):
             print(f"  NOTE {ticker} absent: {KNOWN_UNAVAILABLE[ticker]}")
 

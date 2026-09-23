@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 RESULTS_DIR = Path(__file__).parent / "results"
+KEYWORD_INDEX_LOCAL_PATH = RESULTS_DIR / "keyword_index.sqlite"
 FINANCEBENCH = Path(__file__).parent / "eval_data" / "financebench_150.json"
 CUSTOM = Path(__file__).parent / "eval_data" / "custom_150.json"
 
@@ -22,26 +23,27 @@ def _init_clients():
     import boto3
     from pinecone import Pinecone
 
-    from pipeline.sync_pinecone import get_embed_fn, load_bm25_index
+    from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
     bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
     pinecone_index = pc.Index("finrag-filings")
     s3 = boto3.client("s3", region_name="us-east-1")
-    bm25_index, bm25_chunks = load_bm25_index(s3, "finrag-processed-filings", "bm25/index.pkl")
+    keyword_index = load_keyword_index(
+        s3, "finrag-processed-filings", "keyword/index.sqlite", KEYWORD_INDEX_LOCAL_PATH
+    )
     embed_fn = get_embed_fn(bedrock)
-    return bedrock, pinecone_index, bm25_index, bm25_chunks, embed_fn
+    return bedrock, pinecone_index, keyword_index, embed_fn
 
 
 def _call_pipeline(
-    question: str, bedrock, pinecone_index, bm25_index, bm25_chunks, embed_fn
+    question: str, bedrock, pinecone_index, keyword_index, embed_fn
 ) -> dict:
     from server.mcp_tools.search_filings import build_search_filings_answer
     return build_search_filings_answer(
         query=question,
         bedrock_client=bedrock,
         pinecone_index=pinecone_index,
-        bm25_index=bm25_index,
-        bm25_chunks=bm25_chunks,
+        keyword_index=keyword_index,
         embed_fn=embed_fn,
     )
 

@@ -16,16 +16,15 @@ def _deps():
     ]
     pinecone_index = MagicMock()
     pinecone_index.query.return_value = {"matches": []}
-    bm25_index = MagicMock()
-    bm25_index.get_scores.return_value = []
-    bm25_chunks: list[dict] = []
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = []
     embed_fn = MagicMock(return_value=[0.1, 0.2])
-    return bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn
+    return bedrock_client, pinecone_index, keyword_index, embed_fn
 
 
 @patch("server.mcp_tools.search_filings.rerank")
 def test_build_search_filings_answer_runs_full_pipeline(mock_rerank):
-    bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn = _deps()
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
     mock_rerank.return_value = [
         {
             "chunk_id": "c1",
@@ -42,8 +41,7 @@ def test_build_search_filings_answer_runs_full_pipeline(mock_rerank):
         query,
         bedrock_client=bedrock_client,
         pinecone_index=pinecone_index,
-        bm25_index=bm25_index,
-        bm25_chunks=bm25_chunks,
+        keyword_index=keyword_index,
         embed_fn=embed_fn,
     )
 
@@ -78,9 +76,9 @@ def test_build_search_filings_answer_runs_full_pipeline(mock_rerank):
 @patch("server.mcp_tools.search_filings.rerank")
 def test_register_search_filings_tool_does_not_raise(mock_rerank):
     mock_rerank.return_value = []
-    bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn = _deps()
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
     mcp = MCPServer("Test")
 
     register_search_filings_tool(
-        mcp, bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn
+        mcp, bedrock_client, pinecone_index, keyword_index, embed_fn
     )
