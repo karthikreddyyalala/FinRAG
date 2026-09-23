@@ -33,3 +33,7 @@ evals/results/chunk_cache/
 
 # OS
 .DS_Store
+
+# Local copy of the keyword index (built/downloaded, ~1GB)
+*.sqlite
+*.sqlite.partial

@@ -4,14 +4,16 @@ Uses the `pinecone` package (not the deprecated `pinecone-client`).
 """
 from __future__ import annotations
 
-import io
 import json
-import pickle
+import re
+import sqlite3
+import tempfile
 import time
+from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from pinecone import Pinecone
-from rank_bm25 import BM25Okapi
 
 TITAN_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSIONS = 1536
@@ -234,77 +236,174 @@ def get_pinecone_index(api_key: str, index_name: str) -> Any:
     return pc.Index(index_name)
 
 
-def build_and_store_bm25_index(
-    s3_client: Any, bucket: str, key: str, chunks: list[dict[str, Any]]
-) -> None:
-    """Build a BM25 keyword index from chunk text and pickle it to S3.
+_FTS_STOPWORDS = frozenset(
+    "a an and are as at be by for from has have in is it its of on or that the "
+    "this to was were what when where which who will with".split()
+)
 
-    BM25Okapi has no persistence of its own, so the index and its source
-    chunks are pickled together -- a BM25 hit resolves straight to full
-    chunk metadata without a second lookup at query time.
+
+def _fts_match_expression(query: str) -> str:
+    """Turn free text into a safe FTS5 MATCH expression: quoted terms, OR-ed.
+
+    Raw query text must never reach MATCH as FTS5 syntax. Quotes, NEAR(),
+    column filters ("text:"), leading "-", and bare AND/OR either raise a
+    syntax error or silently change what is searched. Each term is reduced to
+    word characters and double-quoted, so it can only ever be a literal term.
+    OR-ing them matches BM25's any-term semantics; bm25() does the ranking.
+    """
+    terms = [t for t in re.findall(r"\w+", query.lower()) if t not in _FTS_STOPWORDS]
+    return " OR ".join(f'"{t}"' for t in dict.fromkeys(terms))
+
+
+class KeywordIndex:
+    """BM25 keyword search over chunks, backed by an on-disk SQLite FTS5 table.
+
+    Replaces the in-memory rank-bm25 pickle, which stopped scaling at 164k
+    chunks: building it peaked at 7.5 GB, loading took 212 s, and its
+    whitespace tokeniser left punctuation attached ("property," never matched
+    "property"). FTS5 still ranks with BM25 -- its built-in bm25() -- but reads
+    pages from disk on demand and tokenises and stems properly.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        """Open an existing index read-only.
+
+        Args:
+            db_path: Path to a file written by build_keyword_index().
+        """
+        # check_same_thread=False: hybrid_search queries from a worker thread.
+        # Safe here -- the connection is read-only and SQLite is serialised.
+        self._conn = sqlite3.connect(
+            f"file:{Path(db_path).resolve()}?mode=ro", uri=True, check_same_thread=False
+        )
+
+    def search(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+        """Return up to top_k chunks, best BM25 match first.
+
+        Args:
+            query: Free-text query; any FTS5 syntax in it is neutralised.
+            top_k: Maximum number of chunks to return.
+
+        Returns:
+            Chunk dicts with exactly BM25_CHUNK_FIELDS.
+        """
+        expression = _fts_match_expression(query)
+        if not expression:
+            return []
+        rows = self._conn.execute(
+            f"SELECT {', '.join(BM25_CHUNK_FIELDS)} FROM chunks "
+            "WHERE chunks MATCH ? ORDER BY rank LIMIT ?",
+            (expression, top_k),
+        ).fetchall()
+        return [dict(zip(BM25_CHUNK_FIELDS, row)) for row in rows]
+
+
+def build_keyword_index(db_path: str | Path, chunks: Iterable[dict[str, Any]]) -> int:
+    """Write chunks to a new SQLite FTS5 index, streaming, in bounded memory.
+
+    Args:
+        db_path: Where to write the index. Overwritten if it exists.
+        chunks: Chunks from chunker.chunk_filing() -- any iterable, so a caller
+            can stream from disk instead of materialising the whole corpus.
+
+    Returns:
+        Number of chunks written.
+    """
+    path = Path(db_path)
+    path.unlink(missing_ok=True)
+    conn = sqlite3.connect(path)
+    unindexed = ", ".join(f"{f} UNINDEXED" for f in BM25_CHUNK_FIELDS if f != "text")
+    # porter: "purchases" and "purchase" share a stem, so inflections match.
+    conn.execute(
+        f"CREATE VIRTUAL TABLE chunks USING fts5(text, {unindexed}, "
+        "tokenize='porter unicode61')"
+    )
+    columns = ("text", *(f for f in BM25_CHUNK_FIELDS if f != "text"))
+    insert = f"INSERT INTO chunks ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})"
+
+    count = 0
+    batch: list[tuple[Any, ...]] = []
+    for chunk in chunks:
+        batch.append(tuple(chunk.get(c) for c in columns))
+        if len(batch) >= 5000:
+            conn.executemany(insert, batch)
+            count += len(batch)
+            batch = []
+    if batch:
+        conn.executemany(insert, batch)
+        count += len(batch)
+    conn.commit()
+    conn.execute("INSERT INTO chunks(chunks) VALUES ('optimize')")  # merge b-trees
+    conn.commit()
+    conn.close()
+    return count
+
+
+def build_and_store_keyword_index(
+    s3_client: Any, bucket: str, key: str, chunks: Iterable[dict[str, Any]]
+) -> int:
+    """Build the keyword index to a temp file and upload it to S3.
 
     Args:
         s3_client: A boto3 S3 client.
         bucket: Destination bucket (finrag-processed-filings).
-        key: S3 key to store the pickled index at.
-        chunks: All chunks across the corpus, from chunker.chunk_filing().
+        key: S3 key for the index file.
+        chunks: All chunks across the corpus.
+
+    Returns:
+        Number of chunks indexed.
     """
-    # ponytail: basic whitespace tokenization (no stemming/stopwords);
-    # upgrade to spacy/nltk in Week 3 if query quality metrics warrant
-    tokenized = [c["text"].lower().split() for c in chunks]
-    bm25 = BM25Okapi(tokenized)
-    del tokenized  # BM25Okapi keeps its own structures; free the duplicate
-
-    # Store only the fields retrieval reads. Table chunks carry their rows
-    # again in `table_rows` even though `text` already holds the serialised
-    # table, so keeping them roughly doubles the payload for no benefit.
-    slim = [{f: c.get(f) for f in BM25_CHUNK_FIELDS} for c in chunks]
-
-    # Streamed, not pickle.dumps(): a bytes blob allocates the whole payload
-    # a second time on top of the live objects. At corpus scale that is the
-    # difference between finishing and thrashing swap on an 8 GB machine.
-    # pickle is safe here -- written and read only by this project's own code.
-    buffer = io.BytesIO()
-    pickle.dump({"bm25": bm25, "chunks": slim}, buffer, protocol=pickle.HIGHEST_PROTOCOL)
-    buffer.seek(0)
-    s3_client.upload_fileobj(buffer, bucket, key)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "keyword.sqlite"
+        count = build_keyword_index(path, chunks)
+        s3_client.upload_file(str(path), bucket, key)  # multipart for large files
+    return count
 
 
-def load_bm25_index(
-    s3_client: Any, bucket: str, key: str, max_retries: int = 5
-) -> tuple[BM25Okapi, list[dict[str, Any]]]:
-    """Load a pickled BM25 index and its source chunks from S3.
+def load_keyword_index(
+    s3_client: Any,
+    bucket: str,
+    key: str,
+    local_path: str | Path,
+    max_retries: int = 5,
+    retry_delay: float = 5.0,
+) -> KeywordIndex:
+    """Download the keyword index once and open it.
 
-    The object is ~1GB, read in one get_object().read() call -- a mid-stream
-    ReadTimeoutError killed an eval run before a single question was
-    processed, forcing the whole download to restart from zero. Only
-    ReadTimeoutError is retried; a real error (missing key, bad permissions)
-    fails immediately rather than being masked by blind retrying.
+    A warm Lambda reuses the file already in /tmp rather than downloading it
+    again. The download lands on a temp name and is renamed only once
+    complete: a partial file left at the final path would otherwise pass the
+    exists-check and be reused on every later request. Only ReadTimeoutError
+    is retried -- a missing key or bad permissions fails immediately.
 
     Args:
         s3_client: A boto3 S3 client.
-        bucket: Bucket the index was stored in.
-        key: S3 key the index was stored at.
-        max_retries: Attempts before giving up.
+        bucket: Bucket holding the index.
+        key: S3 key of the index file.
+        local_path: Where to keep the downloaded file.
+        max_retries: Download attempts before giving up.
+        retry_delay: Initial backoff in seconds, doubled per retry.
 
     Returns:
-        (bm25_index, chunks) -- chunks[i] is the source chunk for the i-th
-        entry in bm25_index's internal corpus, in the same order.
+        An open KeywordIndex.
     """
-    import time
-
     import botocore.exceptions
 
-    delay = 5.0
-    for attempt in range(max_retries):
-        try:
-            obj = s3_client.get_object(Bucket=bucket, Key=key)
-            payload = pickle.loads(obj["Body"].read())
-            return payload["bm25"], payload["chunks"]
-        except botocore.exceptions.ReadTimeoutError:
-            if attempt == max_retries - 1:
-                raise
-            print(f"    S3 read timeout, retrying in {delay:.0f}s ...", flush=True)
-            time.sleep(delay)
-            delay = min(delay * 2, 60)
-    raise RuntimeError("unreachable")
+    path = Path(local_path)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_name(path.name + ".partial")
+        delay = retry_delay
+        for attempt in range(max_retries):
+            try:
+                s3_client.download_file(bucket, key, str(partial))
+                partial.replace(path)
+                break
+            except botocore.exceptions.ReadTimeoutError:
+                partial.unlink(missing_ok=True)
+                if attempt == max_retries - 1:
+                    raise
+                print(f"    S3 read timeout, retrying in {delay:.0f}s ...", flush=True)
+                time.sleep(delay)
+                delay = min(delay * 2, 60)
+    return KeywordIndex(path)

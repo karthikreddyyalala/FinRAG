@@ -18,20 +18,21 @@ from fastapi import FastAPI
 from mangum import Mangum
 from mcp.server import MCPServer
 
-from pipeline.sync_pinecone import get_embed_fn, get_pinecone_index, load_bm25_index
+from pipeline.sync_pinecone import get_embed_fn, get_pinecone_index, load_keyword_index
 from server.mcp_tools.search_filings import register_search_filings_tool
 
 PROCESSED_BUCKET = "finrag-processed-filings"
-BM25_INDEX_KEY = "bm25/index.pkl"
+KEYWORD_INDEX_KEY = "keyword/index.sqlite"
+# /tmp is the only writable path on Lambda and persists across warm invocations.
+KEYWORD_INDEX_LOCAL_PATH = "/tmp/finrag/keyword.sqlite"
 
-ProductionDependencies = tuple[Any, Any, Any, list[dict[str, Any]], Callable[[str], list[float]]]
+ProductionDependencies = tuple[Any, Any, Any, Callable[[str], list[float]]]
 
 
 def create_app(
     bedrock_client: Any,
     pinecone_index: Any,
-    bm25_index: Any,
-    bm25_chunks: list[dict[str, Any]],
+    keyword_index: Any,
     embed_fn: Callable[[str], list[float]],
 ) -> FastAPI:
     """Build the FastAPI app with the MCP server mounted.
@@ -39,8 +40,7 @@ def create_app(
     Args:
         bedrock_client: A boto3 bedrock-runtime client.
         pinecone_index: A Pinecone Index handle for the search tool.
-        bm25_index: The corpus-wide BM25 index.
-        bm25_chunks: The chunks bm25_index was built from.
+        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
         embed_fn: Callable(text) -> embedding vector for embedding queries.
 
     Returns:
@@ -48,7 +48,7 @@ def create_app(
     """
     mcp = MCPServer("FinRAG")
     register_search_filings_tool(
-        mcp, bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn
+        mcp, bedrock_client, pinecone_index, keyword_index, embed_fn
     )
 
     @asynccontextmanager
@@ -68,12 +68,14 @@ def _build_production_dependencies() -> ProductionDependencies:
     pinecone_index = get_pinecone_index(
         api_key=os.environ["PINECONE_API_KEY"], index_name="finrag-filings"
     )
-    bm25_index, bm25_chunks = load_bm25_index(s3_client, PROCESSED_BUCKET, BM25_INDEX_KEY)
+    keyword_index = load_keyword_index(
+        s3_client, PROCESSED_BUCKET, KEYWORD_INDEX_KEY, KEYWORD_INDEX_LOCAL_PATH
+    )
     # Must be the model the corpus was embedded with (OpenAI), not Titan --
     # querying Pinecone with another model's vectors returns unrelated chunks
     # without any error. get_embed_fn() is shared with the eval harness.
     embed_fn = get_embed_fn()
-    return bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn
+    return bedrock_client, pinecone_index, keyword_index, embed_fn
 
 
 @lru_cache(maxsize=1)
@@ -85,10 +87,10 @@ def get_app() -> FastAPI:
     index requires a real S3 read, both of which would require live
     credentials just to import this module otherwise.
     """
-    bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn = (
+    bedrock_client, pinecone_index, keyword_index, embed_fn = (
         _build_production_dependencies()
     )
-    return create_app(bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn)
+    return create_app(bedrock_client, pinecone_index, keyword_index, embed_fn)
 
 
 def handler(event: Any, context: Any) -> Any:

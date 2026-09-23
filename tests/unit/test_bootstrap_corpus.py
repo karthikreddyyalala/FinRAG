@@ -85,7 +85,7 @@ def test_target_tickers_cover_every_financebench_company():
     assert not missing, f"FinanceBench companies absent from corpus: {sorted(missing)}"
 
 
-@patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
+@patch("scripts.bootstrap_corpus.build_and_store_keyword_index")
 @patch("scripts.bootstrap_corpus.bootstrap_ticker")
 @patch("scripts.bootstrap_corpus.get_pinecone_index")
 @patch("scripts.bootstrap_corpus.boto3")
@@ -105,11 +105,12 @@ def test_main_builds_bm25_index_after_all_tickers(
     assert mock_bootstrap_ticker.call_count == expected
     mock_build_bm25.assert_called_once()
     # BM25 must be built over every ticker's chunks, not just the last one's
-    chunks_arg = mock_build_bm25.call_args[0][3]
+    # a generator: consume it to check every ticker's chunks reached the index
+    chunks_arg = list(mock_build_bm25.call_args[0][3])
     assert len(chunks_arg) == expected
 
 
-@patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
+@patch("scripts.bootstrap_corpus.build_and_store_keyword_index")
 @patch("scripts.bootstrap_corpus.bootstrap_ticker")
 @patch("scripts.bootstrap_corpus.get_pinecone_index")
 @patch("scripts.bootstrap_corpus.boto3")
@@ -135,7 +136,7 @@ def test_partial_run_does_not_publish_bm25(
     mock_build_bm25.assert_not_called()
 
 
-@patch("scripts.bootstrap_corpus.build_and_store_bm25_index")
+@patch("scripts.bootstrap_corpus.build_and_store_keyword_index")
 @patch("scripts.bootstrap_corpus.bootstrap_ticker")
 @patch("scripts.bootstrap_corpus.get_pinecone_index")
 @patch("scripts.bootstrap_corpus.boto3")

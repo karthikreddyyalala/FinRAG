@@ -10,7 +10,6 @@ from collections.abc import Callable
 from typing import Any
 
 from mcp.server import MCPServer
-from rank_bm25 import BM25Okapi
 
 from server.generation.answer_generator import generate_answer
 from server.retrieval.hybrid_retriever import hybrid_search
@@ -23,8 +22,7 @@ def build_search_filings_answer(
     query: str,
     bedrock_client: Any,
     pinecone_index: Any,
-    bm25_index: BM25Okapi,
-    bm25_chunks: list[dict[str, Any]],
+    keyword_index: Any,
     embed_fn: Callable[[str], list[float]],
     top_k: int = 5,
 ) -> dict[str, Any]:
@@ -35,8 +33,7 @@ def build_search_filings_answer(
         bedrock_client: A boto3 bedrock-runtime client (used for rewrite,
             generation, and -- via embed_fn's closure -- embeddings).
         pinecone_index: A Pinecone Index handle.
-        bm25_index: The corpus-wide BM25 index from sync_pinecone.load_bm25_index().
-        bm25_chunks: The chunks bm25_index was built from.
+        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
         embed_fn: Callable(text) -> embedding vector, for the Pinecone query.
         top_k: Number of chunks to keep after reranking.
 
@@ -46,7 +43,7 @@ def build_search_filings_answer(
     start = time.monotonic()
 
     rewritten = rewrite_query(bedrock_client, query)
-    candidates = hybrid_search(rewritten, bm25_index, bm25_chunks, pinecone_index, embed_fn)
+    candidates = hybrid_search(rewritten, keyword_index, pinecone_index, embed_fn)
     # The rewritten form carries the GAAP phrasing the lexical fallback needs;
     # CrossEncoder still sees the natural query it was trained on.
     top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=rewritten)
@@ -80,8 +77,7 @@ def register_search_filings_tool(
     mcp: MCPServer,
     bedrock_client: Any,
     pinecone_index: Any,
-    bm25_index: BM25Okapi,
-    bm25_chunks: list[dict[str, Any]],
+    keyword_index: Any,
     embed_fn: Callable[[str], list[float]],
 ) -> None:
     """Register the search_sec_filings tool on an MCPServer instance.
@@ -90,8 +86,7 @@ def register_search_filings_tool(
         mcp: The MCPServer instance to register the tool on.
         bedrock_client: A boto3 bedrock-runtime client.
         pinecone_index: A Pinecone Index handle.
-        bm25_index: The corpus-wide BM25 index.
-        bm25_chunks: The chunks bm25_index was built from.
+        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
         embed_fn: Callable(text) -> embedding vector.
     """
 
@@ -107,5 +102,5 @@ def register_search_filings_tool(
             Dict with answer text, citations, cost_usd, and latency_ms.
         """
         return build_search_filings_answer(
-            query, bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn
+            query, bedrock_client, pinecone_index, keyword_index, embed_fn
         )
