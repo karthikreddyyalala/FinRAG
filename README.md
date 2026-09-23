@@ -72,7 +72,7 @@ where `headers.txt` holds one line, `Authorization: Bearer <token>` — a file, 
 | Four-stage retrieval + numerical verification | Done |
 | Eval harness (FinanceBench, ragas, CI gate) | Done |
 | AWS deployment (Lambda + Function URL) | **Done** — see Deployment above |
-| Remaining 3 of 4 MCP tools | Not started |
+| All 4 MCP tools (search, financials, compare, latest filing) | **Done** — live-tested |
 | Cognito auth, observability dashboard | Not started |
 
 See `CLAUDE.md` for the full week-by-week build plan and current state.
