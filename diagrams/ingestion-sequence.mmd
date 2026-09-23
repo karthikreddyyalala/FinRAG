@@ -1,11 +1,18 @@
-%% Ingestion pipeline as actually implemented (scripts/bootstrap_corpus.py).
+%% Two separate flows share this pipeline:
+%%  1. ONE-TIME SEED (scripts/bootstrap_corpus.py, run manually): initial
+%%     corpus build, chunk_cache/ lives on local disk only, a cached ticker
+%%     is skipped forever (correct for a run-once seed, see main flow below).
+%%  2. DEPLOYED WEEKLY CRON (scripts/weekly_refresh.py, FinragIngestionStack
+%%     Lambda + EventBridge, rate(7 days)): diffs EDGAR's current filing list
+%%     against the cache by filing_date and ingests only what's new -- see
+%%     the box at the bottom. Re-running bootstrap's logic on a schedule
+%%     would re-embed and re-upsert 2000+ unchanged filings every week.
 %% Embeddings are OpenAI text-embedding-3-small (1536-dim), not Titan: the
 %% local fastembed/ONNX path was ~100x slower and Titan's dimensions do not
 %% match the 1536-dim Pinecone index.
 sequenceDiagram
     autonumber
-    participant EB as EventBridge (weekly cron)
-    participant B as bootstrap_corpus.py
+    participant B as bootstrap_corpus.py (one-time, manual)
     participant CC as chunk_cache/ (local, per-ticker)
     participant E as edgar_client.py
     participant S3R as S3 (finrag-raw-filings)
@@ -16,7 +23,7 @@ sequenceDiagram
     participant PC as Pinecone (finrag-filings, 1536-dim)
     participant S3P as S3 (finrag-processed-filings)
 
-    EB->>B: trigger ingestion
+    Note over B: run once locally to seed the corpus
 
     loop for each of 72 tickers
         B->>CC: cache hit for {ticker}.json?
@@ -62,3 +69,28 @@ sequenceDiagram
     B->>S3P: upload keyword/index.sqlite (~900 MB)
     B->>B: exit 1 if any ticker failed or is uncovered
     Note over PC,S3P: corpus ready: 164,092 chunks / 70 companies
+
+    rect rgb(240, 248, 255)
+    Note over B,S3P: DEPLOYED WEEKLY CRON (actual production path -- FinragIngestionStack)
+    participant EB as EventBridge (rate(7 days))
+    participant WR as weekly_refresh.py (Lambda, IngestionStack)
+
+    EB->>WR: trigger
+    WR->>S3P: download chunk_cache/*.json (Lambda cold start wipes local /tmp every time)
+    loop for each of 72 tickers
+        WR->>E: list_filings(ticker) -- cheap, EDGAR only
+        WR->>WR: diff against cached filing_dates
+        alt no new filings
+            WR->>WR: log "up to date", touch nothing
+        else new filings found
+            WR->>H: process only the NEW filings (same html_processor/chunker/sync_pinecone path above)
+            Note over WR: all-or-nothing per ticker, same as bootstrap_ticker --<br/>a failed new filing raises without writing a partial cache entry
+        end
+    end
+    WR->>S3P: upload updated chunk_cache/*.json
+    alt anything changed
+        WR->>S3P: rebuild + upload keyword/index.sqlite (same publish guard: never over partial coverage)
+    else nothing changed
+        WR->>WR: skip index rebuild -- no wasted S3 write
+    end
+    end
