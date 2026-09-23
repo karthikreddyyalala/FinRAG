@@ -15,6 +15,7 @@ import json
 import multiprocessing as mp
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -173,12 +174,47 @@ def main() -> None:
     print(f"\nKeyword index rebuilt: {count} chunks across {len(covered)} companies")
 
 
+CHUNK_CACHE_S3_PREFIX = "chunk_cache/"
+
+
+def _sync_chunk_cache_from_s3(s3_client: Any, bucket: str, local_dir: Path) -> None:
+    """Download every cached ticker file from S3 into local_dir.
+
+    A Lambda's local disk is wiped between invocations, and a weekly
+    schedule guarantees a cold start every time -- without this, the diff
+    logic in refresh_ticker() would see an empty cache and treat the whole
+    corpus as new.
+    """
+    local_dir.mkdir(parents=True, exist_ok=True)
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=CHUNK_CACHE_S3_PREFIX):
+        for obj in page.get("Contents", []):
+            filename = obj["Key"][len(CHUNK_CACHE_S3_PREFIX):]
+            if filename:
+                s3_client.download_file(bucket, obj["Key"], str(local_dir / filename))
+
+
+def _sync_chunk_cache_to_s3(s3_client: Any, bucket: str, local_dir: Path) -> None:
+    """Upload every local cache file back to S3 so the next cold start sees it."""
+    for f in local_dir.glob("*.json"):
+        s3_client.upload_file(str(f), bucket, f"{CHUNK_CACHE_S3_PREFIX}{f.name}")
+
+
 def handler(event: Any, context: Any) -> None:
-    """EventBridge Lambda entry point: load secrets from SSM, then refresh."""
+    """EventBridge Lambda entry point: pull the cache from S3, refresh, push it back."""
     load_secrets_from_ssm(
         boto3.client("ssm"), prefix=os.environ.get("FINRAG_SSM_PREFIX", "/finrag")
     )
-    main()
+    s3_client = boto3.client("s3")
+    _sync_chunk_cache_from_s3(s3_client, PROCESSED_BUCKET, CHUNK_CACHE)
+    try:
+        main()
+    finally:
+        # Push back even on failure: a partially-refreshed ticker that
+        # raised still wrote nothing to its cache file (refresh_ticker's
+        # all-or-nothing guarantee), so this can never persist a bad state --
+        # but tickers that succeeded before the failure should not be lost.
+        _sync_chunk_cache_to_s3(s3_client, PROCESSED_BUCKET, CHUNK_CACHE)
 
 
 if __name__ == "__main__":
