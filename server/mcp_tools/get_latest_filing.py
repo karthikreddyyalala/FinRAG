@@ -9,9 +9,11 @@ three tools run.
 """
 from __future__ import annotations
 
+import socket
 from dataclasses import asdict
 from typing import Any
 
+import botocore.exceptions
 from mcp.server import MCPServer
 
 from pipeline.edgar_client import get_cik_for_ticker, list_filings
@@ -27,18 +29,66 @@ SUMMARY_SYSTEM_PROMPT = (
 )
 
 
+def _is_bedrock_unavailable(exc: Exception) -> bool:
+    """True when Bedrock is throttling, unreachable, or not enabled here.
+
+    Kept in sync with the identical check in query_rewriter.py and
+    answer_generator.py (deliberately duplicated, not imported -- see
+    those modules' comments). Every other LLM call site in this codebase
+    already fell back to OpenAI after being burned by exactly this
+    failure mode killing a live run.
+    """
+    timeout_types = (
+        botocore.exceptions.ReadTimeoutError
+        | botocore.exceptions.ConnectTimeoutError
+        | botocore.exceptions.EndpointConnectionError
+        | socket.timeout
+    )
+    if isinstance(exc, timeout_types):
+        return True
+    text = str(exc)
+    return (
+        "Throttling" in text
+        or "throttl" in text.lower()
+        or "ResourceNotFoundException" in text
+    )
+
+
+def _call_openai_summary(ticker: str, filing_type: str, context: str) -> str:
+    import os
+
+    from openai import OpenAI
+
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    r = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+            {"role": "user", "content": f"{ticker} {filing_type}:\n\n{context}"},
+        ],
+    )
+    return r.choices[0].message.content.strip()
+
+
 def _summarize(bedrock_client: Any, ticker: str, filing_type: str, chunks: list[dict]) -> str:
     if not chunks:
         return NOT_INGESTED_MESSAGE
 
     context = "\n\n".join(c.get("text", "") for c in chunks)
-    response = bedrock_client.converse(
-        modelId=HAIKU_MODEL_ID,
-        system=[{"text": SUMMARY_SYSTEM_PROMPT}],
-        messages=[{"role": "user", "content": [{"text": f"{ticker} {filing_type}:\n\n{context}"}]}],
-        inferenceConfig={"temperature": 0},
-    )
-    return response["output"]["message"]["content"][0]["text"].strip()
+    user_text = f"{ticker} {filing_type}:\n\n{context}"
+    try:
+        response = bedrock_client.converse(
+            modelId=HAIKU_MODEL_ID,
+            system=[{"text": SUMMARY_SYSTEM_PROMPT}],
+            messages=[{"role": "user", "content": [{"text": user_text}]}],
+            inferenceConfig={"temperature": 0},
+        )
+        return response["output"]["message"]["content"][0]["text"].strip()
+    except Exception as e:
+        if not _is_bedrock_unavailable(e):
+            raise
+        return _call_openai_summary(ticker, filing_type, context)
 
 
 def build_latest_filing_answer(
