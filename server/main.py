@@ -38,6 +38,8 @@ from server.mcp_tools.compare_companies import register_compare_companies_tool
 from server.mcp_tools.get_financials import register_get_financials_tool
 from server.mcp_tools.get_latest_filing import register_get_latest_filing_tool
 from server.mcp_tools.search_filings import register_search_filings_tool
+from server.ssm_secrets import SECRET_PARAMETERS as SECRET_PARAMETERS  # re-export
+from server.ssm_secrets import load_secrets_from_ssm
 
 COGNITO_REQUIRED_SCOPE = "finrag/invoke"
 WELL_KNOWN_OAUTH_PATH = "/.well-known/oauth-protected-resource"
@@ -47,43 +49,7 @@ KEYWORD_INDEX_KEY = "keyword/index.sqlite"
 # /tmp is the only writable path on Lambda and persists across warm invocations.
 KEYWORD_INDEX_LOCAL_PATH = "/tmp/finrag/keyword.sqlite"
 
-# SSM parameter name (under the prefix) -> environment variable it populates.
-SECRET_PARAMETERS = {
-    "openai-api-key": "OPENAI_API_KEY",
-    "pinecone-api-key": "PINECONE_API_KEY",
-    "mcp-auth-token": "MCP_AUTH_TOKEN",
-}
-
 ProductionDependencies = tuple[Any, Any, Any, Callable[[str], list[float]]]
-
-
-def load_secrets_from_ssm(ssm_client: Any, prefix: str) -> None:
-    """Populate secret environment variables from SSM SecureString parameters.
-
-    The Lambda carries only parameter *names*; values never appear in code or
-    in the CloudFormation template. A variable already set in the environment
-    wins, so local dev and the eval harness keep working without SSM.
-
-    Args:
-        ssm_client: A boto3 SSM client.
-        prefix: Parameter path prefix, e.g. "/finrag".
-
-    Raises:
-        RuntimeError: If a needed parameter is missing -- better to fail the
-            cold start than to surface later as a vague auth error.
-    """
-    needed = {
-        f"{prefix}/{param}": env_var
-        for param, env_var in SECRET_PARAMETERS.items()
-        if not os.environ.get(env_var)
-    }
-    if not needed:
-        return
-    resp = ssm_client.get_parameters(Names=list(needed), WithDecryption=True)
-    if resp.get("InvalidParameters"):
-        raise RuntimeError(f"SSM parameters missing: {sorted(resp['InvalidParameters'])}")
-    for param in resp["Parameters"]:
-        os.environ[needed[param["Name"]]] = param["Value"]
 
 
 def create_app(
