@@ -22,9 +22,13 @@ from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_logs as logs
 from constructs import Construct
 
-# mcp-remote's default local OAuth redirect listener (matches the
-# --callback-port a client is told to pass; see README's Deployment section).
-OAUTH_CALLBACK_URL = "http://localhost:8090/oauth/callback"
+# mcp-remote derives a stable local callback port from a hash of the server
+# URL (not a fixed default) -- verified live for this exact Function URL by
+# running mcp-remote directly and reading "Using callback port derived from
+# the server URL: 11164" from its own log. A mismatch here fails silently in
+# Cognito's hosted UI ("An error was encountered with the requested page"),
+# not with any error naming the redirect_uri.
+OAUTH_CALLBACK_URL = "http://localhost:11164/oauth/callback"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PACKAGES = ("server", "pipeline")
