@@ -24,6 +24,7 @@ from functools import lru_cache
 from typing import Any
 
 import boto3
+import jwt
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from mangum import Mangum
@@ -31,10 +32,13 @@ from mcp.server import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
 from pipeline.sync_pinecone import get_embed_fn, get_pinecone_index, load_keyword_index
+from server.auth.cognito_validator import validate_token
 from server.mcp_tools.compare_companies import register_compare_companies_tool
 from server.mcp_tools.get_financials import register_get_financials_tool
 from server.mcp_tools.get_latest_filing import register_get_latest_filing_tool
 from server.mcp_tools.search_filings import register_search_filings_tool
+
+COGNITO_REQUIRED_SCOPE = "finrag/invoke"
 
 PROCESSED_BUCKET = "finrag-processed-filings"
 KEYWORD_INDEX_KEY = "keyword/index.sqlite"
@@ -171,10 +175,46 @@ def get_dependencies() -> ProductionDependencies:
     return _build_production_dependencies()
 
 
+@lru_cache(maxsize=1)
+def _get_jwks_client(pool_id: str, region: str) -> jwt.PyJWKClient:
+    """Cached per Lambda instance -- reuses PyJWKClient's own key cache
+    across warm invocations instead of refetching the JWKS on every request.
+    """
+    jwks_uri = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}/.well-known/jwks.json"
+    return jwt.PyJWKClient(jwks_uri)
+
+
 def _is_authorized(authorization_header: str | None, token: str) -> bool:
-    """Constant-time check of an Authorization header against the token."""
-    supplied = (authorization_header or "").encode()
-    return hmac.compare_digest(supplied, f"Bearer {token}".encode())
+    """Accept either the static bearer token or a valid Cognito access token.
+
+    Dual-accept, not a hard cutover: the static token is already verified
+    working end to end in a real client. Cognito login needs an interactive
+    browser consent screen no CLI session can complete, so both stay valid
+    until that's confirmed from an actual client -- see CLAUDE.md Phase 11.
+    """
+    header = authorization_header or ""
+    if hmac.compare_digest(header.encode(), f"Bearer {token}".encode()):
+        return True
+
+    supplied = header.removeprefix("Bearer ").strip()
+    pool_id = os.environ.get("COGNITO_USER_POOL_ID")
+    client_id = os.environ.get("COGNITO_CLIENT_ID")
+    region = os.environ.get("AWS_REGION")
+    if not (supplied and pool_id and client_id and region):
+        return False
+
+    issuer = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}"
+    try:
+        validate_token(
+            supplied, _get_jwks_client(pool_id, region), issuer, client_id,
+            required_scope=COGNITO_REQUIRED_SCOPE,
+        )
+        return True
+    except Exception:
+        # Fail closed on anything: bad signature, expired, wrong scope, or a
+        # transient JWKS fetch failure should all read as unauthorized, not
+        # crash the request.
+        return False
 
 
 def handler(event: Any, context: Any) -> Any:
