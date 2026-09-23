@@ -749,11 +749,27 @@ DONE -- Cognito OAuth 2.1/PKCE (dual-accept, not yet a hard cutover)
       every one of the 3 deploys above)
   [x] Cognito user created (admin-create-user, FORCE_CHANGE_PASSWORD --
       sets their own password on first hosted-UI login, not set by Claude)
-  [ ] NOT DONE, needs a human: log in from an actual MCP client (Claude
-      Desktop / mcp-remote) to confirm the browser OAuth flow end to end --
-      this environment cannot complete an interactive consent screen. Once
-      confirmed, retire the static MCP_AUTH_TOKEN bearer path and its
-      SSM parameter/header file.
+  [x] Three real bugs found by actually attempting the login flow (not
+      just deploying and assuming): (1) mcp-remote defaults to OAuth
+      Dynamic Client Registration, which Cognito doesn't support -- fixed
+      client-side with --static-oauth-client-info pointing at the
+      pre-registered app client; (2) Cognito's hosted UI failed with a
+      bare unexplained error -- mcp-remote derives its local callback port
+      from a hash of the server URL (11164 for this Function URL), not a
+      fixed default, and the CDK-registered callback URL had a guessed,
+      wrong port (8090); (3) invalid_scope -- the app client only allowed
+      the custom finrag/invoke scope, but mcp-remote's default authorize
+      request always includes openid/email/phone/profile too, and Cognito
+      rejects the whole request if any requested scope isn't allowed.
+      See README's Deployment section for the working config + full
+      writeup.
+  [x] CLI-verified after both infra fixes: the authorize URL now returns
+      302 (real login redirect), not an OAuth error
+  [ ] NOT DONE, needs a human: actually complete the browser login (enter
+      password, click through consent) from Claude Desktop -- this
+      environment can generate the correct authorize URL and confirm
+      Cognito accepts it, but cannot type a password into a browser.
+      Once confirmed, retire the static MCP_AUTH_TOKEN bearer path.
   Outputs: CognitoUserPoolId us-east-1_DfcfEbPLO, CognitoClientId
     5n9n0e2ugjnklckjlrtc50p9c4, CognitoAuthorizeUrl
     https://finrag-mcp-496158977343.auth.us-east-1.amazoncognito.com
