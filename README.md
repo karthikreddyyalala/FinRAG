@@ -76,7 +76,8 @@ To try it, replace the `--header-file` args with `--static-oauth-client-info`:
       "args": [
         "-y", "mcp-remote",
         "<Function URL>/mcp",
-        "--static-oauth-client-info", "{\"client_id\":\"5n9n0e2ugjnklckjlrtc50p9c4\"}"
+        "--static-oauth-client-info", "{\"client_id\":\"5n9n0e2ugjnklckjlrtc50p9c4\"}",
+        "--static-oauth-client-metadata", "{\"scope\":\"openid finrag/invoke\",\"token_endpoint_auth_method\":\"none\"}"
       ]
     }
   }
@@ -88,6 +89,12 @@ To try it, replace the `--header-file` args with `--static-oauth-client-info`:
 Two more bugs only showed up live, past that first one:
 - Cognito's hosted UI returned a bare "An error was encountered with the requested page" with no explanation. Root cause: `mcp-remote` derives its local OAuth callback port from a hash of the server URL (`11164` for this Function URL, not a fixed default), and the CDK-registered callback URL had a different, guessed port (`8090`). Fixed by reading the actual port from `mcp-remote`'s own log and registering that.
 - Then `invalid_request - invalid_scope`: the app client only allowed our custom `finrag/invoke` scope, but `mcp-remote`'s default authorize request always asks for `openid email phone profile` too, and Cognito rejects the whole request if any requested scope isn't explicitly allowed. Fixed by adding the four standard OIDC scopes to the app client.
+
+Two more client-side settings, both in `--static-oauth-client-metadata`:
+- `scope`: `mcp-remote` picks scopes from Cognito's discovery metadata, which only lists the standard OIDC ones — never custom resource-server scopes. Without pinning `finrag/invoke`, login succeeds but every request gets a 401, and `mcp-remote` deletes the cached token and gives up.
+- `token_endpoint_auth_method: none`: Cognito's metadata only advertises `client_secret_basic/post`, so `mcp-remote` would try to authenticate the token exchange with a secret this public PKCE client doesn't have.
+
+Claude Desktop reads this config only at launch — after editing it, fully quit (Cmd+Q), don't just close the window.
 
 First login prompts you to set a permanent password for `karthikreddyy386@gmail.com`. Once you've confirmed it works end to end in Claude Desktop, the static token path gets retired.
 
