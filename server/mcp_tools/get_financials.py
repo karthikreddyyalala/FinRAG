@@ -51,7 +51,13 @@ def build_financials_answer(
     lexical_query = expand_financial_terms(f"{ticker} {metric} {period}")
 
     candidates = hybrid_search(lexical_query, keyword_index, pinecone_index, embed_fn)
-    top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=lexical_query)
+    # The ticker is a known input here, unlike search_sec_filings' free-text
+    # queries -- a short ticker like "F" is too weak a lexical signal for
+    # BM25/dense retrieval to reliably constrain to the right company, so an
+    # unrelated chunk from another ticker can ride along in the candidate
+    # set. Filtering by the metadata we already have is cheap and exact.
+    own_ticker_candidates = [c for c in candidates if c.get("ticker", "").upper() == ticker.upper()]
+    top_chunks = rerank(query, own_ticker_candidates, top_k=top_k, lexical_query=lexical_query)
 
     raw_answer = generate_answer(bedrock_client, query, top_chunks)
     source_texts = [chunk["text"] for chunk in top_chunks]
