@@ -564,9 +564,46 @@ If any service approaches $10, stop and investigate before continuing.
 ## Phase 11: Current State (Update Every Session)
 
 ```
-Current week: 3 DONE -> starting 5 (deployment prioritized ahead of Week 4)
-Branch: week3-eval-harness (9 commits ahead of main, not yet pushed/merged)
-Test status: 125 unit tests passing, ruff clean
+Current week: 3 DONE, 5 (deployment) IN PROGRESS -- Lambda live with all 4
+  MCP tools; Cognito + weekly refresh still open
+Branch: week5-deployment (pushed to origin, not yet merged), off main which
+  has week3-eval-harness merged (PRs #3/#4)
+Test status: 164 unit tests passing, ruff clean
+
+DEPLOYED: finrag-mcp-server Lambda + Function URL, us-east-1, arm64,
+  2048MB/120s/2GB ephemeral. Bearer auth checked before any cold-start work.
+  Secrets via SSM /finrag/* (openai-api-key, pinecone-api-key,
+  mcp-auth-token). Verified live: canonical FinanceBench Q1 (3M FY2018
+  capex) returns $(1,577)M cited to MMM 10-K 2019-02-07, matching local.
+  Claude Desktop config written (~/Library/Application Support/Claude/
+  claude_desktop_config.json, backed up to .bak first).
+
+All 4 MCP tools built (TDD) and live: search_sec_filings,
+  get_company_financials, compare_companies, get_latest_filing. Tools 2/3
+  deliberately skip the Haiku rewrite call (input is already structured --
+  ticker/metric/period, nothing to expand from natural language) and go
+  straight to GAAP-expansion + hybrid search + rerank + verify. Tool 4 skips
+  the RAG pipeline entirely: metadata comes live from EDGAR (corpus can lag
+  it by up to a week), summary is one Haiku call over whatever's ingested,
+  with the same Bedrock->OpenAI fallback every other LLM call site has.
+  Live testing caught and fixed a real bug before it shipped: compare_
+  companies(["TSLA","F"], revenue, 2024) cited Ford's number to a *Pfizer*
+  10-K -- "F" was too weak a lexical token to constrain BM25/dense retrieval
+  to Ford alone. Fixed by filtering candidates to the requested ticker
+  (metadata we already have) before reranking, since -- unlike
+  search_sec_filings' free-text queries -- the ticker is a known input for
+  these two tools. Re-verified live after the fix: TSLA answered correctly,
+  F correctly refused ("context does not provide") instead of misattributing.
+  Old bm25/index.pkl deleted from S3 (was superseded by FTS5, sat unused).
+
+rank-bm25 replaced with SQLite FTS5 (server/*, pipeline/sync_pinecone.py
+  KeywordIndex): old in-memory build peaked at 7.5GB and needed a temporary
+  EC2 box; FTS5 streams in bounded memory (568MB peak) and serves from disk.
+  Also fixed real bm25/index.pkl bugs found only once this ran on Lambda:
+  server embedded queries with Titan while the corpus is OpenAI-embedded
+  (get_embed_fn() now shared between server and eval harness); DNS-rebinding
+  host check rejected every Function URL request (421); MCP session
+  manager's run-once-per-instance broke warm Lambda invocations.
 Corpus: 71/72 companies ingested. FY2018-2026 depth for the 32 FinanceBench
   companies, 2025-2026 for the other 40. SPOT out of scope (20-F filer, not
   10-K/10-Q). PYPL temporarily absent (Pinecone free-tier write cap hit
@@ -665,29 +702,43 @@ real CrossEncoder reranker (torch deadlocks on macOS + Python 3.13, so it
 currently falls back to a lexical scorer locally).
 
 ```
-DONE -- Week 3
-  [x] Corpus rebuilt: 71/72 tickers, FY2018-2026 depth for FinanceBench cos
-  [x] Verified: BM25 covers 70 companies with chunks; SMOKE test confirmed
-      the FY2018 3M capex question retrieves the correct MMM chunk and the
-      $1,577M figure, cited to the right 10-K
-  [x] Full 150Q eval run to completion, deterministic, 600/600 ragas scored
-  [x] README.md written with the results table and coverage caveats
-  [x] This section updated with real numbers
-  [ ] Push branch to GitHub, open PR to main  <-- do this next
+DONE -- Week 3 (merged to main via PR #3/#4)
+
+DONE so far -- Week 5 deployment
+  [x] rank-bm25 -> SQLite FTS5 (KeywordIndex): 7.5GB build -> 568MB, no EC2
+  [x] Fixed server's Titan/OpenAI embedder mismatch (get_embed_fn() shared)
+  [x] infra/stacks/mcp_server_stack.py -- Lambda + Function URL, no Docker
+      (local pip bundling), no API Gateway (29s cap too short for cold start)
+  [x] Fixed 3 bugs only visible once actually deployed: DNS-rebinding host
+      check (421 on every request), session-manager run-once-per-instance
+      (crashed warm invocations), unauthenticated requests triggering full
+      cold starts before the 401
+  [x] Bearer auth (interim until Cognito), SSM secrets, scoped IAM
+  [x] Deployed. Live-tested: canonical FinanceBench Q1 matches local exactly
+  [x] Claude Desktop config written (backed up original first)
+  [x] README.md Deployment section; this section updated
+  [x] S3 cleanup: deleted unused bm25/index.pkl
+  [x] get_company_financials, compare_companies, get_latest_filing -- all 3
+      built TDD, deployed, live-verified; 1 real bug found live and fixed
+      (cross-ticker citation on single-letter tickers -- see above)
+  [ ] Push week5-deployment, open PR to main  <-- do this next
+  [ ] Manually verify in Claude Desktop (restart app, ask a real question)
 
   Rerun commands (for future reference):
     python3 scripts/bootstrap_corpus.py          # skips cached tickers
     PYTHONPATH=. python3 evals/run_eval.py       # checkpoints per question
+    PYTHONPATH=. npx -y aws-cdk deploy FinragMcpServerStack --app "python3 infra/app.py" --require-approval never
 
-NEXT -- Week 5 deployment (pulled forward)
-  [ ] infra/stacks/mcp_server_stack.py -- Lambda + API Gateway
-  [ ] Package reranker as container-image Lambda (torch > 250MB zip limit)
-  [ ] Deploy, connect Claude Desktop to the live endpoint, test 5 queries
-  [ ] Re-enable CrossEncoder on Lambda, re-run eval, compare to lexical baseline
-  [ ] mcp_tools: get_company_financials, compare_companies, get_latest_filing
-      (currently 1 of 4 tools exists)
-  [ ] auth/cognito_validator.py -- OAuth 2.1 + PKCE, JWKS validation
+NEXT -- Week 5 remainder
+  [ ] auth/cognito_validator.py -- OAuth 2.1 + PKCE, JWKS validation; retire
+      the interim bearer-token check once wired
   [ ] EventBridge weekly refresh -> scripts/weekly_refresh.py
+  [~] CrossEncoder reranker -- deferred: needs a container-image Lambda
+      (torch/sentence-transformers too large for the zip bundle), which
+      needs Docker/colima/podman locally, none of which are installed.
+      Not pursued: the lexical fallback is already live-verified correct
+      (91% numerical accuracy) and CrossEncoder's payoff here is unproven,
+      so the setup cost isn't justified right now.
 
 THEN -- Week 4 observability (deferred)
   [ ] observability/logger.py -- per-stage cost/latency/tokens to DynamoDB
@@ -712,11 +763,25 @@ THEN -- Week 6 polish
 - PYPL missing from corpus: Pinecone free-tier monthly write-unit cap (2M)
   exhausted by repeated corpus rebuilds today. Resets monthly; backfill by
   deleting evals/results/chunk_cache/PYPL.json and re-running bootstrap
-- CrossEncoder disabled locally (macOS + Python 3.13 torch deadlock); the
-  lexical fallback in reranker.py is a stopgap until Lambda deployment
-- infra/ has only storage_stack.py; mcp_server/pinecone/observability stacks
-  do not exist
-- Nothing is deployed to AWS; the system runs on a laptop only
+- CrossEncoder still disabled everywhere, including on the now-deployed
+  Lambda (reranker.py's lexical fallback is what's live); needs a
+  container-image Lambda (Docker not installed locally) -- deferred, see
+  Phase 11 "NEXT" above for the reasoning
+- infra/ has storage_stack.py and mcp_server_stack.py; pinecone_stack.py and
+  observability_stack.py do not exist yet
+- Bearer-token auth is interim, not Cognito; token lives in SSM and in
+  Claude Desktop's local config file, not in any short-lived credential flow
+- get_company_financials/compare_companies filter retrieval candidates by
+  exact ticker match on chunk metadata (fixes the Ford/Pfizer bug) but do
+  not filter by period. Live test: querying MMM capex for FY2018 retrieved
+  only 2023-2025 chunks and correctly refused rather than hallucinating --
+  safe, but it won't find a period-specific answer that exists deeper in
+  the corpus than hybrid_search's top_k=10 reaches. The full search tool
+  handles this via Haiku's date-constraint extraction; tools 2/3 skip that
+  call by design (see Phase 11 above), so they're weaker on ambiguous dates
+- An OpenAI API key was pasted in plaintext in a chat session during setup
+  this week and is considered exposed; rotate it in the OpenAI dashboard and
+  update the /finrag/openai-api-key SSM parameter
 ```
 
 ---
@@ -780,7 +845,8 @@ FinRAG MCP | Python, AWS Bedrock, MCP SDK, FastAPI, ragas    [In Progress]
 • Built an EDGAR ingestion pipeline covering 71 companies and 2,000+ SEC
   filings (10-K/10-Q/8-K, up to 8 years of history per company) with
   table-aware HTML extraction, hierarchical chunking, and content-addressed
-  chunk IDs for idempotent re-ingestion into Pinecone and a BM25 index
+  chunk IDs for idempotent re-ingestion into Pinecone and a SQLite FTS5
+  keyword index
 
 • Engineered a four-stage retrieval pipeline — query rewriting (Claude Haiku
   plus a deterministic GAAP line-item expansion), parallel BM25/dense hybrid
@@ -789,9 +855,9 @@ FinRAG MCP | Python, AWS Bedrock, MCP SDK, FastAPI, ragas    [In Progress]
   150-question FinanceBench benchmark, with all 150 questions answered and
   independently spot-verified end to end
 
-• Currently building AWS serverless deployment (Lambda, API Gateway),
-  Cognito auth, and 3 additional MCP tools; runs today via any MCP client
-  connected to a local server
+• Deployed serverless on AWS (Lambda behind a Function URL, arm64,
+  SSM-managed secrets, scoped IAM); currently adding Cognito OAuth 2.1/PKCE
+  and 3 additional MCP tools on top of the one already live
 ```
 
 ### Final version (DO NOT USE YET -- template for after Week 5 deployment)
