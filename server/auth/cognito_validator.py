@@ -15,7 +15,13 @@ class TokenValidationError(Exception):
     """Raised for any invalid, expired, or wrongly-scoped bearer token."""
 
 
-def validate_token(token: str, jwks_client: Any, issuer: str, client_id: str) -> dict[str, Any]:
+def validate_token(
+    token: str,
+    jwks_client: Any,
+    issuer: str,
+    client_id: str,
+    required_scope: str | None = None,
+) -> dict[str, Any]:
     """Validate a Cognito-issued access token and return its claims.
 
     Args:
@@ -28,13 +34,15 @@ def validate_token(token: str, jwks_client: Any, issuer: str, client_id: str) ->
             accepts tokens for. Required even though the token's signature
             already proves it came from our user pool: without it, any app
             registered in the same pool could call this server.
+        required_scope: If given, must appear in the token's space-separated
+            `scope` claim.
 
     Returns:
         The decoded token claims.
 
     Raises:
         TokenValidationError: Signature invalid, expired, wrong issuer,
-            wrong client, or not an access token.
+            wrong client, missing scope, or not an access token.
     """
     try:
         signing_key = jwks_client.get_signing_key_from_jwt(token)
@@ -49,5 +57,7 @@ def validate_token(token: str, jwks_client: Any, issuer: str, client_id: str) ->
         raise TokenValidationError("Not an access token")
     if claims.get("client_id") != client_id:
         raise TokenValidationError("Token issued for a different app client")
+    if required_scope and required_scope not in claims.get("scope", "").split():
+        raise TokenValidationError(f"Missing required scope {required_scope!r}")
 
     return claims
