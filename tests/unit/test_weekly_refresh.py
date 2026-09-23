@@ -17,7 +17,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pipeline.edgar_client import FilingMetadata
-from scripts.weekly_refresh import KNOWN_UNAVAILABLE, TARGET_TICKERS, handler, main, refresh_ticker
+from scripts.weekly_refresh import (
+    KNOWN_UNAVAILABLE,
+    TARGET_TICKERS,
+    _sync_chunk_cache_from_s3,
+    _sync_chunk_cache_to_s3,
+    handler,
+    main,
+    refresh_ticker,
+)
 
 OLD_FILING = FilingMetadata(
     ticker="NVDA", cik=1045810, form_type="10-Q", filing_date="2026-05-01",
@@ -169,14 +177,77 @@ def test_known_unavailable_tickers_never_attempted():
     assert set(KNOWN_UNAVAILABLE) & set(TARGET_TICKERS) == set(KNOWN_UNAVAILABLE)
 
 
+@patch("scripts.weekly_refresh._sync_chunk_cache_to_s3")
+@patch("scripts.weekly_refresh._sync_chunk_cache_from_s3")
 @patch("scripts.weekly_refresh.main")
 @patch("scripts.weekly_refresh.load_secrets_from_ssm")
 @patch("scripts.weekly_refresh.boto3")
-def test_handler_loads_secrets_then_refreshes(mock_boto3, mock_load_secrets, mock_main):
+def test_handler_loads_secrets_then_refreshes(
+    mock_boto3, mock_load_secrets, mock_main, mock_sync_from, mock_sync_to
+):
     handler({}, MagicMock())
 
     mock_load_secrets.assert_called_once()
+    mock_sync_from.assert_called_once()
     mock_main.assert_called_once()
+    mock_sync_to.assert_called_once()
+
+
+@patch("scripts.weekly_refresh._sync_chunk_cache_to_s3")
+@patch("scripts.weekly_refresh._sync_chunk_cache_from_s3")
+@patch("scripts.weekly_refresh.main")
+@patch("scripts.weekly_refresh.load_secrets_from_ssm")
+@patch("scripts.weekly_refresh.boto3")
+def test_handler_still_uploads_cache_when_main_fails(
+    mock_boto3, mock_load_secrets, mock_main, mock_sync_from, mock_sync_to
+):
+    """Tickers that succeeded before a later one failed must not be lost --
+    refresh_ticker already guarantees a failed ticker wrote nothing to its
+    own cache file, so uploading on failure is always safe."""
+    mock_main.side_effect = SystemExit(1)
+
+    with pytest.raises(SystemExit):
+        handler({}, MagicMock())
+
+    mock_sync_to.assert_called_once()
+
+
+def test_download_from_s3_populates_the_local_cache_dir(tmp_path):
+    """A weekly Lambda cold start starts with an empty /tmp every time --
+    without this, refresh_ticker would see an empty cache for every ticker,
+    read every EDGAR filing as new, and re-ingest the whole 2000+ filing
+    corpus weekly instead of just what's new."""
+    s3 = MagicMock()
+    s3.get_paginator.return_value.paginate.return_value = [
+        {"Contents": [{"Key": "chunk_cache/NVDA.json"}, {"Key": "chunk_cache/AAPL.json"}]}
+    ]
+
+    _sync_chunk_cache_from_s3(s3, "finrag-processed-filings", tmp_path)
+
+    calls = {c.args[1] for c in s3.download_file.call_args_list}
+    assert calls == {"chunk_cache/NVDA.json", "chunk_cache/AAPL.json"}
+
+
+def test_download_from_s3_handles_an_empty_cache_prefix(tmp_path):
+    """First-ever run: nothing in S3 yet. Must not crash on a missing
+    'Contents' key -- that's what an empty prefix listing looks like."""
+    s3 = MagicMock()
+    s3.get_paginator.return_value.paginate.return_value = [{}]
+
+    _sync_chunk_cache_from_s3(s3, "finrag-processed-filings", tmp_path)  # must not raise
+
+    s3.download_file.assert_not_called()
+
+
+def test_upload_to_s3_pushes_every_local_cache_file(tmp_path):
+    (tmp_path / "NVDA.json").write_text("[]")
+    (tmp_path / "AAPL.json").write_text("[]")
+    s3 = MagicMock()
+
+    _sync_chunk_cache_to_s3(s3, "finrag-processed-filings", tmp_path)
+
+    uploaded_keys = {c.args[2] for c in s3.upload_file.call_args_list}
+    assert uploaded_keys == {"chunk_cache/NVDA.json", "chunk_cache/AAPL.json"}
 
 
 @patch("scripts.weekly_refresh.build_and_store_keyword_index")
