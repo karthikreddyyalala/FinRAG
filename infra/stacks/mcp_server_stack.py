@@ -30,6 +30,7 @@ RUNTIME_REQUIREMENTS = (
     "mcp>=2.0,<3.0",
     "pinecone>=8.0,<9.0",
     "openai>=1.50,<3.0",
+    "requests>=2.31,<3.0",
 )
 PYTHON_VERSION = "3.13"
 
