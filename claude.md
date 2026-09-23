@@ -568,7 +568,7 @@ Current week: 3 DONE, 5 (deployment) IN PROGRESS -- Lambda live with all 4
   MCP tools; Cognito + weekly refresh still open
 Branch: week5-deployment (pushed to origin, not yet merged), off main which
   has week3-eval-harness merged (PRs #3/#4)
-Test status: 164 unit tests passing, ruff clean
+Test status: 182 unit tests passing, ruff clean
 
 DEPLOYED: finrag-mcp-server Lambda + Function URL, us-east-1, arm64,
   2048MB/120s/2GB ephemeral. Bearer auth checked before any cold-start work.
@@ -729,9 +729,37 @@ DONE so far -- Week 5 deployment
     PYTHONPATH=. python3 evals/run_eval.py       # checkpoints per question
     PYTHONPATH=. npx -y aws-cdk deploy FinragMcpServerStack --app "python3 infra/app.py" --require-approval never
 
+DONE -- Cognito OAuth 2.1/PKCE (dual-accept, not yet a hard cutover)
+  [x] server/auth/cognito_validator.py -- JWKS signature, issuer, client_id,
+      token_use, scope, all TDD (8 tests, real RSA keypair, no live Cognito
+      needed to test the logic)
+  [x] CDK: single-user Cognito pool (no self-signup), public PKCE app
+      client (no secret), finrag/invoke resource-server scope, hosted domain
+  [x] server/main.py: _is_authorized accepts EITHER the static token or a
+      valid Cognito JWT -- deliberately not a cutover, see below
+  [x] /.well-known/oauth-protected-resource (RFC 9728) so a client's OAuth
+      discovery can actually find Cognito -- without this, wiring the
+      validator alone is unreachable dead code. Bug caught live: the
+      FastAPI-level auth bypass for this path never ran, because
+      handler()'s OWN earlier auth check (checked before create_app() is
+      even built, by design, to avoid a cold start on anonymous probes)
+      rejected it first. Fixed with a matching bypass at that layer too.
+  [x] Deployed. Live-verified: discovery endpoint public (200, no token),
+      static bearer token still works unchanged (regression-checked after
+      every one of the 3 deploys above)
+  [x] Cognito user created (admin-create-user, FORCE_CHANGE_PASSWORD --
+      sets their own password on first hosted-UI login, not set by Claude)
+  [ ] NOT DONE, needs a human: log in from an actual MCP client (Claude
+      Desktop / mcp-remote) to confirm the browser OAuth flow end to end --
+      this environment cannot complete an interactive consent screen. Once
+      confirmed, retire the static MCP_AUTH_TOKEN bearer path and its
+      SSM parameter/header file.
+  Outputs: CognitoUserPoolId us-east-1_DfcfEbPLO, CognitoClientId
+    5n9n0e2ugjnklckjlrtc50p9c4, CognitoAuthorizeUrl
+    https://finrag-mcp-496158977343.auth.us-east-1.amazoncognito.com
+
 NEXT -- Week 5 remainder
-  [ ] auth/cognito_validator.py -- OAuth 2.1 + PKCE, JWKS validation; retire
-      the interim bearer-token check once wired
+  [ ] Human verification of the Cognito login flow above
   [ ] EventBridge weekly refresh -> scripts/weekly_refresh.py
   [~] CrossEncoder reranker -- deferred: needs a container-image Lambda
       (torch/sentence-transformers too large for the zip bundle), which
@@ -769,8 +797,11 @@ THEN -- Week 6 polish
   Phase 11 "NEXT" above for the reasoning
 - infra/ has storage_stack.py and mcp_server_stack.py; pinecone_stack.py and
   observability_stack.py do not exist yet
-- Bearer-token auth is interim, not Cognito; token lives in SSM and in
-  Claude Desktop's local config file, not in any short-lived credential flow
+- Cognito is deployed and wired (dual-accept), but not yet confirmed by an
+  actual browser login -- the static bearer token is still the only path
+  verified working end to end. Token lives in SSM and in Claude Desktop's
+  local config file, not in any short-lived credential flow, until Cognito
+  login is confirmed and the static path is retired
 - get_company_financials/compare_companies filter retrieval candidates by
   exact ticker match on chunk metadata (fixes the Ford/Pfizer bug) but do
   not filter by period. Live test: querying MMM capex for FY2018 retrieved
