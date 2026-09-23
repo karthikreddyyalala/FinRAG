@@ -17,6 +17,7 @@ through Mangum with real Function URL events before deploying:
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -39,6 +40,7 @@ from server.mcp_tools.get_latest_filing import register_get_latest_filing_tool
 from server.mcp_tools.search_filings import register_search_filings_tool
 
 COGNITO_REQUIRED_SCOPE = "finrag/invoke"
+WELL_KNOWN_OAUTH_PATH = "/.well-known/oauth-protected-resource"
 
 PROCESSED_BUCKET = "finrag-processed-filings"
 KEYWORD_INDEX_KEY = "keyword/index.sqlite"
@@ -122,24 +124,22 @@ def create_app(
 
     # Public by definition (RFC 9728): an OAuth client has no token yet when
     # it fetches this to discover where to get one. Must stay reachable
-    # without auth, or a client's OAuth discovery can never bootstrap.
-    @app.get("/.well-known/oauth-protected-resource")
+    # without auth, or a client's OAuth discovery can never bootstrap. (The
+    # Lambda handler has its own earlier copy of this bypass -- see
+    # WELL_KNOWN_OAUTH_PATH in handler() -- since its own auth check runs
+    # before create_app() is ever called.)
+    @app.get(WELL_KNOWN_OAUTH_PATH)
     async def oauth_protected_resource(request: Request) -> Any:
-        pool_id = os.environ.get("COGNITO_USER_POOL_ID")
-        region = os.environ.get("AWS_REGION")
-        if not (pool_id and region):
+        metadata = _oauth_protected_resource_metadata(str(request.base_url))
+        if metadata is None:
             return JSONResponse({"error": "not_found"}, status_code=404)
-        issuer = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}"
-        return {
-            "resource": f"{str(request.base_url).rstrip('/')}/mcp",
-            "authorization_servers": [issuer],
-        }
+        return metadata
 
     # Also enforced in the app, not only the Lambda handler, so the app is
     # never open when served any other way (e.g. uvicorn locally).
     @app.middleware("http")
     async def require_bearer_token(request: Request, call_next: Any) -> Any:
-        if request.url.path == "/.well-known/oauth-protected-resource":
+        if request.url.path == WELL_KNOWN_OAUTH_PATH:
             return await call_next(request)
         if not _is_authorized(request.headers.get("authorization"), auth_token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -160,6 +160,20 @@ def create_app(
         ),
     )
     return app
+
+
+def _oauth_protected_resource_metadata(base_url: str) -> dict[str, Any] | None:
+    """RFC 9728 protected-resource metadata, or None if Cognito isn't configured.
+
+    Shared by the FastAPI route (local/uvicorn serving) and handler()'s own
+    early bypass (Lambda, where auth is checked before create_app() runs).
+    """
+    pool_id = os.environ.get("COGNITO_USER_POOL_ID")
+    region = os.environ.get("AWS_REGION")
+    if not (pool_id and region):
+        return None
+    issuer = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}"
+    return {"resource": f"{base_url.rstrip('/')}/mcp", "authorization_servers": [issuer]}
 
 
 def _build_production_dependencies() -> ProductionDependencies:
@@ -246,11 +260,23 @@ def handler(event: Any, context: Any) -> Any:
     load_secrets_from_ssm(
         boto3.client("ssm"), prefix=os.environ.get("FINRAG_SSM_PREFIX", "/finrag")
     )
+    headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
+
+    if event.get("rawPath") == WELL_KNOWN_OAUTH_PATH:
+        base_url = f"https://{headers.get('host', '')}/"
+        metadata = _oauth_protected_resource_metadata(base_url)
+        status = 200 if metadata is not None else 404
+        body = metadata if metadata is not None else {"error": "not_found"}
+        return {
+            "statusCode": status,
+            "headers": {"content-type": "application/json"},
+            "body": json.dumps(body),
+        }
+
     token = os.environ.get("MCP_AUTH_TOKEN")
     if not token:
         raise RuntimeError("MCP_AUTH_TOKEN unset; refusing to serve an open endpoint")
 
-    headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
     if not _is_authorized(headers.get("authorization"), token):
         return {
             "statusCode": 401,
