@@ -108,6 +108,29 @@ def test_non_access_token_rejected(keypair):
         )
 
 
+def test_missing_required_scope_rejected(keypair):
+    private_key, public_key = keypair
+    token = _make_token(private_key, scope="some/other-scope")
+
+    with pytest.raises(TokenValidationError):
+        validate_token(
+            token, jwks_client=_fake_jwks_client(public_key), issuer=ISSUER,
+            client_id=CLIENT_ID, required_scope="finrag/invoke",
+        )
+
+
+def test_required_scope_present_among_several_is_accepted(keypair):
+    private_key, public_key = keypair
+    token = _make_token(private_key, scope="openid finrag/invoke profile")
+
+    claims = validate_token(
+        token, jwks_client=_fake_jwks_client(public_key), issuer=ISSUER,
+        client_id=CLIENT_ID, required_scope="finrag/invoke",
+    )
+
+    assert claims["client_id"] == CLIENT_ID
+
+
 def test_tampered_signature_rejected(keypair):
     _, public_key = keypair
     wrong_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
