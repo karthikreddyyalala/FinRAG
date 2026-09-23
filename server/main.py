@@ -120,10 +120,27 @@ def create_app(
 
     app = FastAPI(lifespan=lifespan)
 
+    # Public by definition (RFC 9728): an OAuth client has no token yet when
+    # it fetches this to discover where to get one. Must stay reachable
+    # without auth, or a client's OAuth discovery can never bootstrap.
+    @app.get("/.well-known/oauth-protected-resource")
+    async def oauth_protected_resource(request: Request) -> Any:
+        pool_id = os.environ.get("COGNITO_USER_POOL_ID")
+        region = os.environ.get("AWS_REGION")
+        if not (pool_id and region):
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        issuer = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}"
+        return {
+            "resource": f"{str(request.base_url).rstrip('/')}/mcp",
+            "authorization_servers": [issuer],
+        }
+
     # Also enforced in the app, not only the Lambda handler, so the app is
     # never open when served any other way (e.g. uvicorn locally).
     @app.middleware("http")
     async def require_bearer_token(request: Request, call_next: Any) -> Any:
+        if request.url.path == "/.well-known/oauth-protected-resource":
+            return await call_next(request)
         if not _is_authorized(request.headers.get("authorization"), auth_token):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         return await call_next(request)
