@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from functools import lru_cache, partial
+from functools import lru_cache
 from typing import Any
 
 import boto3
@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from mangum import Mangum
 from mcp.server import MCPServer
 
-from pipeline.sync_pinecone import embed_text, get_pinecone_index, load_bm25_index
+from pipeline.sync_pinecone import get_embed_fn, get_pinecone_index, load_bm25_index
 from server.mcp_tools.search_filings import register_search_filings_tool
 
 PROCESSED_BUCKET = "finrag-processed-filings"
@@ -69,7 +69,10 @@ def _build_production_dependencies() -> ProductionDependencies:
         api_key=os.environ["PINECONE_API_KEY"], index_name="finrag-filings"
     )
     bm25_index, bm25_chunks = load_bm25_index(s3_client, PROCESSED_BUCKET, BM25_INDEX_KEY)
-    embed_fn = partial(embed_text, bedrock_client)
+    # Must be the model the corpus was embedded with (OpenAI), not Titan --
+    # querying Pinecone with another model's vectors returns unrelated chunks
+    # without any error. get_embed_fn() is shared with the eval harness.
+    embed_fn = get_embed_fn()
     return bedrock_client, pinecone_index, bm25_index, bm25_chunks, embed_fn
 
 
