@@ -10,7 +10,7 @@ def test_create_app_returns_fastapi_app_with_mcp_mounted():
     keyword_index = MagicMock()
     embed_fn = MagicMock(return_value=[0.0])
 
-    app = create_app(bedrock_client, pinecone_index, keyword_index, embed_fn)
+    app = create_app(bedrock_client, pinecone_index, keyword_index, embed_fn, auth_token="t")
 
     route_paths = [getattr(r, "path", None) for r in app.routes]
     assert any(path in ("/", "") for path in route_paths)
