@@ -26,8 +26,12 @@ def test_metadata_comes_from_live_edgar_not_the_corpus():
     keyword_index.search.return_value = []
 
     with (
-        patch("server.mcp_tools.get_latest_filing.get_cik_for_ticker", return_value=320193) as mock_cik,
-        patch("server.mcp_tools.get_latest_filing.list_filings", return_value=[FILING]) as mock_list,
+        patch(
+            "server.mcp_tools.get_latest_filing.get_cik_for_ticker", return_value=320193
+        ) as mock_cik,
+        patch(
+            "server.mcp_tools.get_latest_filing.list_filings", return_value=[FILING]
+        ) as mock_list,
     ):
         result = build_latest_filing_answer(
             ticker="AAPL", filing_type="10-Q",
@@ -51,7 +55,11 @@ def test_summarizes_via_haiku_not_sonnet():
     ]
     bedrock = MagicMock()
     bedrock.converse.return_value = {
-        "output": {"message": {"content": [{"text": "Apple's Q3 filing highlights record services revenue."}]}}
+        "output": {
+            "message": {
+                "content": [{"text": "Apple's Q3 filing highlights record services revenue."}]
+            }
+        }
     }
 
     with (
@@ -86,6 +94,40 @@ def test_no_ingested_chunks_skips_llm_call_entirely():
 
     bedrock.converse.assert_not_called()
     assert "not yet been ingested" in result["summary"]
+
+
+def test_falls_back_to_openai_when_bedrock_is_throttled():
+    """Every other LLM call site in this codebase (query_rewriter,
+    answer_generator) falls back to OpenAI on Bedrock throttling -- both
+    were burned by exactly this failure mode killing a live run. This
+    summarizer is a fourth LLM call site and must follow the same rule."""
+    import botocore.exceptions
+
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = [
+        {"chunk_id": "c1", "text": "Apple reported record services revenue.", "ticker": "AAPL"}
+    ]
+    bedrock = MagicMock()
+    bedrock.converse.side_effect = botocore.exceptions.ClientError(
+        {"Error": {"Code": "ThrottlingException", "Message": "Too many tokens per day"}},
+        "Converse",
+    )
+
+    with (
+        patch("server.mcp_tools.get_latest_filing.get_cik_for_ticker", return_value=320193),
+        patch("server.mcp_tools.get_latest_filing.list_filings", return_value=[FILING]),
+        patch(
+            "server.mcp_tools.get_latest_filing._call_openai_summary",
+            return_value="Fallback summary.",
+        ) as mock_openai,
+    ):
+        result = build_latest_filing_answer(
+            ticker="AAPL", filing_type="10-Q",
+            bedrock_client=bedrock, keyword_index=keyword_index,
+        )
+
+    mock_openai.assert_called_once()
+    assert result["summary"] == "Fallback summary."
 
 
 def test_no_matching_filing_raises():
