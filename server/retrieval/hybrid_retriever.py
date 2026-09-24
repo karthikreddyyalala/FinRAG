@@ -43,12 +43,54 @@ def merge_and_dedup(
     return merged
 
 
+# Pinecone can't range-compare string metadata, so the date window is applied
+# to dense hits after retrieval -- over-fetch so enough survive it.
+DENSE_OVERFETCH = 5
+
+
+def _search_once(
+    query: str,
+    keyword_index: Any,
+    pinecone_index: Any,
+    embed_fn: Callable[[str], list[float]],
+    top_k: int,
+    ticker: str | None,
+    period_range: tuple[str, str] | None,
+) -> list[dict[str, Any]]:
+    kw_filters: dict[str, Any] = {}
+    pc_kwargs: dict[str, Any] = {"top_k": top_k, "include_metadata": True}
+    if ticker:
+        kw_filters["ticker"] = ticker
+        pc_kwargs["filter"] = {"ticker": {"$eq": ticker}}
+    if period_range:
+        kw_filters["period_range"] = period_range
+        pc_kwargs["top_k"] = top_k * DENSE_OVERFETCH
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        bm25_future = executor.submit(keyword_index.search, query, top_k, **kw_filters)
+        pinecone_future = executor.submit(
+            lambda: pinecone_index.query(vector=embed_fn(query), **pc_kwargs)["matches"]
+        )
+        bm25_results = bm25_future.result()
+        pinecone_matches = pinecone_future.result()
+
+    if period_range:
+        start, end = period_range
+        pinecone_matches = [
+            m for m in pinecone_matches
+            if start <= str((m.get("metadata") or {}).get("period", "")) <= end
+        ][:top_k]
+    return merge_and_dedup(bm25_results, pinecone_matches)
+
+
 def hybrid_search(
     rewritten_query: str,
     keyword_index: Any,
     pinecone_index: Any,
     embed_fn: Callable[[str], list[float]],
     top_k: int = 10,
+    ticker: str | None = None,
+    period_range: tuple[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run BM25 and Pinecone search in parallel, merge and dedup the results.
 
@@ -58,18 +100,18 @@ def hybrid_search(
         pinecone_index: A Pinecone Index handle.
         embed_fn: Callable(text) -> embedding vector, for the Pinecone query.
         top_k: Number of results to take from each source before merging.
+        ticker: Restrict both sources to this company, when given.
+        period_range: Restrict both sources to filings dated in this
+            inclusive ISO (start, end) window, when given.
 
     Returns:
-        Up to 2*top_k deduplicated candidate chunks.
+        Up to 2*top_k deduplicated candidate chunks. If filters leave
+        nothing, falls back to an unfiltered search -- a wrong filter must
+        never do worse than no filter.
     """
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        bm25_future = executor.submit(keyword_index.search, rewritten_query, top_k)
-        pinecone_future = executor.submit(
-            lambda: pinecone_index.query(
-                vector=embed_fn(rewritten_query), top_k=top_k, include_metadata=True
-            )["matches"]
-        )
-        bm25_results = bm25_future.result()
-        pinecone_matches = pinecone_future.result()
-
-    return merge_and_dedup(bm25_results, pinecone_matches)
+    args = (rewritten_query, keyword_index, pinecone_index, embed_fn, top_k)
+    if ticker or period_range:
+        results = _search_once(*args, ticker, period_range)
+        if results:
+            return results
+    return _search_once(*args, None, None)

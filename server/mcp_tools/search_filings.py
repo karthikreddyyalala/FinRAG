@@ -14,6 +14,7 @@ from mcp.server import MCPServer
 from server.generation.answer_generator import generate_answer
 from server.retrieval.hybrid_retriever import hybrid_search
 from server.retrieval.numerical_verifier import verify_answer
+from server.retrieval.query_filters import extract_filters, period_window
 from server.retrieval.query_rewriter import rewrite_query
 from server.retrieval.reranker import rerank
 
@@ -43,7 +44,14 @@ def build_search_filings_answer(
     start = time.monotonic()
 
     rewritten = rewrite_query(bedrock_client, query)
-    candidates = hybrid_search(rewritten, keyword_index, pinecone_index, embed_fn)
+    # From the user's own words, not the LLM rewrite, which can add names or
+    # years the user never asked about.
+    filters = extract_filters(query)
+    candidates = hybrid_search(
+        rewritten, keyword_index, pinecone_index, embed_fn,
+        ticker=filters["ticker"],
+        period_range=period_window(filters["years"]) if filters["years"] else None,
+    )
     # The rewritten form carries the GAAP phrasing the lexical fallback needs;
     # CrossEncoder still sees the natural query it was trained on.
     top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=rewritten)
