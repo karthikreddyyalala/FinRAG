@@ -16,6 +16,7 @@ from mcp.server import MCPServer
 from server.generation.answer_generator import generate_answer
 from server.retrieval.hybrid_retriever import hybrid_search
 from server.retrieval.numerical_verifier import verify_answer
+from server.retrieval.query_filters import extract_filters, period_window
 from server.retrieval.query_rewriter import expand_financial_terms
 from server.retrieval.reranker import rerank
 
@@ -50,7 +51,12 @@ def build_financials_answer(
     query = f"What was {ticker}'s {metric} for {period}?"
     lexical_query = expand_financial_terms(f"{ticker} {metric} {period}")
 
-    candidates = hybrid_search(lexical_query, keyword_index, pinecone_index, embed_fn)
+    years = extract_filters(period)["years"]
+    candidates = hybrid_search(
+        lexical_query, keyword_index, pinecone_index, embed_fn,
+        ticker=ticker.upper(),
+        period_range=period_window(years) if years else None,
+    )
     # The ticker is a known input here, unlike search_sec_filings' free-text
     # queries -- a short ticker like "F" is too weak a lexical signal for
     # BM25/dense retrieval to reliably constrain to the right company, so an

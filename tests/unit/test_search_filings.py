@@ -82,3 +82,23 @@ def test_register_search_filings_tool_does_not_raise(mock_rerank):
     register_search_filings_tool(
         mcp, bedrock_client, pinecone_index, keyword_index, embed_fn
     )
+
+
+@patch("server.mcp_tools.search_filings.rerank", return_value=[])
+@patch("server.mcp_tools.search_filings.generate_answer", return_value="none")
+@patch("server.mcp_tools.search_filings.rewrite_query", return_value="rewritten")
+@patch("server.mcp_tools.search_filings.hybrid_search", return_value=[])
+def test_company_and_year_from_the_question_become_retrieval_filters(
+    mock_hybrid, mock_rewrite, mock_generate, mock_rerank
+):
+    """Live bug: "3M capital expenditure FY2018" missed the FY2018 10-K
+    because 27 other MMM filings had look-alike PP&E rows."""
+    from server.mcp_tools.search_filings import build_search_filings_answer
+
+    build_search_filings_answer(
+        "3M capital expenditure FY2018", MagicMock(), MagicMock(), MagicMock(), lambda t: [0.0]
+    )
+
+    kwargs = mock_hybrid.call_args.kwargs
+    assert kwargs["ticker"] == "MMM"
+    assert kwargs["period_range"] == ("2018-01-01", "2019-12-31")

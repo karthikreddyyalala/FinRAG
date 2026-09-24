@@ -12,13 +12,17 @@ from server.mcp_tools.compare_companies import build_comparison_answer
 TSLA_RESULT = {
     "ticker": "TSLA", "metric": "gross margin", "period": "2024",
     "answer": "Tesla's gross margin was 18.2%.",
-    "citations": [{"ticker": "TSLA", "filing_type": "10-K", "period": "2024", "page": None, "text": "..."}],
+    "citations": [
+        {"ticker": "TSLA", "filing_type": "10-K", "period": "2024", "page": None, "text": "..."}
+    ],
     "cost_usd": 0.0, "latency_ms": 100,
 }
 FORD_RESULT = {
     "ticker": "F", "metric": "gross margin", "period": "2024",
     "answer": "Ford's gross margin was 9.1%.",
-    "citations": [{"ticker": "F", "filing_type": "10-K", "period": "2024", "page": None, "text": "..."}],
+    "citations": [
+        {"ticker": "F", "filing_type": "10-K", "period": "2024", "page": None, "text": "..."}
+    ],
     "cost_usd": 0.0, "latency_ms": 120,
 }
 
@@ -35,7 +39,10 @@ def test_runs_one_lookup_per_ticker():
         )
 
     assert mock_lookup.call_count == 2
-    called_tickers = [c.kwargs.get("ticker", c.args[0] if c.args else None) for c in mock_lookup.call_args_list]
+    called_tickers = [
+        c.kwargs.get("ticker", c.args[0] if c.args else None)
+        for c in mock_lookup.call_args_list
+    ]
     assert called_tickers == ["TSLA", "F"]
 
 

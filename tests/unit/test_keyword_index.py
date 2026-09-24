@@ -141,3 +141,32 @@ def test_read_timeout_is_retried(tmp_path):
     idx = load_keyword_index(s3, "b", "k", tmp_path / "kw.sqlite", max_retries=5, retry_delay=0)
     assert calls["n"] == 3
     assert idx.search("Tesla", top_k=1)
+
+
+def _dated(cid, ticker, period):
+    return {**_chunk(cid, "Purchases of property, plant and equipment (PP&E)", ticker),
+            "period": period}
+
+
+def test_search_filters_by_ticker_and_period_window(tmp_path):
+    """Same PP&E wording in every filing -- only the filters can tell the
+    FY2018 10-K apart from look-alikes in other years or companies."""
+    db = tmp_path / "kw.sqlite"
+    build_keyword_index(db, [
+        _dated("mmm-2019", "MMM", "2019-02-07"),
+        _dated("mmm-2023", "MMM", "2023-02-08"),
+        _dated("pfe-2019", "PFE", "2019-02-28"),
+    ])
+    index = KeywordIndex(db)
+
+    hits = index.search("property plant equipment", top_k=10, ticker="MMM",
+                        period_range=("2018-01-01", "2019-12-31"))
+
+    assert [h["chunk_id"] for h in hits] == ["mmm-2019"]
+
+
+def test_search_without_filters_is_unchanged(tmp_path):
+    db = tmp_path / "kw.sqlite"
+    build_keyword_index(db, [_dated("a", "MMM", "2019-02-07"), _dated("b", "PFE", "2023-01-01")])
+
+    assert len(KeywordIndex(db).search("property plant equipment", top_k=10)) == 2
