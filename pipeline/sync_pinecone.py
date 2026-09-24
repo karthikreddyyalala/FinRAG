@@ -277,12 +277,21 @@ class KeywordIndex:
             f"file:{Path(db_path).resolve()}?mode=ro", uri=True, check_same_thread=False
         )
 
-    def search(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        ticker: str | None = None,
+        period_range: tuple[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Return up to top_k chunks, best BM25 match first.
 
         Args:
             query: Free-text query; any FTS5 syntax in it is neutralised.
             top_k: Maximum number of chunks to return.
+            ticker: Only chunks from this company, when given.
+            period_range: Only chunks whose filing date (ISO string) falls in
+                this inclusive (start, end) range, when given.
 
         Returns:
             Chunk dicts with exactly BM25_CHUNK_FIELDS.
@@ -290,10 +299,17 @@ class KeywordIndex:
         expression = _fts_match_expression(query)
         if not expression:
             return []
+        where, params = "chunks MATCH ?", [expression]
+        if ticker:
+            where += " AND ticker = ?"
+            params.append(ticker)
+        if period_range:
+            where += " AND period BETWEEN ? AND ?"
+            params.extend(period_range)
         rows = self._conn.execute(
             f"SELECT {', '.join(BM25_CHUNK_FIELDS)} FROM chunks "
-            "WHERE chunks MATCH ? ORDER BY rank LIMIT ?",
-            (expression, top_k),
+            f"WHERE {where} ORDER BY rank LIMIT ?",
+            (*params, top_k),
         ).fetchall()
         return [dict(zip(BM25_CHUNK_FIELDS, row)) for row in rows]
 
