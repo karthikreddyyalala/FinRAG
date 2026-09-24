@@ -765,11 +765,26 @@ DONE -- Cognito OAuth 2.1/PKCE (dual-accept, not yet a hard cutover)
       writeup.
   [x] CLI-verified after both infra fixes: the authorize URL now returns
       302 (real login redirect), not an OAuth error
-  [ ] NOT DONE, needs a human: actually complete the browser login (enter
-      password, click through consent) from Claude Desktop -- this
-      environment can generate the correct authorize URL and confirm
-      Cognito accepts it, but cannot type a password into a browser.
-      Once confirmed, retire the static MCP_AUTH_TOKEN bearer path.
+  [x] VERIFIED END TO END (2026-09-24): Claude Desktop -> mcp-remote ->
+      Cognito login -> tool call on the Lambda with a Cognito token, no
+      static header. Needed two more client-side flags beyond the static
+      client id: scope "openid finrag/invoke" (Cognito's discovery never
+      lists custom scopes, so mcp-remote otherwise omits it -> 401) and
+      token_endpoint_auth_method "none" (public PKCE client). Desktop reads
+      its config only at launch -- a stale running app caused one round of
+      false failures.
+  [ ] Retire the static MCP_AUTH_TOKEN bearer path (still accepted; used
+      for curl-based testing)
+
+RETRIEVAL BUG FOUND IN LIVE USE (2026-09-24) -- not yet fixed
+  Natural phrasings ("3M capital expenditure FY2018") return "context does
+  not provide"; only the verbose FinanceBench wording (mentions "cash flow
+  statement") finds the FY2018 10-K. Cause: all 28 MMM filings contain
+  near-identical PP&E cash-flow rows, and nothing ties "FY2018" to the 10-K
+  filed 2019-02-07, so 2022-2023 look-alikes crowd it out of top-k.
+  Proposed fix: time-aware retrieval -- rewriter extracts ticker + fiscal
+  year, passed as metadata filters to Pinecone and the FTS5 index. Then
+  re-run the 150Q eval to confirm no regression.
   Outputs: CognitoUserPoolId us-east-1_DfcfEbPLO, CognitoClientId
     5n9n0e2ugjnklckjlrtc50p9c4, CognitoAuthorizeUrl
     https://finrag-mcp-496158977343.auth.us-east-1.amazoncognito.com
