@@ -818,24 +818,87 @@ DONE -- EventBridge weekly refresh
       verified via 14 unit tests (diff logic, S3 sync, failure handling,
       partial-run safety) instead of a live run
 
-NEXT -- Week 5 remainder
-  [ ] Human verification of the Cognito login flow above
-  [~] CrossEncoder reranker -- deferred: needs a container-image Lambda
-      (torch/sentence-transformers too large for the zip bundle), which
-      needs Docker/colima/podman locally, none of which are installed.
-      Not pursued: the lexical fallback is already live-verified correct
-      (91% numerical accuracy) and CrossEncoder's payoff here is unproven,
-      so the setup cost isn't justified right now.
+=====================================================================
+MASTER CHECKLIST (2026-09-24) -- do in this order, one item at a time.
+Each item: TDD, deploy if it touches the server, verify live, update
+this file + README, commit, push. "Done when" is the bar, not "code
+written".
+=====================================================================
 
-THEN -- Week 4 observability (deferred)
-  [ ] observability/logger.py -- per-stage cost/latency/tokens to DynamoDB
-  [ ] Bedrock prompt caching; query result caching in DynamoDB
-  [ ] Model tier routing (simple -> Haiku, comparison -> Sonnet)
-  [ ] Measure real before/after cost per query for the README claim
-  [ ] Vercel dashboard: eval scores, cost/query, latency breakdown
+PHASE A -- Make the demo reliable (do first)
+  [ ] A1. Time-aware retrieval fix (the 3M FY2018 bug above)
+          - rewriter extracts ticker + fiscal year from the question
+          - pass as metadata filters to Pinecone + FTS5 keyword index
+          - FY N annual figures -> 10-K filed in early N+1
+          Done when: "3M capital expenditure FY2018" and "What was 3M's
+          capex in fiscal year 2018?" both return $1,577M cited to
+          [MMM 10-K 2019-02-07], on the deployed Lambda
+  [ ] A2. Re-run full 150Q FinanceBench eval after A1
+          Done when: numerical_accuracy >= 0.910 and faithfulness >=
+          0.801 (no regression vs. current), new numbers in README
+  [ ] A3. Retire the static bearer token (Cognito is now the only login)
+          - drop MCP_AUTH_TOKEN path from server/main.py + its tests
+          - delete /finrag/mcp-auth-token SSM param + ~/.finrag/mcp-headers.txt
+          Done when: request with old token -> 401; Claude Desktop still
+          works via Cognito
+  [ ] A4. (USER) Rotate the OpenAI key pasted in chat; update SSM
+          /finrag/openai-api-key. Done when: old key revoked on
+          platform.openai.com, live query still answers
+  [ ] A5. (USER) Merge week5-deployment -> main via GitHub PR
+          Done when: main has all Week 5 commits, CI green
 
-THEN -- Week 6 polish
-  [ ] Demo video, landing page, blog post, MCP registry submission
+PHASE B -- Prove the design choices (strongest interview material)
+  [ ] B1. Baseline A: dense (Pinecone) only, no rewrite, no rerank -- 150Q
+  [ ] B2. Baseline B: keyword (FTS5) only, no rewrite, no rerank -- 150Q
+  [ ] B3. Comparison table in README: Baseline A vs B vs full pipeline
+          Done when: README shows all three rows with real scores
+
+PHASE C -- Cost & observability (Week 4, deferred until now)
+  [ ] C1. server/observability/logger.py -- per-query record to DynamoDB:
+          query, rewritten query, chunks per stage, tokens in/out,
+          cost_usd, latency_ms per stage. Replace the cost_usd=0.0 stubs.
+          Done when: a live query writes one complete row
+  [ ] C2. Measure BASELINE cost/latency per query (before C3-C5), from
+          C1's logs over a fixed question set
+  [ ] C3. Bedrock prompt caching on the generation system prompt
+  [ ] C4. Query result cache in DynamoDB (hash of normalized query)
+  [ ] C5. Model tier routing: single-metric lookups -> Haiku,
+          comparisons / multi-hop -> Sonnet
+  [ ] C6. Re-measure cost/latency after C3-C5; before/after table in
+          README; fill the cost numbers into Phase 14 resume bullets
+  [ ] C7. CloudWatch dashboard (observability_stack.py): invocations,
+          errors, latency, cost
+
+PHASE D -- Corpus & eval completeness
+  [ ] D1. Backfill PYPL (Pinecone monthly write cap has reset)
+          Done when: PYPL chunks in Pinecone + FTS5, weekly refresh sees it
+  [ ] D2. custom_150.json: replace VERIFY_AFTER_BOOTSTRAP placeholders
+          with verified ground truths (needs USER review of answers)
+  [ ] D3. Full 300Q eval (FinanceBench 150 + custom 150), README updated
+
+PHASE E -- Public dashboard
+  [ ] E1. dashboard/ Next.js + Recharts: EvalScoreChart,
+          CostPerQueryChart, LatencyBreakdown, reading exported results
+  [ ] E2. Deploy to Vercel, link from README
+
+PHASE F -- Launch & polish (Week 6)
+  [ ] F1. Final README pass: architecture diagram, setup, results, costs
+  [ ] F2. Update all diagrams (query-sequence.mmd still shows 1 tool,
+          no Cognito, no time filters)
+  [ ] F3. Phase 14: switch to the "Final version" resume bullets, every
+          claim backed by something live
+  [ ] F4. (USER) 3-minute demo video: Claude Desktop answering with citations
+  [ ] F5. Blog post: "What I learned building production RAG on AWS Bedrock"
+  [ ] F6. Submit to the official MCP registry
+  [ ] F7. (USER) Post on Hacker News (Show HN), r/LocalLLaMA, r/LangChain
+
+DEFERRED -- revisit only if a reason appears
+  [~] CrossEncoder reranker -- needs a container-image Lambda (Docker not
+      installed locally); lexical fallback is live-verified at 91%
+      numerical accuracy, CrossEncoder payoff unproven
+  [~] Rate limiting -- plan assumed API Gateway; the Function URL has
+      none, but the account's 10-concurrent-execution ceiling already
+      caps traffic. Revisit if the account limit is ever raised
 ```
 
 ### Known gaps / debt
