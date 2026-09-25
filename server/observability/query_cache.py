@@ -60,7 +60,8 @@ def get_cached_answer(dynamodb_resource: Any, table_name: str, query: str) -> di
 
 
 def put_cached_answer(
-    dynamodb_resource: Any, table_name: str, query: str, answer: str, citations: list[dict[str, Any]]
+    dynamodb_resource: Any, table_name: str, query: str, answer: str,
+    citations: list[dict[str, Any]],
 ) -> None:
     """Write this query's answer to the cache with a 24h TTL.
 

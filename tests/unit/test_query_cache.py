@@ -48,7 +48,9 @@ def test_get_cached_answer_returns_payload_on_hit():
 
     result = get_cached_answer(dynamodb, "finrag-query-cache", "q")
 
-    assert result == {"answer": "cached answer [NVDA 10-Q Q1-2026]", "citations": [{"ticker": "NVDA"}]}
+    assert result == {
+        "answer": "cached answer [NVDA 10-Q Q1-2026]", "citations": [{"ticker": "NVDA"}],
+    }
 
 
 def test_get_cached_answer_treats_expired_ttl_as_a_miss():
@@ -84,7 +86,9 @@ def test_put_cached_answer_writes_hash_key_and_ttl():
     table = MagicMock()
     dynamodb.Table.return_value = table
 
-    put_cached_answer(dynamodb, "finrag-query-cache", "Nvidia revenue?", "ans", [{"ticker": "NVDA"}])
+    put_cached_answer(
+        dynamodb, "finrag-query-cache", "Nvidia revenue?", "ans", [{"ticker": "NVDA"}],
+    )
 
     dynamodb.Table.assert_called_once_with("finrag-query-cache")
     item = table.put_item.call_args.kwargs["Item"]
@@ -92,7 +96,8 @@ def test_put_cached_answer_writes_hash_key_and_ttl():
     assert item["answer"] == "ans"
     assert item["citations"] == [{"ticker": "NVDA"}]
     assert item["ttl"] > int(time.time())
-    assert item["ttl"] <= int(time.time()) + 24 * 60 * 60 + 5  # 24h TTL, small slack for test runtime
+    # 24h TTL, small slack for test runtime
+    assert item["ttl"] <= int(time.time()) + 24 * 60 * 60 + 5
 
 
 def test_put_cached_answer_never_raises_on_dynamodb_failure():
