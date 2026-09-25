@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from server.generation.answer_generator import format_citation, generate_answer
+from server.generation.answer_generator import MAX_CHUNK_CHARS, format_citation, generate_answer
 
 
 def _fake_bedrock_client(answer_text: str) -> MagicMock:
@@ -57,3 +57,26 @@ def test_generate_answer_handles_empty_chunks_list():
     assert answer == "I could not find reliable data for this question."
     call_kwargs = client.converse.call_args.kwargs
     assert "[TICKER 10-Q PERIOD]" in str(call_kwargs["system"])  # fallback example citation used
+
+
+def test_generate_answer_truncates_an_oversized_chunk():
+    """Live bug: a BM25-only match (no dense/rerank screening) surfaced a
+    huge table chunk that blew Sonnet's context window outright -- caught on
+    the FinanceBench 150 Baseline B run, question 91/150."""
+    client = _fake_bedrock_client("Answer [NVDA 10-Q Q1-2026].")
+    chunks = [
+        {
+            "chunk_id": "c1",
+            "text": "x" * (MAX_CHUNK_CHARS + 5000),
+            "ticker": "NVDA",
+            "filing_type": "10-Q",
+            "period": "Q1-2026",
+            "page_number": None,
+        }
+    ]
+
+    generate_answer(client, "q", chunks)
+
+    sent_context = str(client.converse.call_args.kwargs["messages"])
+    assert len(sent_context) < MAX_CHUNK_CHARS + 5000
+    assert "[... truncated]" in sent_context
