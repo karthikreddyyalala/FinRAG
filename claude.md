@@ -820,11 +820,12 @@ DONE -- EventBridge weekly refresh
 =====================================================================
 SESSION HANDOFF (updated 2026-09-24) -- read this first in a new chat
 =====================================================================
-Where we are: A1, A2, A3 DONE and live-verified. NEXT = A4 (user: rotate
-  the OpenAI key pasted in chat), then A5 (user: merge PR to main). Work
-  the MASTER CHECKLIST below strictly one item at a time; explain in plain
-  language, stop after each item for the user's go-ahead.
-Branch: week5-deployment (pushed; not yet merged to main).
+Where we are: A1-A3, A5 DONE. NEXT = A4 (user: rotate the OpenAI key pasted
+  in chat), then Phase B (baseline comparisons). Work the MASTER CHECKLIST
+  below strictly one item at a time; explain in plain language, stop after
+  each item for the user's go-ahead.
+Branch: week5-deployment merged to main via rebase-merge PR (2026-09-24,
+  main at db4c3dd). Work from main now.
 
 Live-test the deployed server (Cognito-only now; static token was retired
 in A3 and gets 401). A real Cognito access token needs the hosted-UI login
@@ -907,8 +908,10 @@ PHASE A -- Make the demo reliable (do first)
   [ ] A4. (USER) Rotate the OpenAI key pasted in chat; update SSM
           /finrag/openai-api-key. Done when: old key revoked on
           platform.openai.com, live query still answers
-  [ ] A5. (USER) Merge week5-deployment -> main via GitHub PR
-          Done when: main has all Week 5 commits, CI green
+  [x] A5. (USER) Merge week5-deployment -> main via GitHub PR -- DONE
+          2026-09-24: rebase-merged. main and week5-deployment content
+          verified identical (git diff main week5-deployment: empty).
+          main now at db4c3dd, all 35 Week 5 commits present.
 
 PHASE B -- Prove the design choices (strongest interview material)
   [ ] B1. Baseline A: dense (Pinecone) only, no rewrite, no rerank -- 150Q
