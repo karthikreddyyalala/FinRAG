@@ -118,3 +118,22 @@ def test_registers_as_an_mcp_tool():
 
     mcp = MCPServer("Test")
     register_compare_companies_tool(mcp, MagicMock(), MagicMock(), MagicMock(), lambda t: [0.0])
+
+
+def test_overrides_to_sonnet_for_each_hop():
+    """C5 (CLAUDE.md Phase C): build_financials_answer defaults to Haiku for
+    a single-metric lookup, but a comparison across companies is the
+    'complex comparison' case -- must stay on Sonnet, not silently inherit
+    the single-lookup default."""
+    with patch(
+        "server.mcp_tools.compare_companies.build_financials_answer",
+        side_effect=[TSLA_RESULT, FORD_RESULT],
+    ) as mock_lookup:
+        build_comparison_answer(
+            tickers=["TSLA", "F"], metric="gross margin", period="2024",
+            bedrock_client=MagicMock(), pinecone_index=MagicMock(),
+            keyword_index=MagicMock(), embed_fn=lambda t: [0.0],
+        )
+
+    for call in mock_lookup.call_args_list:
+        assert call.kwargs.get("model") == "sonnet"

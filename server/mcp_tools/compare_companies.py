@@ -43,10 +43,15 @@ def build_comparison_answer(
     for ticker in tickers:
         try:
             companies.append(
+                # C5 (CLAUDE.md Phase C): build_financials_answer defaults
+                # to Haiku for a single-metric lookup, but a comparison
+                # across several companies is CLAUDE.md's "complex
+                # comparison" case -- stays on Sonnet, overridden explicitly
+                # per hop rather than inheriting the single-lookup default.
                 build_financials_answer(
                     ticker, metric, period,
                     bedrock_client=bedrock_client, pinecone_index=pinecone_index,
-                    keyword_index=keyword_index, embed_fn=embed_fn,
+                    keyword_index=keyword_index, embed_fn=embed_fn, model="sonnet",
                 )
             )
         except Exception as e:

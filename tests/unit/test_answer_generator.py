@@ -1,6 +1,14 @@
 from unittest.mock import MagicMock
 
-from server.generation.answer_generator import MAX_CHUNK_CHARS, format_citation, generate_answer
+import pytest
+
+from server.generation.answer_generator import (
+    HAIKU_MODEL_ID,
+    MAX_CHUNK_CHARS,
+    SONNET_MODEL_ID,
+    format_citation,
+    generate_answer,
+)
 
 
 def _fake_bedrock_client(answer_text: str) -> MagicMock:
@@ -115,3 +123,28 @@ def test_generate_answer_truncates_an_oversized_chunk():
     sent_context = str(client.converse.call_args.kwargs["messages"])
     assert len(sent_context) < MAX_CHUNK_CHARS + 5000
     assert "[... truncated]" in sent_context
+
+
+def test_generate_answer_defaults_to_sonnet():
+    client = _fake_bedrock_client("Answer [NVDA 10-Q Q1-2026].")
+
+    generate_answer(client, "q", [])
+
+    assert client.converse.call_args.kwargs["modelId"] == SONNET_MODEL_ID
+
+
+def test_generate_answer_routes_to_haiku_when_requested():
+    """C5 (CLAUDE.md Phase C): get_company_financials routes single-metric
+    lookups to Haiku. This is the mechanism that makes that possible."""
+    client = _fake_bedrock_client("Answer [NVDA 10-Q Q1-2026].")
+
+    generate_answer(client, "q", [], model="haiku")
+
+    assert client.converse.call_args.kwargs["modelId"] == HAIKU_MODEL_ID
+
+
+def test_generate_answer_rejects_unknown_model():
+    client = _fake_bedrock_client("Answer.")
+
+    with pytest.raises(ValueError):
+        generate_answer(client, "q", [], model="gpt-5")

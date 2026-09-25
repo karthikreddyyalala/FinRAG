@@ -31,6 +31,7 @@ def build_financials_answer(
     keyword_index: Any,
     embed_fn: Callable[[str], list[float]],
     top_k: int = 5,
+    model: str = "haiku",
 ) -> dict[str, Any]:
     """Look up a single metric for a company/period and return a cited value.
 
@@ -43,6 +44,14 @@ def build_financials_answer(
         keyword_index: sync_pinecone.KeywordIndex over the full corpus.
         embed_fn: Callable(text) -> embedding vector.
         top_k: Number of chunks to keep after reranking.
+        model: Generation model tier, "haiku" (default) or "sonnet" (C5,
+            CLAUDE.md Phase C). A single ticker/metric/period lookup is
+            CLAUDE.md's "simple single-metric" case -- extracting one
+            already-located number from a short, targeted context is well
+            within Haiku's ability, and it is the cheaper/faster tier.
+            compare_companies overrides this to "sonnet" per call, since a
+            multi-hop comparison is the "complex comparison" case the
+            checklist routes to Sonnet instead.
 
     Returns:
         {"ticker", "metric", "period", "answer", "citations", "cost_usd", "latency_ms"}
@@ -66,11 +75,11 @@ def build_financials_answer(
     own_ticker_candidates = [c for c in candidates if c.get("ticker", "").upper() == ticker.upper()]
     top_chunks = rerank(query, own_ticker_candidates, top_k=top_k, lexical_query=lexical_query)
 
-    raw_answer = generate_answer(bedrock_client, query, top_chunks)
+    raw_answer = generate_answer(bedrock_client, query, top_chunks, model=model)
     source_texts = [chunk["text"] for chunk in top_chunks]
     verified_answer = verify_answer(raw_answer, source_texts)
     generate_input = "\n\n".join(source_texts) + query
-    cost_usd = estimate_cost_usd("sonnet", generate_input, raw_answer)
+    cost_usd = estimate_cost_usd(model, generate_input, raw_answer)
 
     citations = [
         {
