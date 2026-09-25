@@ -1,4 +1,4 @@
-"""Bedrock Sonnet Converse API generation with mandatory inline citations.
+"""Bedrock Converse API generation with mandatory inline citations.
 
 Uses a cross-region inference profile ID (the `us.` prefix) -- same
 requirement as query_rewriter.py's Haiku call, verified against AWS
@@ -11,6 +11,13 @@ wires up Bedrock prompt caching, which only pays off when the system
 prompt prefix stays identical call to call. Interpolating the
 per-query context into system (as an earlier draft of this module did)
 would defeat that caching entirely.
+
+C5 (CLAUDE.md Phase C, model tier routing): generate_answer() takes a
+`model` tier ("sonnet" or "haiku") rather than always using Sonnet.
+get_company_financials (a single ticker/metric/period lookup -- CLAUDE.md's
+"simple single-metric" case) routes to Haiku; search_sec_filings and
+compare_companies (free-text and multi-hop respectively -- the "complex
+comparison" case) stay on Sonnet.
 """
 from __future__ import annotations
 
@@ -19,7 +26,10 @@ from typing import Any
 
 import botocore.exceptions
 
+from server.retrieval.query_rewriter import HAIKU_MODEL_ID
+
 SONNET_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+MODEL_IDS = {"sonnet": SONNET_MODEL_ID, "haiku": HAIKU_MODEL_ID}
 
 # chunker.py targets ~1500 words (~8000 chars) for a parent text chunk, but a
 # table chunk is exempt from that target -- CLAUDE.md's chunker stores "each
@@ -120,7 +130,7 @@ def format_citation(chunk: dict[str, Any]) -> str:
 # figure" on the next -- financial extraction has one right answer, and
 # nothing here should be creative.
 def generate_answer(
-    bedrock_client: Any, query: str, chunks: list[dict[str, Any]]
+    bedrock_client: Any, query: str, chunks: list[dict[str, Any]], model: str = "sonnet"
 ) -> str:
     """Generate a cited answer from the top reranked chunks.
 
@@ -129,10 +139,18 @@ def generate_answer(
         query: The original user query.
         chunks: Top chunks from reranker.rerank(), each with text + citation
             metadata (ticker, filing_type, period, page_number).
+        model: "sonnet" (default) or "haiku" -- see MODEL_IDS. Callers pick
+            the tier; this function does not infer complexity on its own.
 
     Returns:
         The generated answer text with inline citations.
+
+    Raises:
+        ValueError: model is not one of MODEL_IDS' keys.
     """
+    if model not in MODEL_IDS:
+        raise ValueError(f"unknown model {model!r}; expected one of {sorted(MODEL_IDS)}")
+
     context_blocks = [
         f"{_truncate(chunk['text'])}\nCitation: {format_citation(chunk)}" for chunk in chunks
     ]
@@ -185,7 +203,7 @@ def generate_answer(
 
     try:
         response = bedrock_client.converse(
-            modelId=SONNET_MODEL_ID,
+            modelId=MODEL_IDS[model],
             system=[{"text": system_prompt}],
             messages=[{"role": "user", "content": [{"text": user_message}]}],
             inferenceConfig={"temperature": 0},

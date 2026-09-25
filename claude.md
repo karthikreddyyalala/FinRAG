@@ -1126,8 +1126,44 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
             set from C2 to get a real before/after number including
             this cache's effect (repeat questions in that set would now
             show near-zero cost/latency on a second pass)
-  [ ] C5. Model tier routing: single-metric lookups -> Haiku,
-          comparisons / multi-hop -> Sonnet
+  [x] C5. Model tier routing: single-metric lookups -> Haiku,
+          comparisons / multi-hop -> Sonnet -- DONE 2026-09-25, on branch
+          week5-c5-model-tier-routing (PR, not pushed direct to main this
+          time):
+          - answer_generator.generate_answer() takes a model tier
+            ("sonnet" default, or "haiku") via MODEL_IDS, instead of
+            hardcoding Sonnet. search_sec_filings is unaffected (still
+            defaults to "sonnet" -- free-text queries can be arbitrarily
+            complex, doesn't fit the checklist's "single-metric" case)
+          - get_company_financials (build_financials_answer) now defaults
+            to model="haiku" -- CLAUDE.md's "simple single-metric" case:
+            one ticker/metric/period, extracting one already-located
+            number from a short context
+          - compare_companies overrides to model="sonnet" explicitly per
+            hop (it reuses build_financials_answer for each ticker) --
+            CLAUDE.md's "complex comparison" case, not the single-lookup
+            default
+          - Correctness was not assumed: live-compared Haiku vs Sonnet on
+            real questions against known ground truth (not mocked) before
+            treating this as done. MMM FY2018 capex (ground truth
+            $1,577M, FinanceBench): both models returned the identical
+            correct cited answer, Haiku at ~1/3 the cost ($0.002472 vs
+            $0.007415). AWK FY2020 dividends: both models gave the
+            identical "context does not provide this figure" response --
+            a retrieval gap affecting both tiers equally, not a
+            Haiku-specific regression.
+          - A real test bug surfaced and was fixed in the same pass:
+            test_skips_the_haiku_rewrite_call asserted "no Haiku modelId
+            anywhere in the call log", which was a valid proxy for "no
+            rewrite call happened" before this change -- now that
+            generation itself legitimately calls Haiku by design, that
+            heuristic is stale. Replaced with the test's actual intent:
+            exactly one Bedrock call per lookup (generation only, no
+            separate rewrite call).
+          - Not yet done: C6's before/after remeasurement will be the
+            first real signal on aggregate savings across get_financials/
+            compare_companies traffic, not just the 2 spot-checked cases
+            above
   [ ] C6. Re-measure cost/latency after C3-C5; before/after table in
           README; fill the cost numbers into Phase 14 resume bullets
   [ ] C7. CloudWatch dashboard (observability_stack.py): invocations,
