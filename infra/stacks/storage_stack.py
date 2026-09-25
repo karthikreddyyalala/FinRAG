@@ -51,3 +51,22 @@ class StorageStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.RETAIN,
         )
+
+        # Query result cache (Phase C4, CLAUDE.md): search_sec_filings'
+        # final answer, keyed by a sha256 hash of the normalized question
+        # (server/observability/query_cache.py). DESTROY, not RETAIN like
+        # the log table above: cache content is disposable and regenerates
+        # itself on the next query, unlike query_log_table's historical
+        # record. `ttl` drives DynamoDB's own item-expiry sweep; the 24h
+        # value itself lives in query_cache.py, not here.
+        self.query_cache_table = dynamodb.Table(
+            self,
+            "QueryCacheTable",
+            table_name="finrag-query-cache",
+            partition_key=dynamodb.Attribute(
+                name="query_hash", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            time_to_live_attribute="ttl",
+            removal_policy=RemovalPolicy.DESTROY,
+        )

@@ -13,6 +13,7 @@ from mcp.server import MCPServer
 
 from server.generation.answer_generator import generate_answer
 from server.observability.logger import estimate_cost_usd, log_query
+from server.observability.query_cache import get_cached_answer, put_cached_answer
 from server.retrieval.hybrid_retriever import bm25_only_search, dense_only_search, hybrid_search
 from server.retrieval.numerical_verifier import verify_answer
 from server.retrieval.query_filters import extract_filters, period_window
@@ -21,6 +22,7 @@ from server.retrieval.reranker import rerank
 
 BASELINE_MODES = ("dense_only", "bm25_only")
 QUERY_LOG_TABLE = "finrag-query-logs"
+QUERY_CACHE_TABLE = "finrag-query-cache"
 
 
 def build_search_filings_answer(
@@ -53,6 +55,10 @@ def build_search_filings_answer(
             query's cost/latency breakdown to QUERY_LOG_TABLE (best-effort;
             never raises). None (the default) skips logging entirely --
             every eval/test call site passes nothing and stays unaffected.
+            Also gates the query result cache (QUERY_CACHE_TABLE, "full"
+            mode only): a hit skips the whole pipeline and returns
+            cost_usd=0.0; a miss runs the pipeline as normal and writes the
+            answer to the cache with a 24h TTL before returning.
 
     Returns:
         {"answer": str, "citations": [...], "cost_usd": float, "latency_ms": int}
@@ -64,6 +70,26 @@ def build_search_filings_answer(
     stage_latency_ms: dict[str, int] = {}
     cost_usd = 0.0
     rewritten = query
+
+    # C4 (CLAUDE.md Phase C): scoped to "full" mode only -- the baseline
+    # modes exist purely to measure the uncached pipeline for evals/
+    # run_eval.py's Baseline A/B comparison, and must never short-circuit.
+    if mode == "full" and dynamodb_resource is not None:
+        cached = get_cached_answer(dynamodb_resource, QUERY_CACHE_TABLE, query)
+        if cached is not None:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            log_query(
+                dynamodb_resource, QUERY_LOG_TABLE,
+                query=query, rewritten_query=query, answer=cached["answer"],
+                citations=cached["citations"], cost_usd=0.0, latency_ms_total=latency_ms,
+                latency_ms_per_stage={"cache_lookup": latency_ms}, cache_hit=True,
+            )
+            return {
+                "answer": cached["answer"],
+                "citations": cached["citations"],
+                "cost_usd": 0.0,
+                "latency_ms": latency_ms,
+            }
 
     if mode == "dense_only":
         stage_start = time.monotonic()
@@ -119,6 +145,9 @@ def build_search_filings_answer(
     ]
 
     latency_ms = int((time.monotonic() - start) * 1000)
+
+    if mode == "full" and dynamodb_resource is not None:
+        put_cached_answer(dynamodb_resource, QUERY_CACHE_TABLE, query, verified_answer, citations)
 
     if dynamodb_resource is not None:
         log_query(

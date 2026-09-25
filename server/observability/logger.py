@@ -69,6 +69,7 @@ def log_query(
     latency_ms_total: int,
     latency_ms_per_stage: dict[str, int],
     user_id: str = "unknown",
+    cache_hit: bool = False,
 ) -> None:
     """Write one query's full record to the DynamoDB query-log table.
 
@@ -90,6 +91,9 @@ def log_query(
             "rerank": 90, "generate": 1800, "verify": 15}.
         user_id: Caller identity, when known (Cognito client_id, or
             "unknown" for the static-token era / local runs).
+        cache_hit: True when this query was answered from query_cache.py's
+            DynamoDB cache rather than the live pipeline (C4, CLAUDE.md) --
+            cost_usd is 0.0 on a hit since no LLM calls were made.
     """
     try:
         table = dynamodb_resource.Table(table_name)
@@ -105,6 +109,7 @@ def log_query(
             "latency_ms_total": latency_ms_total,
             "latency_ms_per_stage": {k: int(v) for k, v in latency_ms_per_stage.items()},
             "user_id": user_id,
+            "cache_hit": cache_hit,
         })
     except Exception:
         # Never let observability take down the actual answer.
