@@ -158,6 +158,58 @@ def test_bm25_only_mode_skips_rewrite_rerank_and_dense(mock_rerank, mock_rewrite
     assert result["citations"][0]["text"] == "Revenue was $9.06B."
 
 
+@patch("server.mcp_tools.search_filings.rerank")
+def test_full_pipeline_returns_nonzero_cost_and_per_stage_latency(mock_rerank):
+    """Phase C (CLAUDE.md): cost_usd must no longer be the Week 1-3 stub."""
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    mock_rerank.return_value = [
+        {"chunk_id": "c1", "text": "Data center revenue reached $9.06 billion.",
+         "ticker": "NVDA", "filing_type": "10-Q", "period": "Q1-2026", "page_number": None}
+    ]
+
+    result = build_search_filings_answer(
+        "How did Nvidia data center revenue change?",
+        bedrock_client, pinecone_index, keyword_index, embed_fn,
+    )
+
+    assert result["cost_usd"] > 0.0
+
+
+@patch("server.mcp_tools.search_filings.rerank")
+def test_full_pipeline_logs_to_dynamodb_when_resource_given(mock_rerank):
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    mock_rerank.return_value = [
+        {"chunk_id": "c1", "text": "Data center revenue reached $9.06 billion.",
+         "ticker": "NVDA", "filing_type": "10-Q", "period": "Q1-2026", "page_number": None}
+    ]
+    dynamodb = MagicMock()
+    table = MagicMock()
+    dynamodb.Table.return_value = table
+
+    build_search_filings_answer(
+        "How did Nvidia data center revenue change?",
+        bedrock_client, pinecone_index, keyword_index, embed_fn,
+        dynamodb_resource=dynamodb,
+    )
+
+    dynamodb.Table.assert_called_once_with("finrag-query-logs")
+    table.put_item.assert_called_once()
+
+
+@patch("server.mcp_tools.search_filings.rerank")
+def test_full_pipeline_skips_logging_when_no_dynamodb_resource(mock_rerank):
+    """None (the default) must be a true no-op -- every eval/test call site
+    that doesn't pass dynamodb_resource must keep working unchanged."""
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    mock_rerank.return_value = []
+
+    result = build_search_filings_answer(
+        "q", bedrock_client, pinecone_index, keyword_index, embed_fn,
+    )
+
+    assert "cost_usd" in result  # ran to completion, no crash, nothing to assert on a mock
+
+
 def test_unknown_mode_raises():
     bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
     with pytest.raises(ValueError):

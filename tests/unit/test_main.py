@@ -23,6 +23,18 @@ def test_create_app_returns_fastapi_app_with_mcp_mounted():
     assert any(path in ("/", "") for path in route_paths)
 
 
+def test_create_app_threads_dynamodb_resource_to_search_filings_tool():
+    """Phase C (CLAUDE.md): create_app must pass dynamodb_resource through
+    to register_search_filings_tool, or per-query logging never wires up in
+    production even though get_dependencies() builds the resource."""
+    dynamodb = MagicMock()
+
+    with patch("server.main.register_search_filings_tool") as mock_register:
+        create_app(MagicMock(), MagicMock(), MagicMock(), MagicMock(), dynamodb)
+
+    assert mock_register.call_args.kwargs["dynamodb_resource"] is dynamodb
+
+
 def test_middleware_accepts_a_valid_cognito_token():
     """Cognito is the only accepted credential -- verified end to end in
     Claude Desktop on 2026-09-24; the interim static token is retired."""

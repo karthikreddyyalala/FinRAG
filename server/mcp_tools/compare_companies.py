@@ -31,9 +31,11 @@ def build_comparison_answer(
     succeeded and there is no reason to discard them.
 
     Returns:
-        {"metric", "period", "companies": [...], "latency_ms"}
+        {"metric", "period", "companies": [...], "cost_usd", "latency_ms"}
         Each company entry is either a get_company_financials result or, on
-        failure, {"ticker", "error"}.
+        failure, {"ticker", "error"}. cost_usd sums each successful hop's
+        own cost_usd -- a failed hop contributes 0 (it never reached the
+        generation call that costs anything).
     """
     start = time.monotonic()
 
@@ -50,10 +52,13 @@ def build_comparison_answer(
         except Exception as e:
             companies.append({"ticker": ticker, "error": str(e)})
 
+    total_cost_usd = sum(c.get("cost_usd", 0.0) for c in companies)
+
     return {
         "metric": metric,
         "period": period,
         "companies": companies,
+        "cost_usd": round(total_cost_usd, 6),
         "latency_ms": int((time.monotonic() - start) * 1000),
     }
 
