@@ -821,30 +821,34 @@ DONE -- EventBridge weekly refresh
 SESSION HANDOFF (updated 2026-09-25, end of day) -- read this first in a
 new chat
 =====================================================================
-BLOCKING, DO THIS FIRST: GitHub Actions CI is red on main and has been
-  failing since 07:58 UTC 2026-09-25 (pre-dates all of today's work).
-  Three real, verified root causes were found and fixed today (datasets/
-  ragas pin conflict; a ruff line-length bug in C4's own code; reranker
-  unit tests coupled to a macOS-only platform gate) -- each one confirmed
-  by reproducing it in a genuinely clean venv and seeing the exact
-  failure locally, not guessed. But the CI job's "Unit tests" step is
-  STILL failing after all three fixes (commit ec601c7, most recent),
-  and the real cause of that remaining failure is UNKNOWN -- neither the
-  GitHub REST API's job-logs nor run-logs endpoint is accessible without
-  admin/token auth (both return 403 for this identity), `gh` is not
-  authenticated in this environment, and no local repro (clean Python
-  3.12 venv, stripped env, this machine's architecture) reproduces
-  whatever CI is actually hitting. Asked the user to run
-  `gh run view <run-id> --log-failed` themselves (they have a real
-  authenticated session) and paste the output -- START THERE, don't
-  re-guess blind again. Latest failing run id: check
-  https://github.com/karthikreddyyalala/FinRAG/actions for the newest
-  one on main, it may have changed since this note was written.
+RESOLVED 2026-09-25: GitHub Actions CI was red on main from 07:58 UTC
+  2026-09-25 through the day. Three real root causes fixed first
+  (datasets/ragas pin conflict; a ruff line-length bug in C4's own code;
+  reranker unit tests coupled to a macOS-only platform gate), but the
+  "Unit tests" step stayed red after all three -- the real GitHub REST
+  API job-logs endpoint was inaccessible (403, no admin token; `gh` not
+  authenticated in this environment), so the user pasted a screenshot of
+  the actual failure from the Actions UI instead of another blind guess.
+  Real cause: `handler()` in server/main.py constructs a real
+  `boto3.client("ssm")` as a call argument before `load_secrets_from_ssm`
+  (which tests mock) ever runs -- it needs a region regardless of what a
+  given test patches. Locally this was masked by AWS_DEFAULT_REGION
+  already present via `~/.aws/config`; CI has neither that nor a
+  sufficient `AWS_REGION`-only fallback on this botocore version. Fixed
+  in two passes (first covered the `handler` fixture's tests, a second
+  screenshot showed 2 more tests with their own ad hoc patch context
+  still failing) -- replaced per-test env dicts with one autouse pytest
+  fixture in tests/unit/test_lambda_handler.py so this can't be missed
+  per-test again. Verified by reproducing the exact CI condition locally
+  (`env -u AWS_DEFAULT_REGION -u AWS_REGION pytest tests/unit/`, all 256
+  passing) before pushing either fix, then confirmed green on the actual
+  Actions run.
 
-Where we are: Phase A (all), Phase B (all), C1-C5 DONE. NEXT = C6
-  (re-measure cost/latency after C3-C5, before/after table in README,
-  fill Phase 14 resume-bullet cost numbers) -- but CI must be green
-  first, see the blocking note above. Work the MASTER CHECKLIST
+Where we are: Phase A (all), Phase B (all), C1-C6 DONE. CI is green
+  (fixed 2026-09-25: unit tests were constructing a real boto3 SSM
+  client before any test mock could intercept it, and only some test
+  fixtures set an AWS region -- see git log for the two follow-up
+  commits). NEXT = C7 (CloudWatch dashboard). Work the MASTER CHECKLIST
   below strictly one item at a time; explain in plain language, stop
   after each item for the user's go-ahead.
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
@@ -1254,8 +1258,21 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
             first real signal on aggregate savings across get_financials/
             compare_companies traffic, not just the 2 spot-checked cases
             above
-  [ ] C6. Re-measure cost/latency after C3-C5; before/after table in
-          README; fill the cost numbers into Phase 14 resume bullets
+  [x] C6. Re-measure cost/latency after C3-C5 -- DONE 2026-09-25, same
+          fixed 15-question set as C2, real production dependencies:
+          avg cost_usd 0.012586 (was 0.013677), avg latency_ms 24074 (was
+          24109). README "Cost & latency" section added with the honest
+          read: this set only exercises search_sec_filings, which is the
+          one tool C3-C5 mostly don't touch, so the move is small and
+          expected, not a shortfall. C3 wasn't applied (documented why in
+          C3). C5's real savings (Haiku vs Sonnet, ~1/3 cost) apply to
+          get_financials/compare_companies, not this tool. C4's cache
+          only pays off on a repeat identical query -- this set is 15
+          distinct fresh questions by design, so zero cache hits here;
+          its live-verified hit-vs-miss numbers are cited in README
+          instead. Phase 14 Final-version resume bullet filled in with
+          real cost numbers (also fixed a stale claim there: API Gateway
+          was never deployed, it's Function URL only).
   [ ] C7. CloudWatch dashboard (observability_stack.py): invocations,
           errors, latency, cost
 
@@ -1425,9 +1442,10 @@ FinRAG MCP | Python, AWS Bedrock, MCP SDK, FastAPI, ragas               2026
   — achieving 91.0% numerical accuracy and 80.1% faithfulness on the
   150-question FinanceBench benchmark
 
-• Deployed serverless on AWS (Lambda, API Gateway) with Cognito OAuth
-  2.1/PKCE; [cost per query numbers from Week 4]; ragas eval metrics wired
-  into GitHub Actions CI with automated regression gates
+• Deployed serverless on AWS (Lambda behind a Function URL, no API Gateway)
+  with Cognito OAuth 2.1/PKCE; ~$0.013/query average, cut to ~$0.003/query
+  on single-metric lookups via model-tier routing (Haiku vs. Sonnet); ragas
+  eval metrics wired into GitHub Actions CI with automated regression gates
 ```
 
 ---
