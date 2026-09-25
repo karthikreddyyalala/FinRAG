@@ -818,15 +818,37 @@ DONE -- EventBridge weekly refresh
       partial-run safety) instead of a live run
 
 =====================================================================
-SESSION HANDOFF (updated 2026-09-25) -- read this first in a new chat
+SESSION HANDOFF (updated 2026-09-25, end of day) -- read this first in a
+new chat
 =====================================================================
-Where we are: Phase A (all), Phase B (all), C1, C2 DONE. NEXT = C3
-  (Bedrock prompt caching on the generation system prompt). Work the
-  MASTER CHECKLIST below strictly one item at a time; explain in plain
-  language, stop after each item for the user's go-ahead.
-Branch: main (week5-deployment merged 2026-09-24). All work today
-  committed directly to main, pushed after every item. Last commit:
-  cb5ea36 "docs: C1 done and live-verified".
+Where we are: Phase A (all), Phase B (all), C1-C5 DONE. NEXT = C6
+  (re-measure cost/latency after C3-C5, before/after table in README,
+  fill Phase 14 resume-bullet cost numbers). Work the MASTER CHECKLIST
+  below strictly one item at a time; explain in plain language, stop
+  after each item for the user's go-ahead.
+Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
+  onward uses a feature branch + PR (user rebase-merges via GitHub),
+  not direct pushes to main like C1-C4. `gh` is NOT authenticated in
+  this environment -- `gh pr create` fails with exit 4 ("gh auth
+  login" needed, which is an interactive browser flow only the user
+  can run). Push the branch and hand the user the "compare" URL
+  (`git push` prints it) instead of trying `gh pr create`. Last commit
+  on main: aae6c7e "C5: model tier routing...".
+
+GIT HISTORY WAS RE-WRITTEN TODAY (2026-09-25) -- if anything references
+  an old commit hash from earlier in this project's life, it no longer
+  exists. The user asked to strip "Co-Authored-By: Claude" trailers that
+  had re-accumulated on 13 commits (a standing rule, see Gotchas below,
+  that the harness's own attribution reminder keeps fighting every
+  session). Rewrote all of main via `git filter-branch --msg-filter`,
+  force-pushed; rebuilt the open feature branch by cherry-picking its one
+  unique commit onto the new main (plain `git rebase` breaks after
+  filter-branch -- every hash changed, so git can't find the old
+  merge-base and tries to replay the ENTIRE branch history from the
+  first commit; `git rebase --abort` then cherry-pick is the fix).
+  Verified `git diff old new --stat` empty (content identical) and the
+  full test suite passed before each force-push. If the trailer
+  reappears again: same fix, not a manual per-commit amend.
 
 What shipped today (2026-09-25), in order:
   - A2: 30Q CI regression after A1 -- no regression, numerical_accuracy
@@ -845,6 +867,38 @@ What shipped today (2026-09-25), in order:
   - C2: baseline cost/latency measured on 15 real FinanceBench questions
     pre-caching/routing: avg cost_usd 0.013677, avg latency_ms 24109 --
     this is the "before" number C6 compares against after C3-C5
+  - C3: evaluated Bedrock prompt caching on the generation system prompt.
+    NOT applied -- prompt is ~257 tokens, under Sonnet's 1,024-token
+    caching minimum, and a 5-min-TTL cache miss at this traffic level
+    costs MORE (1.25x input price) than no caching at all. Did fix a
+    real bug found in the process: the "stable" system prompt was
+    actually interpolating a per-query citation, so it was never
+    byte-identical to begin with. Deployed nothing (pure prompt-string
+    fix, no server behavior change worth a deploy).
+  - C4: query result cache in DynamoDB (finrag-query-cache table,
+    24h TTL, search_sec_filings "full" mode only). Live-verified: same
+    question twice, miss $0.007445/23209ms, hit $0.0/67ms, identical
+    answer; confirmed via `aws dynamodb scan` that real rows landed in
+    both finrag-query-cache and finrag-query-logs. Deploy hit the disk
+    gotcha a 3rd time (see below) -- user freed real disk space, retry
+    succeeded.
+  - C5: model tier routing. get_company_financials now defaults to
+    Haiku (single-metric lookup); compare_companies overrides back to
+    Sonnet per hop (multi-hop comparison); search_sec_filings unaffected.
+    Live-compared Haiku vs Sonnet on 2 real FinanceBench questions before
+    trusting it: MMM FY2018 capex -- identical correct answer, Haiku at
+    ~1/3 cost ($0.002472 vs $0.007415); AWK FY2020 dividends -- identical
+    honest refusal on both tiers (a retrieval gap, not a Haiku
+    regression). Shipped on branch week5-c5-model-tier-routing, PR'd and
+    merged by the user (not pushed direct to main).
+  - Stripped the Co-Authored-By: Claude trailer from all of git history
+    (see "GIT HISTORY WAS RE-WRITTEN TODAY" above) -- unrelated to the
+    Phase C checklist but real work done this session.
+
+DISK STATUS AT SESSION END: 41GB free (user freed real space outside
+  this repo's caches after the C4 ENOSPC failure below). Do not assume
+  it stays that way -- this machine has been chronically near-full all
+  week (see Gotchas). Still `df -h /` before any eval run or deploy.
 
 Live-test the deployed server (Cognito-only; static token retired in A3,
 gets 401). A real Cognito access token needs the hosted-UI login flow
@@ -922,7 +976,15 @@ Gotchas learned the hard way:
   cache made it ignore fixed flags. rm -rf it when auth acts strangely.
 - Cognito login password: ~/.finrag/cognito-password.txt (user reads it
   themselves; never print it -- the credential classifier blocks that).
-- Never add Co-Authored-By: Claude trailers to commits (user rule).
+- Never add Co-Authored-By: Claude trailers to commits (user rule). This
+  keeps recurring because the harness's own attribution system reminder
+  re-suggests it every session -- check for it before every commit, don't
+  trust that "I did it right last time" carries forward. If it slips
+  through again, see "GIT HISTORY WAS RE-WRITTEN TODAY" above for the fix.
+- `gh` is not authenticated in this environment -- `gh pr create`/`gh
+  auth login` need an interactive browser flow only the user can run.
+  Push the branch and hand the user the compare/PR URL `git push` prints
+  instead.
 - Bedrock daily token quota can be exhausted after heavy runs; every LLM
   call site falls back to OpenAI gpt-4o-mini automatically.
 - Neither AWS Cost Explorer (this IAM identity isn't enabled for it) nor
