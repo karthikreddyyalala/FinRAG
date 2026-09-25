@@ -818,37 +818,84 @@ DONE -- EventBridge weekly refresh
       partial-run safety) instead of a live run
 
 =====================================================================
-SESSION HANDOFF (updated 2026-09-24) -- read this first in a new chat
+SESSION HANDOFF (updated 2026-09-25) -- read this first in a new chat
 =====================================================================
-Where we are: A1-A3, A5 DONE. NEXT = A4 (user: rotate the OpenAI key pasted
-  in chat), then Phase B (baseline comparisons). Work the MASTER CHECKLIST
-  below strictly one item at a time; explain in plain language, stop after
-  each item for the user's go-ahead.
-Branch: week5-deployment merged to main via rebase-merge PR (2026-09-24,
-  main at db4c3dd). Work from main now.
+Where we are: Phase A (all), Phase B (all), C1, C2 DONE. NEXT = C3
+  (Bedrock prompt caching on the generation system prompt). Work the
+  MASTER CHECKLIST below strictly one item at a time; explain in plain
+  language, stop after each item for the user's go-ahead.
+Branch: main (week5-deployment merged 2026-09-24). All work today
+  committed directly to main, pushed after every item. Last commit:
+  cb5ea36 "docs: C1 done and live-verified".
 
-Live-test the deployed server (Cognito-only now; static token was retired
-in A3 and gets 401). A real Cognito access token needs the hosted-UI login
-flow (through Claude Desktop / mcp-remote, or manually) -- there is no
-static header to source anymore:
+What shipped today (2026-09-25), in order:
+  - A2: 30Q CI regression after A1 -- no regression, numerical_accuracy
+    actually improved 0.910->0.949
+  - A3: retired the static bearer token, Cognito-only auth now. Real bug
+    caught+fixed: _is_authorized silently accepted a header missing the
+    "Bearer " prefix
+  - A5: week5-deployment merged to main (rebase-merge PR)
+  - Phase B: dense_only/bm25_only baseline modes added to
+    build_search_filings_answer(); Baseline A/B run 150Q each; comparison
+    table in README. Real bug caught+fixed: an oversized table chunk (no
+    dense/rerank pass in BM25-only to screen it out) blew Sonnet's context
+    window -- fixed with MAX_CHUNK_CHARS cap in generate_answer()
+  - C1: real cost_usd + per-stage latency + DynamoDB logging, wired into
+    all 3 relevant tools, live-verified on the deployed Lambda
+  - C2: baseline cost/latency measured on 15 real FinanceBench questions
+    pre-caching/routing: avg cost_usd 0.013677, avg latency_ms 24109 --
+    this is the "before" number C6 compares against after C3-C5
+
+Live-test the deployed server (Cognito-only; static token retired in A3,
+gets 401). A real Cognito access token needs the hosted-UI login flow
+(through Claude Desktop / mcp-remote, or manually) -- there is no static
+header to source anymore:
   caffeinate -i curl -sS -X POST "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp" \
     -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
     -H "Authorization: Bearer <cognito-access-token>" --max-time 110 \
     -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_sec_filings","arguments":{"query":"3M capital expenditure FY2018"}}}'
   Expected: $(1,577) million cited to [MMM 10-K 2019-02-07].
-  Sanity check without a token (should 401 -- confirms the old static path
-  is really gone):
-  caffeinate -i curl -sS -o /dev/null -w "%{http_code}\n" -X POST "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp" \
-    -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
-    -H "Authorization: Bearer any-old-token" --max-time 60 \
-    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+To live-verify a change WITHOUT a Cognito token (what today's C1/C2 work
+actually used) -- calls real Bedrock/Pinecone/DynamoDB directly, bypassing
+HTTP/auth entirely, same production dependency-building code the Lambda
+runs:
+  export OPENAI_API_KEY=$(aws ssm get-parameter --name /finrag/openai-api-key --with-decryption --region us-east-1 --query Parameter.Value --output text)
+  export PINECONE_API_KEY=$(aws ssm get-parameter --name /finrag/pinecone-api-key --with-decryption --region us-east-1 --query Parameter.Value --output text)
+  PYTHONPATH=. OPENAI_API_KEY="$OPENAI_API_KEY" PINECONE_API_KEY="$PINECONE_API_KEY" python3 -c "
+  import server.main as main
+  deps = main._build_production_dependencies()
+  bedrock, pinecone_index, keyword_index, embed_fn, dynamodb = deps
+  from server.mcp_tools.search_filings import build_search_filings_answer
+  r = build_search_filings_answer('<question>', bedrock, pinecone_index, keyword_index, embed_fn, dynamodb_resource=dynamodb)
+  print(r['cost_usd'], r['latency_ms'], r['answer'][:200])
+  "
+  # ALWAYS follow with: rm -f /tmp/finrag/keyword.sqlite -- see disk gotcha below.
 
 Deploy: PYTHONPATH=. npx --yes aws-cdk deploy FinragMcpServerStack \
           --app "python3 infra/app.py" --require-approval never
-        then `rm -rf cdk.out` (disk is nearly full -- a full disk failed
-        one deploy with ENOSPC). Deploys take 2-5 min; run in background.
+        then `rm -rf cdk.out`. Deploys take 1-2 min; run in background.
 Logs:   aws logs tail FinragMcpServerStack-McpServerLogs06388123-18nUK8h9Qyv0 --since 30m
         Claude Desktop side: ~/Library/Logs/Claude/mcp-server-finrag.log
+Query logs: aws dynamodb scan --table-name finrag-query-logs --region us-east-1
+
+DISK IS CHRONICALLY NEAR-FULL ON THIS MACHINE -- not a one-time event, it
+recurred twice today (once hitting genuine 0 bytes free, which blocks even
+Bash's own output-file writes -- every tool call fails until freed). Root
+cause: `load_keyword_index()` re-downloads the ~900MB keyword index to
+local `/tmp/finrag/keyword.sqlite` every time it's called outside Lambda
+(any eval run, any direct-pipeline verification script). Before ANY eval
+run or direct-pipeline verification:
+  df -h /   # if under ~1GB free, clean first:
+  rm -rf "$(pwd)/cdk.out" ~/Library/Caches/pip evals/results/keyword_index.sqlite
+And immediately after any script that calls _build_production_dependencies()
+or load_keyword_index() directly (not through run_eval.py, which uses its
+own S3-cached copy under evals/results/):
+  rm -f /tmp/finrag/keyword.sqlite
+This is a recurring tax, not fixed at the root. A real fix (e.g. stream
+from S3 instead of caching locally for one-off scripts, or the user
+permanently freeing disk elsewhere) is still open -- raise it if it bites
+a third time.
 
 Gotchas learned the hard way:
 - The Mac sleeps mid-request: always wrap long runs in `caffeinate -i`
@@ -862,6 +909,12 @@ Gotchas learned the hard way:
 - Never add Co-Authored-By: Claude trailers to commits (user rule).
 - Bedrock daily token quota can be exhausted after heavy runs; every LLM
   call site falls back to OpenAI gpt-4o-mini automatically.
+- Neither AWS Cost Explorer (this IAM identity isn't enabled for it) nor
+  the OpenAI API key in SSM (lacks the api.usage.read scope) can report
+  real dollar spend programmatically. The user checks
+  platform.openai.com/usage and the AWS Billing console directly for
+  actual cost; cost_usd in DynamoDB/eval results is our own estimate, not
+  a substitute for those.
 
 =====================================================================
 MASTER CHECKLIST (2026-09-24) -- do in this order, one item at a time.
@@ -965,8 +1018,21 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
           re-downloading the ~900MB index to /tmp locally whenever this
           verification script runs outside Lambda. Freed and cleaned up
           each time; not yet fixed at the root.
-  [ ] C2. Measure BASELINE cost/latency per query (before C3-C5), from
-          C1's logs over a fixed question set
+  [x] C2. Measure BASELINE cost/latency per query (before C3-C5), from
+          C1's logs over a fixed question set -- DONE 2026-09-25, no
+          caching/routing applied yet, so this is the true "before" number
+          C6 compares against later:
+          Fixed set: first 15 FinanceBench questions (evals/eval_data/
+          financebench_150.json[:15]), run individually against real
+          production dependencies (not mocked), logged to DynamoDB.
+            avg cost_usd:     0.013677  (min 0.005593, max 0.032660)
+            avg latency_ms:   24109     (min 15441,    max 36648)
+            projected cost per 1,000 queries: ~$13.68
+          16 rows confirmed in finrag-query-logs via `aws dynamodb scan
+          --select COUNT` (15 + the earlier C1 live-verification query).
+          Caveat carried from C1: cost_usd is the text-length token
+          estimate, not exact provider usage -- directionally right for
+          before/after comparison, not a billing-accurate number.
   [ ] C3. Bedrock prompt caching on the generation system prompt
   [ ] C4. Query result cache in DynamoDB (hash of normalized query)
   [ ] C5. Model tier routing: single-metric lookups -> Haiku,
