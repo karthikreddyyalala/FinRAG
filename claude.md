@@ -776,7 +776,7 @@ DONE -- Cognito OAuth 2.1/PKCE (dual-accept, not yet a hard cutover)
   [ ] Retire the static MCP_AUTH_TOKEN bearer path (still accepted; used
       for curl-based testing)
 
-RETRIEVAL BUG FOUND IN LIVE USE (2026-09-24) -- not yet fixed
+RETRIEVAL BUG FOUND IN LIVE USE (2026-09-24) -- FIXED same day (A1)
   Natural phrasings ("3M capital expenditure FY2018") return "context does
   not provide"; only the verbose FinanceBench wording (mentions "cash flow
   statement") finds the FY2018 10-K. Cause: all 28 MMM filings contain
@@ -826,16 +826,18 @@ written".
 =====================================================================
 
 PHASE A -- Make the demo reliable (do first)
-  [ ] A1. Time-aware retrieval fix (the 3M FY2018 bug above)
+  [x] A1. Time-aware retrieval fix (the 3M FY2018 bug above) -- DONE 2026-09-24:
+          both failing phrasings now return $(1,577)M, all 5 citations
+          from [MMM 10-K 2019-02-07], live on the deployed Lambda
           - rewriter extracts ticker + fiscal year from the question
           - pass as metadata filters to Pinecone + FTS5 keyword index
           - FY N annual figures -> 10-K filed in early N+1
           Done when: "3M capital expenditure FY2018" and "What was 3M's
           capex in fiscal year 2018?" both return $1,577M cited to
           [MMM 10-K 2019-02-07], on the deployed Lambda
-  [ ] A2. Re-run full 150Q FinanceBench eval after A1
-          Done when: numerical_accuracy >= 0.910 and faithfulness >=
-          0.801 (no regression vs. current), new numbers in README
+  [ ] A2. Regression check after A1: 30Q CI subset (run_ci_eval.py)
+          Done when: no drop vs. current scores. The full 150Q re-run is
+          folded into Phase B, which needs full-pipeline scores anyway.
   [ ] A3. Retire the static bearer token (Cognito is now the only login)
           - drop MCP_AUTH_TOKEN path from server/main.py + its tests
           - delete /finrag/mcp-auth-token SSM param + ~/.finrag/mcp-headers.txt
