@@ -913,11 +913,30 @@ PHASE A -- Make the demo reliable (do first)
           verified identical (git diff main week5-deployment: empty).
           main now at db4c3dd, all 35 Week 5 commits present.
 
-PHASE B -- Prove the design choices (strongest interview material)
-  [ ] B1. Baseline A: dense (Pinecone) only, no rewrite, no rerank -- 150Q
-  [ ] B2. Baseline B: keyword (FTS5) only, no rewrite, no rerank -- 150Q
-  [ ] B3. Comparison table in README: Baseline A vs B vs full pipeline
-          Done when: README shows all three rows with real scores
+PHASE B -- Prove the design choices (strongest interview material) -- DONE
+  2026-09-24
+  [x] B1. Baseline A: dense (Pinecone) only, no rewrite, no rerank -- 150Q.
+          numerical_accuracy 86.5%, faithfulness 79.4%.
+          evals/results/eval_dense_only_1790314408.json
+  [x] B2. Baseline B: keyword (FTS5) only, no rewrite, no rerank -- 150Q.
+          numerical_accuracy 94.4%, faithfulness 83.8%.
+          evals/results/eval_bm25_only_1790318145.json
+          Live bug caught and fixed mid-run: BM25-only has no dense/rerank
+          pass to screen an oversized match, and chunker.py exempts table
+          chunks from its size target -- a huge table chunk blew Sonnet's
+          context window (ValidationException) at Q91/150. Fixed in
+          generate_answer() (MAX_CHUNK_CHARS cap, server/generation/
+          answer_generator.py), not per-mode, then resumed from checkpoint.
+  [x] B3. Comparison table in README: Baseline A vs B vs full pipeline --
+          DONE, "Baseline comparison" section under Eval results.
+          Honest finding, not spun: BM25-only actually scored *higher*
+          than the full pipeline on this benchmark (FinanceBench's
+          questions are largely keyword-friendly). What the full pipeline
+          demonstrably buys is the gap over dense-only search (+4.5pt
+          numerical accuracy, +2.9pt context recall) -- hybrid retrieval
+          and rewriting help most where dense embeddings alone miss a
+          jargon-heavy financial term. Stated as an open finding in README,
+          not resolved in the pipeline's favor by fiat.
 
 PHASE C -- Cost & observability (Week 4, deferred until now)
   [ ] C1. server/observability/logger.py -- per-query record to DynamoDB:
