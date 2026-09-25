@@ -41,6 +41,17 @@ Same 150 FinanceBench questions, three retrieval configurations. Baselines run w
 
 One real bug surfaced by running Baseline B: unlike the full pipeline, BM25-only retrieval has no dense/rerank pass to screen out an oversized match, and `chunker.py` exempts table chunks from its ~1500-word target (one table = one chunk, regardless of size). A large schedule table blew Sonnet's context window outright (`ValidationException: Input is too long for requested model`) at question 91/150. Fixed at the shared `generate_answer()` call, not per-baseline, since any retrieval path can hand it an oversized chunk — see `server/generation/answer_generator.py`'s `MAX_CHUNK_CHARS` cap.
 
+### Cost & latency
+
+Measured on the same fixed set of 15 FinanceBench questions run individually against production dependencies (real Bedrock/OpenAI/Pinecone, not mocked), logged to DynamoDB via `server/observability/logger.py`. `cost_usd` is a text-length token estimate (~4 chars/token), not exact provider billing — directionally right for before/after, not a substitute for the OpenAI/AWS billing consoles.
+
+| | Before (pre-cache/routing) | After (C3–C5 applied) |
+|---|---|---|
+| Avg cost/query | $0.013677 | $0.012586 |
+| Avg latency | 24,109 ms | 24,074 ms |
+
+**Read honestly:** both numbers moved only slightly, and that's expected, not a shortfall — this set exercises `search_sec_filings` only, which is the one tool C3–C5's changes mostly don't touch. C3 (Bedrock prompt caching) was evaluated and deliberately not applied — the system prompt is under Sonnet's 1,024-token caching minimum, and a cold 5-minute-TTL cache at this query rate would cost *more* per miss (1.25x input price) than no caching. C5's model-tier routing (Haiku for single-metric lookups) only applies to `get_company_financials`/`compare_companies`, not `search_sec_filings` — there it's real: MMM FY2018 capex answered identically on both tiers at ~1/3 the cost ($0.002472 vs $0.007415), live-verified. C4's query result cache only pays off on a *repeat* identical question within 24h; this set is 15 distinct fresh questions by design (to match C2's baseline method), so it shows zero cache hits here — its live-verified effect on a repeat query is a hit at $0.0 / 67ms versus a miss at $0.007445 / 23,209ms. The honest summary: caching and routing work, demonstrated on the paths they apply to, but this particular before/after set doesn't isolate them.
+
 ### Corpus coverage
 
 - 71 of 72 target companies ingested (10-K, 10-Q, 8-K; 2018–2026 for the 32 companies FinanceBench asks about, 2025–2026 for the remaining 40)
