@@ -939,10 +939,32 @@ PHASE B -- Prove the design choices (strongest interview material) -- DONE
           not resolved in the pipeline's favor by fiat.
 
 PHASE C -- Cost & observability (Week 4, deferred until now)
-  [ ] C1. server/observability/logger.py -- per-query record to DynamoDB:
-          query, rewritten query, chunks per stage, tokens in/out,
-          cost_usd, latency_ms per stage. Replace the cost_usd=0.0 stubs.
-          Done when: a live query writes one complete row
+  [x] C1. server/observability/logger.py -- per-query record to DynamoDB --
+          DONE 2026-09-25, live-verified on the deployed Lambda:
+          - estimate_cost_usd(): text-length-based token estimate (~4
+            chars/token), documented as approximate -- exact usage would
+            need threading a new return value through rewrite_query()/
+            generate_answer() and every existing call site (all unit
+            tests, run_eval.py, run_ci_eval.py, the CI gate)
+          - log_query(): best-effort DynamoDB write to finrag-query-logs,
+            never raises (a logging outage must not fail the user's query)
+          - search_filings.py replaces cost_usd=0.0 with real cost, tracks
+            per-stage latency (rewrite/retrieve/rerank/generate/verify)
+          - get_financials.py cost_usd fixed; compare_companies.py sums
+            each successful per-ticker hop's cost
+          - server/main.py builds a boto3 dynamodb resource and threads it
+            through create_app() -> register_search_filings_tool()
+          - infra: dynamodb:PutItem IAM grant, scoped to the
+            finrag-query-logs table ARN only
+          - Live-verified end to end: ran one real query against the
+            deployed Lambda's production dependencies (3M FY2018 capex),
+            got cost_usd=0.007224 (not the old 0.0 stub), confirmed the
+            row landed in DynamoDB via `aws dynamodb scan`
+          Deploy hit disk full (0 bytes free, mid-session) -- see "Known
+          gaps" below; the recurring cause is load_keyword_index()
+          re-downloading the ~900MB index to /tmp locally whenever this
+          verification script runs outside Lambda. Freed and cleaned up
+          each time; not yet fixed at the root.
   [ ] C2. Measure BASELINE cost/latency per query (before C3-C5), from
           C1's logs over a fixed question set
   [ ] C3. Bedrock prompt caching on the generation system prompt
