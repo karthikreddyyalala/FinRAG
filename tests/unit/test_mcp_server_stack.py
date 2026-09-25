@@ -109,3 +109,18 @@ def test_lambda_env_has_cognito_ids_but_no_secrets():
     env = fn["Properties"].get("Environment", {}).get("Variables", {})
     assert "COGNITO_USER_POOL_ID" in env
     assert "COGNITO_CLIENT_ID" in env
+
+
+def test_lambda_can_read_and_write_the_query_cache_table_only():
+    """Phase C4: the cache is read+write (unlike the write-only log table),
+    and scoped to exactly the cache table's ARN, not a wildcard."""
+    _template().has_resource_properties("AWS::IAM::Policy", {
+        "PolicyDocument": {
+            "Statement": Match.array_with([
+                Match.object_like({
+                    "Action": Match.array_with(["dynamodb:GetItem", "dynamodb:PutItem"]),
+                    "Resource": Match.string_like_regexp(r".*table/finrag-query-cache$"),
+                })
+            ]),
+        },
+    })

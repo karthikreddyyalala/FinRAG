@@ -192,6 +192,14 @@ class McpServerStack(Stack):
             actions=["dynamodb:PutItem"],
             resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/finrag-query-logs"],
         ))
+        # Query result cache (Phase C4, CLAUDE.md). Read+write, unlike the
+        # write-only log table above: search_sec_filings checks the cache
+        # before running the pipeline (GetItem) and writes a fresh answer
+        # into it on a miss (PutItem).
+        fn.add_to_role_policy(iam.PolicyStatement(
+            actions=["dynamodb:GetItem", "dynamodb:PutItem"],
+            resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/finrag-query-cache"],
+        ))
 
         url = fn.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)
         CfnOutput(self, "McpEndpoint", value=f"{url.url}mcp")

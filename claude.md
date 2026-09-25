@@ -897,6 +897,22 @@ from S3 instead of caching locally for one-off scripts, or the user
 permanently freeing disk elsewhere) is still open -- raise it if it bites
 a third time.
 
+Bit a third time, 2026-09-25, C4 work: `cdk deploy FinragStorageStack`
+alone still re-bundles EVERY stack's Lambda assets during synth (CDK
+synths the whole app regardless of the deploy target), including
+FinragIngestionStack's pandas/lxml/pinecone/openai/tiktoken pip install --
+that alone failed with ENOSPC. The documented cleanup command dropped disk
+to 283MB free, not enough headroom for that bundle. No AWS state was
+touched (failed during local synth, before any CloudFormation call), but
+the deploy could not proceed. Waiting on the user to free real disk space
+elsewhere (outside this repo's own caches) before retrying. If this keeps
+recurring: the actual fix is almost certainly `cdk deploy` targeting a
+context that skips unrelated stacks' bundling (see test_mcp_server_stack.py's
+`aws:cdk:bundling-stacks=[]` context trick used in tests, which is NOT
+safe to use for a real deploy since it would skip bundling the stack being
+deployed too) -- worth a real investigation rather than another cleanup
+pass, next time this bites.
+
 Gotchas learned the hard way:
 - The Mac sleeps mid-request: always wrap long runs in `caffeinate -i`
   (curl reported ~17-minute "timeouts" that were really sleep).
@@ -1064,7 +1080,52 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
             the Bedrock daily quota resets, to replace the docs-based
             estimate with a real number, if C4/C5 ever push the prompt
             back over 1,024 tokens.
-  [ ] C4. Query result cache in DynamoDB (hash of normalized query)
+  [x] C4. Query result cache in DynamoDB (hash of normalized query) -- DONE
+          2026-09-25, live-verified on the deployed Lambda's production
+          dependencies (not mocked):
+          - server/observability/query_cache.py: normalize_query()/
+            cache_key() (sha256 of the lowercased, whitespace-folded
+            query), get_cached_answer()/put_cached_answer() -- both
+            best-effort, never raise (same discipline as logger.py)
+          - Scoped to search_sec_filings only, "full" mode only. Baseline
+            modes (dense_only/bm25_only) never touch the cache -- they
+            exist to measure the UNCACHED pipeline for run_eval.py's
+            Baseline A/B comparison, and a hit there would silently
+            corrupt that measurement (test_baseline_modes_never_touch_the_
+            cache)
+          - TTL fixed at 24h, not tied to the weekly EventBridge refresh --
+            a longer TTL saves more but risks serving a stale answer if
+            the corpus changes for that ticker before expiry; 24h means a
+            cached entry can never survive into a week where the corpus
+            changed
+          - New DynamoDB table finrag-query-cache (storage_stack.py):
+            partition key query_hash, TTL attribute, RemovalPolicy.DESTROY
+            (unlike query_log_table's RETAIN -- cache content is
+            disposable, regenerates on the next query). IAM: Lambda gets
+            GetItem+PutItem scoped to this table's ARN only
+          - Deploy hit the documented disk gotcha a third time: `cdk
+            deploy FinragStorageStack` alone still re-bundles every
+            stack's Lambda assets during synth, and FinragIngestionStack's
+            pip install alone failed with ENOSPC even after the standard
+            cleanup (283MB free wasn't enough). No AWS state was touched by
+            the failure (died in local synth, before any CloudFormation
+            call). User freed real disk space outside the repo; retry
+            succeeded. See the disk-gotcha section above for full details
+            and the still-open real fix.
+          - Live-verified end to end against real Bedrock/Pinecone/
+            DynamoDB (not the deployed Lambda's HTTP path -- same
+            production-dependency-building code, see "To live-verify a
+            change WITHOUT a Cognito token" above): same question run
+            twice. Call 1 (miss): cost_usd=0.007445, latency_ms=23209.
+            Call 2 (hit): cost_usd=0.0, latency_ms=67, identical answer.
+            Confirmed via `aws dynamodb scan`: 1 row in finrag-query-cache
+            with the correct answer + a 24h-out ttl; 2 rows in
+            finrag-query-logs, cache_hit=false then cache_hit=true,
+            1 second apart -- matching the two calls exactly.
+          - Not yet done: C6 will re-measure the same 15-question fixed
+            set from C2 to get a real before/after number including
+            this cache's effect (repeat questions in that set would now
+            show near-zero cost/latency on a second pass)
   [ ] C5. Model tier routing: single-metric lookups -> Haiku,
           comparisons / multi-hop -> Sonnet
   [ ] C6. Re-measure cost/latency after C3-C5; before/after table in
