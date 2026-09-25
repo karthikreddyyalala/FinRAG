@@ -12,11 +12,12 @@ through Mangum with real Function URL events before deploying:
   (secrets, keyword index, Pinecone client) are cached separately in
   get_dependencies(); rebuilding the app wrapper itself takes milliseconds.
 - Bearer-token auth, fail closed: a public URL would otherwise let anyone
-  spend the OpenAI budget. Interim until Cognito (Week 5).
+  spend the OpenAI budget. Cognito OAuth 2.1/PKCE is the only accepted
+  credential (the interim static token was retired once Cognito login was
+  verified end to end -- see CLAUDE.md Phase 11, item A3).
 """
 from __future__ import annotations
 
-import hmac
 import json
 import os
 from collections.abc import AsyncIterator, Callable
@@ -57,7 +58,6 @@ def create_app(
     pinecone_index: Any,
     keyword_index: Any,
     embed_fn: Callable[[str], list[float]],
-    auth_token: str | None,
 ) -> FastAPI:
     """Build the FastAPI app with the MCP server mounted at /mcp.
 
@@ -66,15 +66,10 @@ def create_app(
         pinecone_index: A Pinecone Index handle for the search tool.
         keyword_index: sync_pinecone.KeywordIndex over the full corpus.
         embed_fn: Callable(text) -> embedding vector for embedding queries.
-        auth_token: Required bearer token. Empty or None raises -- the server
-            never starts unauthenticated.
 
     Returns:
         A FastAPI app ready to serve via Mangum on Lambda.
     """
-    if not auth_token:
-        raise ValueError("auth_token is required; refusing to start an open endpoint")
-
     mcp = MCPServer("FinRAG")
     register_search_filings_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
     register_get_financials_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
@@ -107,7 +102,7 @@ def create_app(
     async def require_bearer_token(request: Request, call_next: Any) -> Any:
         if request.url.path == WELL_KNOWN_OAUTH_PATH:
             return await call_next(request)
-        if not _is_authorized(request.headers.get("authorization"), auth_token):
+        if not _is_authorized(request.headers.get("authorization")):
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         return await call_next(request)
 
@@ -181,18 +176,16 @@ def _get_jwks_client(pool_id: str, region: str) -> jwt.PyJWKClient:
     return jwt.PyJWKClient(jwks_uri)
 
 
-def _is_authorized(authorization_header: str | None, token: str) -> bool:
-    """Accept either the static bearer token or a valid Cognito access token.
+def _is_authorized(authorization_header: str | None) -> bool:
+    """Accept only a valid Cognito access token.
 
-    Dual-accept, not a hard cutover: the static token is already verified
-    working end to end in a real client. Cognito login needs an interactive
-    browser consent screen no CLI session can complete, so both stay valid
-    until that's confirmed from an actual client -- see CLAUDE.md Phase 11.
+    The static bearer token was the interim path before Cognito login was
+    confirmed end to end from a real client (Claude Desktop, 2026-09-24);
+    it is retired -- see CLAUDE.md Phase 11, item A3.
     """
     header = authorization_header or ""
-    if hmac.compare_digest(header.encode(), f"Bearer {token}".encode()):
-        return True
-
+    if not header.startswith("Bearer "):
+        return False
     supplied = header.removeprefix("Bearer ").strip()
     pool_id = os.environ.get("COGNITO_USER_POOL_ID")
     client_id = os.environ.get("COGNITO_CLIENT_ID")
@@ -239,16 +232,12 @@ def handler(event: Any, context: Any) -> Any:
             "body": json.dumps(body),
         }
 
-    token = os.environ.get("MCP_AUTH_TOKEN")
-    if not token:
-        raise RuntimeError("MCP_AUTH_TOKEN unset; refusing to serve an open endpoint")
-
-    if not _is_authorized(headers.get("authorization"), token):
+    if not _is_authorized(headers.get("authorization")):
         return {
             "statusCode": 401,
             "headers": {"content-type": "application/json"},
             "body": '{"error": "unauthorized"}',
         }
 
-    app = create_app(*get_dependencies(), auth_token=token)
+    app = create_app(*get_dependencies())
     return Mangum(app, lifespan="auto")(event, context)
