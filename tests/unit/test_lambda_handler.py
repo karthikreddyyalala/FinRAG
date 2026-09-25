@@ -20,8 +20,17 @@ import pytest
 HOST = "abc123.lambda-url.us-east-1.on.aws"
 COGNITO_ENV = {
     "COGNITO_USER_POOL_ID": "us-east-1_Test", "COGNITO_CLIENT_ID": "client-1",
-    "AWS_REGION": "us-east-1", "AWS_DEFAULT_REGION": "us-east-1",
+    "AWS_REGION": "us-east-1",
 }
+
+
+@pytest.fixture(autouse=True)
+def _aws_region():
+    """handler() always constructs a real boto3 SSM client before any
+    per-test mock can intercept it (it's built as a call argument), so
+    every test here needs a region regardless of what else it patches."""
+    with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
+        yield
 
 
 def _event(body, auth="Bearer some-cognito-jwt"):
