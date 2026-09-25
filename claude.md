@@ -844,18 +844,16 @@ RESOLVED 2026-09-25: GitHub Actions CI was red on main from 07:58 UTC
   passing) before pushing either fix, then confirmed green on the actual
   Actions run.
 
-Where we are: Phase A (all), Phase B (all), C1-C7 DONE (code + tests;
-  C7's stack not yet deployed to AWS -- next action is `cdk deploy
-  FinragObservabilityStack`). CI is green (fixed 2026-09-25: unit tests
-  were constructing a real boto3 SSM client before any test mock could
-  intercept it, and only some test fixtures set an AWS region -- see git
-  log for the two follow-up commits). Also today: stripped
-  Co-Authored-By: Claude trailers from the 4 commits since 429ec17
-  (same filter-branch + force-push method as before; content diff
-  verified empty, tests re-run before pushing). NEXT = deploy C7, then
-  Phase D (corpus/eval completeness). Work the MASTER CHECKLIST below
-  strictly one item at a time; explain in plain language, stop after
-  each item for the user's go-ahead.
+Where we are: Phase A (all), Phase B (all), C1-C7 DONE and deployed. CI
+  is green (fixed 2026-09-25: unit tests were constructing a real boto3
+  SSM client before any test mock could intercept it, and only some test
+  fixtures set an AWS region -- see git log for the two follow-up
+  commits). Also today: stripped Co-Authored-By: Claude trailers from
+  the 4 commits since 429ec17 (same filter-branch + force-push method as
+  before; content diff verified empty, tests re-run before pushing).
+  NEXT = Phase D (corpus/eval completeness). Work the MASTER CHECKLIST
+  below strictly one item at a time; explain in plain language, stop
+  after each item for the user's go-ahead.
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
   onward uses a feature branch + PR (user rebase-merges via GitHub),
   not direct pushes to main like C1-C4. `gh` is NOT authenticated in
@@ -1296,8 +1294,11 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
           clean, and a real `app.synth()` of all 4 stacks together
           (bundling skipped via the same `aws:cdk:bundling-stacks: []`
           context trick the existing tests use -- real for CFN template
-          shape, not a live deploy). Not yet deployed to AWS -- next
-          action is `cdk deploy FinragObservabilityStack`.
+          shape). Deployed 2026-09-25: `cdk deploy FinragObservabilityStack`
+          (McpServerStack redeployed trivially alongside it, to publish the
+          new cross-stack `fn` export -- no functional/property change).
+          Live-verified: `aws cloudwatch get-dashboard --dashboard-name
+          finrag-mcp-server` returns it. cdk.out cleaned up after.
 
 PHASE D -- Corpus & eval completeness
   [ ] D1. Backfill PYPL (Pinecone monthly write cap has reset)
