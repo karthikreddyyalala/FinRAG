@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 from mcp.server import MCPServer
 
 from server.mcp_tools.search_filings import (
@@ -102,3 +103,64 @@ def test_company_and_year_from_the_question_become_retrieval_filters(
     kwargs = mock_hybrid.call_args.kwargs
     assert kwargs["ticker"] == "MMM"
     assert kwargs["period_range"] == ("2018-01-01", "2019-12-31")
+
+
+@patch("server.mcp_tools.search_filings.rewrite_query")
+@patch("server.mcp_tools.search_filings.rerank")
+def test_dense_only_mode_skips_rewrite_and_rerank(mock_rerank, mock_rewrite):
+    """Baseline A (CLAUDE.md Phase 4): dense search only, no rewrite, no rerank."""
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    pinecone_index.query.return_value = {
+        "matches": [{"id": "c1", "metadata": {
+            "text": "Revenue was $9.06B.", "ticker": "NVDA",
+            "filing_type": "10-Q", "period": "Q1-2026",
+        }}]
+    }
+    bedrock_client.converse.side_effect = [
+        {"output": {"message": {"content": [{"text": "Revenue was $9.06B [NVDA 10-Q]."}]}}}
+    ]
+
+    result = build_search_filings_answer(
+        "Nvidia revenue", bedrock_client, pinecone_index, keyword_index, embed_fn,
+        mode="dense_only",
+    )
+
+    mock_rewrite.assert_not_called()
+    mock_rerank.assert_not_called()
+    keyword_index.search.assert_not_called()
+    assert result["citations"] == [
+        {"ticker": "NVDA", "filing_type": "10-Q", "period": "Q1-2026", "page": None,
+         "text": "Revenue was $9.06B."}
+    ]
+
+
+@patch("server.mcp_tools.search_filings.rewrite_query")
+@patch("server.mcp_tools.search_filings.rerank")
+def test_bm25_only_mode_skips_rewrite_rerank_and_dense(mock_rerank, mock_rewrite):
+    """Baseline B (CLAUDE.md Phase 4): BM25 only, no dense, no rewrite, no rerank."""
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    keyword_index.search.return_value = [
+        {"chunk_id": "c1", "text": "Revenue was $9.06B.", "ticker": "NVDA",
+         "filing_type": "10-Q", "period": "Q1-2026"}
+    ]
+    bedrock_client.converse.side_effect = [
+        {"output": {"message": {"content": [{"text": "Revenue was $9.06B [NVDA 10-Q]."}]}}}
+    ]
+
+    result = build_search_filings_answer(
+        "Nvidia revenue", bedrock_client, pinecone_index, keyword_index, embed_fn,
+        mode="bm25_only",
+    )
+
+    mock_rewrite.assert_not_called()
+    mock_rerank.assert_not_called()
+    pinecone_index.query.assert_not_called()
+    assert result["citations"][0]["text"] == "Revenue was $9.06B."
+
+
+def test_unknown_mode_raises():
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    with pytest.raises(ValueError):
+        build_search_filings_answer(
+            "q", bedrock_client, pinecone_index, keyword_index, embed_fn, mode="bogus"
+        )
