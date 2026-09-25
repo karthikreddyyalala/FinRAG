@@ -819,6 +819,41 @@ DONE -- EventBridge weekly refresh
       partial-run safety) instead of a live run
 
 =====================================================================
+SESSION HANDOFF (updated 2026-09-24) -- read this first in a new chat
+=====================================================================
+Where we are: A1 DONE and live-verified. NEXT = A2 (30Q regression
+  subset). Work the MASTER CHECKLIST below strictly one item at a time;
+  explain in plain language, stop after each item for the user's go-ahead.
+Branch: week5-deployment (all work pushed; not yet merged to main).
+
+Live-test the deployed server (static token still accepted, A3 retires it):
+  caffeinate -i curl -sS -X POST "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp" \
+    -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+    --header "$(cat ~/.finrag/mcp-headers.txt)" --max-time 110 \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_sec_filings","arguments":{"query":"3M capital expenditure FY2018"}}}'
+  Expected: $(1,577) million cited to [MMM 10-K 2019-02-07].
+
+Deploy: PYTHONPATH=. npx --yes aws-cdk deploy FinragMcpServerStack \
+          --app "python3 infra/app.py" --require-approval never
+        then `rm -rf cdk.out` (disk is nearly full -- a full disk failed
+        one deploy with ENOSPC). Deploys take 2-5 min; run in background.
+Logs:   aws logs tail FinragMcpServerStack-McpServerLogs06388123-18nUK8h9Qyv0 --since 30m
+        Claude Desktop side: ~/Library/Logs/Claude/mcp-server-finrag.log
+
+Gotchas learned the hard way:
+- The Mac sleeps mid-request: always wrap long runs in `caffeinate -i`
+  (curl reported ~17-minute "timeouts" that were really sleep).
+- Claude Desktop reads claude_desktop_config.json ONLY at launch -- after
+  editing, Cmd+Q and reopen, or it silently keeps the old config.
+- mcp-remote caches OAuth state in ~/.mcp-auth/mcp-remote-v1/; a stale
+  cache made it ignore fixed flags. rm -rf it when auth acts strangely.
+- Cognito login password: ~/.finrag/cognito-password.txt (user reads it
+  themselves; never print it -- the credential classifier blocks that).
+- Never add Co-Authored-By: Claude trailers to commits (user rule).
+- Bedrock daily token quota can be exhausted after heavy runs; every LLM
+  call site falls back to OpenAI gpt-4o-mini automatically.
+
+=====================================================================
 MASTER CHECKLIST (2026-09-24) -- do in this order, one item at a time.
 Each item: TDD, deploy if it touches the server, verify live, update
 this file + README, commit, push. "Done when" is the bar, not "code
