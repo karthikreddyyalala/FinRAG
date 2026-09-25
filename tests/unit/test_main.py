@@ -13,7 +13,7 @@ def _app():
     keyword_index = MagicMock()
     keyword_index.search.return_value = []
     embed_fn = MagicMock(return_value=[0.0])
-    return create_app(bedrock_client, pinecone_index, keyword_index, embed_fn, auth_token="t")
+    return create_app(bedrock_client, pinecone_index, keyword_index, embed_fn)
 
 
 def test_create_app_returns_fastapi_app_with_mcp_mounted():
@@ -23,12 +23,9 @@ def test_create_app_returns_fastapi_app_with_mcp_mounted():
     assert any(path in ("/", "") for path in route_paths)
 
 
-def test_middleware_accepts_a_valid_cognito_token_alongside_the_static_one():
-    """Dual-accept, not a hard cutover: the static bearer token is already
-    verified working end to end (screenshot-confirmed in Claude Desktop).
-    Cognito login needs an interactive browser consent screen this
-    environment cannot complete, so both must work until a human confirms
-    the OAuth path from an actual client."""
+def test_middleware_accepts_a_valid_cognito_token():
+    """Cognito is the only accepted credential -- verified end to end in
+    Claude Desktop on 2026-09-24; the interim static token is retired."""
     app = _app()
 
     with (
@@ -57,7 +54,7 @@ def test_oauth_protected_resource_metadata_is_public_and_points_at_cognito():
     """mcp-remote's OAuth discovery starts by fetching this well-known path
     with no token at all -- it must not be behind the auth middleware, or
     discovery can never bootstrap. Without this endpoint a client has no way
-    to find Cognito on its own and silently falls back to the static token."""
+    to find Cognito on its own."""
     app = _app()
 
     with (

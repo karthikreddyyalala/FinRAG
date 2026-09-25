@@ -773,8 +773,7 @@ DONE -- Cognito OAuth 2.1/PKCE (dual-accept, not yet a hard cutover)
       token_endpoint_auth_method "none" (public PKCE client). Desktop reads
       its config only at launch -- a stale running app caused one round of
       false failures.
-  [ ] Retire the static MCP_AUTH_TOKEN bearer path (still accepted; used
-      for curl-based testing)
+  [x] Retire the static MCP_AUTH_TOKEN bearer path -- DONE 2026-09-24, see A3
 
 RETRIEVAL BUG FOUND IN LIVE USE (2026-09-24) -- FIXED same day (A1)
   Natural phrasings ("3M capital expenditure FY2018") return "context does
@@ -821,17 +820,27 @@ DONE -- EventBridge weekly refresh
 =====================================================================
 SESSION HANDOFF (updated 2026-09-24) -- read this first in a new chat
 =====================================================================
-Where we are: A1 DONE and live-verified. NEXT = A2 (30Q regression
-  subset). Work the MASTER CHECKLIST below strictly one item at a time;
-  explain in plain language, stop after each item for the user's go-ahead.
-Branch: week5-deployment (all work pushed; not yet merged to main).
+Where we are: A1, A2, A3 DONE and live-verified. NEXT = A4 (user: rotate
+  the OpenAI key pasted in chat), then A5 (user: merge PR to main). Work
+  the MASTER CHECKLIST below strictly one item at a time; explain in plain
+  language, stop after each item for the user's go-ahead.
+Branch: week5-deployment (pushed; not yet merged to main).
 
-Live-test the deployed server (static token still accepted, A3 retires it):
+Live-test the deployed server (Cognito-only now; static token was retired
+in A3 and gets 401). A real Cognito access token needs the hosted-UI login
+flow (through Claude Desktop / mcp-remote, or manually) -- there is no
+static header to source anymore:
   caffeinate -i curl -sS -X POST "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp" \
     -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
-    --header "$(cat ~/.finrag/mcp-headers.txt)" --max-time 110 \
+    -H "Authorization: Bearer <cognito-access-token>" --max-time 110 \
     -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_sec_filings","arguments":{"query":"3M capital expenditure FY2018"}}}'
   Expected: $(1,577) million cited to [MMM 10-K 2019-02-07].
+  Sanity check without a token (should 401 -- confirms the old static path
+  is really gone):
+  caffeinate -i curl -sS -o /dev/null -w "%{http_code}\n" -X POST "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp" \
+    -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+    -H "Authorization: Bearer any-old-token" --max-time 60 \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 
 Deploy: PYTHONPATH=. npx --yes aws-cdk deploy FinragMcpServerStack \
           --app "python3 infra/app.py" --require-approval never
@@ -870,14 +879,31 @@ PHASE A -- Make the demo reliable (do first)
           Done when: "3M capital expenditure FY2018" and "What was 3M's
           capex in fiscal year 2018?" both return $1,577M cited to
           [MMM 10-K 2019-02-07], on the deployed Lambda
-  [ ] A2. Regression check after A1: 30Q CI subset (run_ci_eval.py)
-          Done when: no drop vs. current scores. The full 150Q re-run is
-          folded into Phase B, which needs full-pipeline scores anyway.
-  [ ] A3. Retire the static bearer token (Cognito is now the only login)
-          - drop MCP_AUTH_TOKEN path from server/main.py + its tests
-          - delete /finrag/mcp-auth-token SSM param + ~/.finrag/mcp-headers.txt
-          Done when: request with old token -> 401; Claude Desktop still
-          works via Cognito
+  [x] A2. Regression check after A1: 30Q CI subset (run_ci_eval.py) -- DONE
+          2026-09-24: numerical_accuracy 0.949 (up from 0.910 baseline),
+          faithfulness 0.796 (flat vs. 0.801 baseline, both under the 0.85
+          gate -- pre-existing, not caused by A1), context metrics all up.
+          No regression from A1. Results: evals/results/ci_latest.json
+  [x] A3. Retire the static bearer token (Cognito is now the only login) --
+          DONE 2026-09-24:
+          - dropped MCP_AUTH_TOKEN path from server/main.py + its tests
+            (create_app/handler no longer take/require auth_token)
+          - deleted /finrag/mcp-auth-token SSM param + ~/.finrag/mcp-headers.txt
+          - real bug caught in the same pass: _is_authorized used
+            `.removeprefix("Bearer ")`, which is a no-op (not a rejection)
+            on a header missing that prefix -- a bare JWT without the
+            scheme would have validated. Now requires the literal "Bearer "
+            prefix before attempting Cognito validation.
+          - live-verified on the deployed Lambda: old-style token -> 401,
+            /.well-known/oauth-protected-resource still public (200)
+          - deploy hit a real blocker: local disk was at 99% full (198MB
+            free), which is why the pip bundling step failed with ENOSPC
+            (the documented gotcha). Freed ~1GB by deleting cdk.out,
+            the pip cache, and the local keyword_index.sqlite eval cache
+            (reproducible, re-downloads from S3), then redeployed clean.
+          Not yet done: a real Claude Desktop restart + Cognito browser
+          login against this deploy (non-interactive session can't drive
+          the hosted-UI consent screen) -- ask the user to confirm.
   [ ] A4. (USER) Rotate the OpenAI key pasted in chat; update SSM
           /finrag/openai-api-key. Done when: old key revoked on
           platform.openai.com, live query still answers
