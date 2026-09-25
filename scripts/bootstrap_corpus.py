@@ -75,7 +75,10 @@ BENCHMARK_FORM_LIMITS = {"10-K": 8, "10-Q": 12, "8-K": 8}
 KNOWN_UNAVAILABLE = {
     "SPOT": "foreign private issuer -- files 20-F, not 10-K/10-Q",
     "PYPL": "Pinecone free-tier monthly write-unit cap (2M) exhausted; "
-            "resets monthly. Costs 1 FinanceBench question.",
+            "resets monthly. Costs 1 FinanceBench question. Retried "
+            "2026-09-25: still capped (same 429, same message) -- the cap "
+            "did not reset as expected. Do not retry again without "
+            "checking the Pinecone dashboard first.",
 }
 
 

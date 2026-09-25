@@ -1301,7 +1301,19 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
           finrag-mcp-server` returns it. cdk.out cleaned up after.
 
 PHASE D -- Corpus & eval completeness
-  [ ] D1. Backfill PYPL (Pinecone monthly write cap has reset)
+  [ ] D1. Backfill PYPL -- BLOCKED, retried 2026-09-25: cap has NOT reset.
+          Ran `scripts/bootstrap_corpus.py` (all 71 other tickers skipped
+          via cache, only PYPL attempted). Every one of PYPL's 28 filings
+          embedded successfully (real OpenAI spend, small -- 380-461
+          chunks/filing) then failed at Pinecone upsert with the identical
+          429 "write unit limit for the current month (2000000)" as
+          before. Restored the KNOWN_UNAVAILABLE entry immediately
+          (guard's whole purpose is exactly this: skip rather than
+          re-embed-then-fail). Net repo diff is just the updated comment;
+          no functional change. Do NOT retry again on a guess that a
+          month boundary passed -- check the Pinecone dashboard's actual
+          usage/reset date first, since "resets monthly" was wrong once
+          already.
           Done when: PYPL chunks in Pinecone + FTS5, weekly refresh sees it
   [ ] D2. custom_150.json: replace VERIFY_AFTER_BOOTSTRAP placeholders
           with verified ground truths (needs USER review of answers)
