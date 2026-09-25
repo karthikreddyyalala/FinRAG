@@ -21,6 +21,17 @@ import botocore.exceptions
 
 SONNET_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
+# chunker.py targets ~1500 words (~8000 chars) for a parent text chunk, but a
+# table chunk is exempt from that target -- CLAUDE.md's chunker stores "each
+# table as one chunk" regardless of size. A large schedule table (hundreds of
+# rows) can run to tens of thousands of characters, and BM25-only retrieval
+# (no dense/rerank pass to screen it out) surfaced one that blew Sonnet's
+# context window outright: caught live on the FinanceBench 150 Baseline B
+# run, question 91/150, "Input is too long for requested model." Cap here,
+# not per-mode, since any retrieval path can hand generate_answer an
+# oversized chunk.
+MAX_CHUNK_CHARS = 8000
+
 # Grounding is the hard rule; the equivalence and sign guidance exist because
 # without them the model refuses figures it has actually found. On
 # FinanceBench Q1 it retrieved "Purchases of property, plant and equipment
@@ -79,6 +90,14 @@ def _is_bedrock_unavailable(exc: Exception) -> bool:
     )
 
 
+def _truncate(text: str) -> str:
+    """Cap a single chunk's text so no oversized chunk can blow the model's
+    context window on its own. See MAX_CHUNK_CHARS for why this exists."""
+    if len(text) <= MAX_CHUNK_CHARS:
+        return text
+    return text[:MAX_CHUNK_CHARS] + "\n[... truncated]"
+
+
 def format_citation(chunk: dict[str, Any]) -> str:
     """Format a chunk's metadata as a CLAUDE.md-style inline citation.
 
@@ -115,7 +134,7 @@ def generate_answer(
         The generated answer text with inline citations.
     """
     context_blocks = [
-        f"{chunk['text']}\nCitation: {format_citation(chunk)}" for chunk in chunks
+        f"{_truncate(chunk['text'])}\nCitation: {format_citation(chunk)}" for chunk in chunks
     ]
     example_citation = format_citation(chunks[0]) if chunks else "[TICKER 10-Q PERIOD]"
 
