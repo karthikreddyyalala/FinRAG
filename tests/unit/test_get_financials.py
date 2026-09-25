@@ -22,8 +22,16 @@ CHUNK = {
 
 def test_skips_the_haiku_rewrite_call():
     """The query is already structured (ticker/metric/period) -- nothing for
-    an LLM to expand from natural language. Calling Haiku here is a wasted
-    API call and adds latency for no benefit."""
+    an LLM to expand from natural language. A separate query_rewriter.
+    rewrite_query() call here would be a wasted API call and added latency
+    for no benefit.
+
+    NOTE: this tool's own *generation* call legitimately uses the Haiku
+    model ID by design (C5, CLAUDE.md Phase C -- single-metric lookups
+    route to Haiku), so "any Haiku modelId" is no longer a valid signal for
+    "a rewrite call happened" the way it was before C5. The real guarantee
+    is call count: exactly one Bedrock call (generation), never two
+    (rewrite + generation)."""
     bedrock = MagicMock()
     bedrock.converse.return_value = {
         "output": {"message": {"content": [{"text": "$(1,577) million [MMM 10-K 2019-02-07]"}]}}
@@ -40,11 +48,7 @@ def test_skips_the_haiku_rewrite_call():
             keyword_index=keyword_index, embed_fn=lambda t: [0.0],
         )
 
-    rewrite_calls = [
-        c for c in bedrock.converse.call_args_list
-        if "haiku" in str(c.kwargs.get("modelId", "")).lower()
-    ]
-    assert not rewrite_calls, "Haiku rewrite was called for a structured lookup"
+    assert bedrock.converse.call_count == 1, "expected exactly one call (generation), no rewrite"
 
 
 def test_query_text_carries_gaap_expansion():
@@ -193,3 +197,46 @@ def test_returns_nonzero_cost_usd():
         )
 
     assert result["cost_usd"] > 0.0
+
+
+def test_defaults_to_haiku_for_generation():
+    """C5 (CLAUDE.md Phase C): single-metric lookups route to Haiku."""
+    bedrock = MagicMock()
+    bedrock.converse.return_value = {
+        "output": {"message": {"content": [{"text": "$(1,577) million [MMM 10-K 2019-02-07]"}]}}
+    }
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = [CHUNK]
+    pinecone_index = MagicMock()
+    pinecone_index.query.return_value = {"matches": []}
+
+    with patch("server.mcp_tools.get_financials.rerank", return_value=[CHUNK]):
+        build_financials_answer(
+            ticker="MMM", metric="capital expenditure", period="FY2018",
+            bedrock_client=bedrock, pinecone_index=pinecone_index,
+            keyword_index=keyword_index, embed_fn=lambda t: [0.0],
+        )
+
+    assert "haiku" in bedrock.converse.call_args.kwargs["modelId"].lower()
+
+
+def test_model_override_routes_to_sonnet():
+    """compare_companies overrides this per hop -- must actually change
+    which model gets called, not just accept the kwarg and ignore it."""
+    bedrock = MagicMock()
+    bedrock.converse.return_value = {
+        "output": {"message": {"content": [{"text": "$(1,577) million [MMM 10-K 2019-02-07]"}]}}
+    }
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = [CHUNK]
+    pinecone_index = MagicMock()
+    pinecone_index.query.return_value = {"matches": []}
+
+    with patch("server.mcp_tools.get_financials.rerank", return_value=[CHUNK]):
+        build_financials_answer(
+            ticker="MMM", metric="capital expenditure", period="FY2018",
+            bedrock_client=bedrock, pinecone_index=pinecone_index,
+            keyword_index=keyword_index, embed_fn=lambda t: [0.0], model="sonnet",
+        )
+
+    assert "sonnet" in bedrock.converse.call_args.kwargs["modelId"].lower()
