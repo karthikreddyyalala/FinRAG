@@ -1033,7 +1033,37 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
           Caveat carried from C1: cost_usd is the text-length token
           estimate, not exact provider usage -- directionally right for
           before/after comparison, not a billing-accurate number.
-  [ ] C3. Bedrock prompt caching on the generation system prompt
+  [x] C3. Bedrock prompt caching on the generation system prompt -- DONE
+          2026-09-25, evaluated and NOT applied, documented not silently
+          dropped:
+          - C3a: SYSTEM_PROMPT_TEMPLATE used to interpolate chunks[0]'s own
+            citation as its worked example (answer_generator.py), which
+            made the "stable" system prompt actually vary per query --
+            defeating caching before it could ever hit. Fixed: worked
+            example is now a fixed constant ([MMM 10-K FY2018 p.40]),
+            byte-identical across calls. New test
+            test_system_prompt_is_identical_regardless_of_chunk_content
+            asserts this; 2 existing tests updated (they asserted the old
+            per-chunk citation leaking into system).
+          - C3b: attempted a live Bedrock cachePoint call to measure
+            cacheWriteInputTokens/cacheReadInputTokens -- hit the
+            documented daily-quota ThrottlingException gotcha, so this is
+            NOT live-measured. From published Bedrock docs instead: Claude
+            Sonnet 4.5 requires >=1,024 tokens in the cached prefix.
+            SYSTEM_PROMPT_TEMPLATE is ~1,029 chars / ~257 tokens -- under
+            the minimum, so a cachePoint here would accept silently and
+            cache nothing.
+          - Decision: did NOT add a cachePoint. Even past the minimum, a
+            5-minute cache TTL against this server's low query rate would
+            mostly miss, and a miss on Sonnet's Converse API is billed at
+            1.25x normal input price -- net cost increase here, not a
+            saving. The real per-query cost driver is the retrieved chunk
+            text (varies every query), which C4's result cache addresses
+            directly instead.
+          - Not yet done: re-attempt the live cachePoint measurement once
+            the Bedrock daily quota resets, to replace the docs-based
+            estimate with a real number, if C4/C5 ever push the prompt
+            back over 1,024 tokens.
   [ ] C4. Query result cache in DynamoDB (hash of normalized query)
   [ ] C5. Model tier routing: single-metric lookups -> Haiku,
           comparisons / multi-hop -> Sonnet
