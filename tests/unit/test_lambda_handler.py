@@ -20,7 +20,7 @@ import pytest
 HOST = "abc123.lambda-url.us-east-1.on.aws"
 COGNITO_ENV = {
     "COGNITO_USER_POOL_ID": "us-east-1_Test", "COGNITO_CLIENT_ID": "client-1",
-    "AWS_REGION": "us-east-1",
+    "AWS_REGION": "us-east-1", "AWS_DEFAULT_REGION": "us-east-1",
 }
 
 
