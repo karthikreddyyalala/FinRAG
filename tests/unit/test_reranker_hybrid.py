@@ -1,11 +1,26 @@
-"""TDD: hybrid merge + rerank must keep results from BOTH retrieval sources."""
+"""TDD: hybrid merge + rerank must keep results from BOTH retrieval sources.
+
+The rerank() calls here test the LEXICAL scorer's own interleaving/overlap
+behavior, so `_crossencoder_available` is force-disabled for the module --
+see test_reranker_scoring.py's module docstring for why this matters on
+CI (Linux + Python 3.12), where the real CrossEncoder is not gated off the
+way it is on the macOS + Python 3.13 dev machine these were written on."""
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from server.retrieval.hybrid_retriever import merge_and_dedup
 from server.retrieval.reranker import rerank
+
+
+@pytest.fixture(autouse=True)
+def _force_lexical_fallback():
+    with patch("server.retrieval.reranker._crossencoder_available", return_value=False):
+        yield
 
 
 def _bm25(n=10):
