@@ -46,7 +46,6 @@ def test_generate_answer_calls_sonnet_with_context_and_citations():
     call_kwargs = client.converse.call_args.kwargs
     assert call_kwargs["modelId"] == "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     assert "$9.06 billion" in str(call_kwargs["messages"])
-    assert "[NVDA 10-Q Q1-2026]" in str(call_kwargs["system"])
 
 
 def test_generate_answer_handles_empty_chunks_list():
@@ -55,8 +54,44 @@ def test_generate_answer_handles_empty_chunks_list():
     answer = generate_answer(client, "What was Nvidia's revenue?", [])
 
     assert answer == "I could not find reliable data for this question."
-    call_kwargs = client.converse.call_args.kwargs
-    assert "[TICKER 10-Q PERIOD]" in str(call_kwargs["system"])  # fallback example citation used
+
+
+def test_system_prompt_is_identical_regardless_of_chunk_content():
+    """Bedrock prompt caching (C3) only pays off if the system prompt is a
+    byte-identical prefix across calls. It used to interpolate chunks[0]'s
+    own citation as the worked example, so the "fixed" prompt actually
+    varied per query -- a cache write that could never be reused. The
+    worked example is now a constant, unrelated to the real chunks."""
+    client_a = _fake_bedrock_client("ans")
+    client_b = _fake_bedrock_client("ans")
+    chunks_a = [
+        {
+            "chunk_id": "c1",
+            "text": "Data center revenue reached $9.06 billion.",
+            "ticker": "NVDA",
+            "filing_type": "10-Q",
+            "period": "Q1-2026",
+            "page_number": None,
+        }
+    ]
+    chunks_b = [
+        {
+            "chunk_id": "c2",
+            "text": "Purchases of property, plant and equipment $(1,577)",
+            "ticker": "MMM",
+            "filing_type": "10-K",
+            "period": "FY2018",
+            "page_number": 40,
+        }
+    ]
+
+    generate_answer(client_a, "query one", chunks_a)
+    generate_answer(client_b, "query two", chunks_b)
+    generate_answer(client_b, "query two", [])
+
+    system_a = client_a.converse.call_args.kwargs["system"]
+    system_b = client_b.converse.call_args.kwargs["system"]
+    assert system_a == system_b
 
 
 def test_generate_answer_truncates_an_oversized_chunk():

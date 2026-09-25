@@ -43,7 +43,7 @@ SYSTEM_PROMPT_TEMPLATE = """Answer the question using only the provided context.
 Grounding rules:
 - Never state a number that does not appear verbatim in the context.
 - If the context genuinely lacks the figure, say so. Do not guess.
-- Cite every claim inline, e.g. {example_citation}
+- Cite every claim inline, e.g. [MMM 10-K FY2018 p.40]
 
 Reading financial statements:
 - Filings label figures with their GAAP line item, not the analyst's term for
@@ -136,9 +136,12 @@ def generate_answer(
     context_blocks = [
         f"{_truncate(chunk['text'])}\nCitation: {format_citation(chunk)}" for chunk in chunks
     ]
-    example_citation = format_citation(chunks[0]) if chunks else "[TICKER 10-Q PERIOD]"
 
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(example_citation=example_citation)
+    # A fixed worked example, not chunks[0]'s own citation: prompt caching
+    # (see SYSTEM_PROMPT_TEMPLATE's docstring) only pays off if this string
+    # is byte-identical across calls. Interpolating a per-query citation
+    # here made every "cacheable" prefix unique in practice.
+    system_prompt = SYSTEM_PROMPT_TEMPLATE
     user_message = USER_MESSAGE_TEMPLATE.format(
         context="\n\n".join(context_blocks), query=query
     )
