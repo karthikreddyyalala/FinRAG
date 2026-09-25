@@ -821,9 +821,30 @@ DONE -- EventBridge weekly refresh
 SESSION HANDOFF (updated 2026-09-25, end of day) -- read this first in a
 new chat
 =====================================================================
+BLOCKING, DO THIS FIRST: GitHub Actions CI is red on main and has been
+  failing since 07:58 UTC 2026-09-25 (pre-dates all of today's work).
+  Three real, verified root causes were found and fixed today (datasets/
+  ragas pin conflict; a ruff line-length bug in C4's own code; reranker
+  unit tests coupled to a macOS-only platform gate) -- each one confirmed
+  by reproducing it in a genuinely clean venv and seeing the exact
+  failure locally, not guessed. But the CI job's "Unit tests" step is
+  STILL failing after all three fixes (commit ec601c7, most recent),
+  and the real cause of that remaining failure is UNKNOWN -- neither the
+  GitHub REST API's job-logs nor run-logs endpoint is accessible without
+  admin/token auth (both return 403 for this identity), `gh` is not
+  authenticated in this environment, and no local repro (clean Python
+  3.12 venv, stripped env, this machine's architecture) reproduces
+  whatever CI is actually hitting. Asked the user to run
+  `gh run view <run-id> --log-failed` themselves (they have a real
+  authenticated session) and paste the output -- START THERE, don't
+  re-guess blind again. Latest failing run id: check
+  https://github.com/karthikreddyyalala/FinRAG/actions for the newest
+  one on main, it may have changed since this note was written.
+
 Where we are: Phase A (all), Phase B (all), C1-C5 DONE. NEXT = C6
   (re-measure cost/latency after C3-C5, before/after table in README,
-  fill Phase 14 resume-bullet cost numbers). Work the MASTER CHECKLIST
+  fill Phase 14 resume-bullet cost numbers) -- but CI must be green
+  first, see the blocking note above. Work the MASTER CHECKLIST
   below strictly one item at a time; explain in plain language, stop
   after each item for the user's go-ahead.
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
@@ -894,6 +915,13 @@ What shipped today (2026-09-25), in order:
   - Stripped the Co-Authored-By: Claude trailer from all of git history
     (see "GIT HISTORY WAS RE-WRITTEN TODAY" above) -- unrelated to the
     Phase C checklist but real work done this session.
+  - CI debugging (see "BLOCKING, DO THIS FIRST" at the top): 3 real,
+    verified root causes fixed (requirements.txt datasets/ragas conflict
+    + ruff line-length in query_cache.py's tests, commit 6cae1a5;
+    reranker tests coupled to a macOS-only platform gate, commit
+    46142cd + centralized into conftest.py, commit ec601c7) but CI's
+    "Unit tests" step is STILL red after all three -- unresolved,
+    blocked on real log access. Not done.
 
 DISK STATUS AT SESSION END: 41GB free (user freed real space outside
   this repo's caches after the C4 ENOSPC failure below). Do not assume
