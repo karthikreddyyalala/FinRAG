@@ -110,6 +110,8 @@ Claude Desktop reads this config only at launch — after editing it, fully quit
 
 First login prompts you to set a permanent password for `karthikreddyy386@gmail.com`. Once you've confirmed it works end to end in Claude Desktop, the static token path gets retired.
 
+**Observability:** `infra/stacks/observability_stack.py` deploys a CloudWatch dashboard (`finrag-mcp-server`) graphing the Lambda's invocations, errors, p50/p99 duration, and an estimated hourly compute cost (duration × memory × on-demand price). Per-query LLM cost (Bedrock/OpenAI) is tracked separately, per-row, in DynamoDB `finrag-query-logs` — not duplicated here as a custom metric, since nothing on a dashboard can act on it faster than the existing `aws dynamodb scan` already does.
+
 ## What's built vs. what's next
 
 | | Status |

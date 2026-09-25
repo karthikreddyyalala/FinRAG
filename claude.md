@@ -844,13 +844,18 @@ RESOLVED 2026-09-25: GitHub Actions CI was red on main from 07:58 UTC
   passing) before pushing either fix, then confirmed green on the actual
   Actions run.
 
-Where we are: Phase A (all), Phase B (all), C1-C6 DONE. CI is green
-  (fixed 2026-09-25: unit tests were constructing a real boto3 SSM
-  client before any test mock could intercept it, and only some test
-  fixtures set an AWS region -- see git log for the two follow-up
-  commits). NEXT = C7 (CloudWatch dashboard). Work the MASTER CHECKLIST
-  below strictly one item at a time; explain in plain language, stop
-  after each item for the user's go-ahead.
+Where we are: Phase A (all), Phase B (all), C1-C7 DONE (code + tests;
+  C7's stack not yet deployed to AWS -- next action is `cdk deploy
+  FinragObservabilityStack`). CI is green (fixed 2026-09-25: unit tests
+  were constructing a real boto3 SSM client before any test mock could
+  intercept it, and only some test fixtures set an AWS region -- see git
+  log for the two follow-up commits). Also today: stripped
+  Co-Authored-By: Claude trailers from the 4 commits since 429ec17
+  (same filter-branch + force-push method as before; content diff
+  verified empty, tests re-run before pushing). NEXT = deploy C7, then
+  Phase D (corpus/eval completeness). Work the MASTER CHECKLIST below
+  strictly one item at a time; explain in plain language, stop after
+  each item for the user's go-ahead.
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
   onward uses a feature branch + PR (user rebase-merges via GitHub),
   not direct pushes to main like C1-C4. `gh` is NOT authenticated in
@@ -1273,8 +1278,26 @@ PHASE C -- Cost & observability (Week 4, deferred until now)
           instead. Phase 14 Final-version resume bullet filled in with
           real cost numbers (also fixed a stale claim there: API Gateway
           was never deployed, it's Function URL only).
-  [ ] C7. CloudWatch dashboard (observability_stack.py): invocations,
-          errors, latency, cost
+  [x] C7. CloudWatch dashboard (observability_stack.py) -- DONE 2026-09-25:
+          new ObservabilityStack graphs the deployed Lambda's own metrics
+          (invocations, errors, p50/p99 duration) plus a MathExpression
+          estimating hourly AWS Lambda compute cost (duration x memory x
+          on-demand price). Deliberately does NOT duplicate per-query LLM
+          cost as a custom CloudWatch metric -- that's already tracked
+          per-row in DynamoDB finrag-query-logs (C1/C4), and a
+          PutMetricData call on every query would just re-derive a number
+          `aws dynamodb scan` already answers. A markdown widget on the
+          dashboard points at that table instead of re-plotting it.
+          infra/app.py now wires 4 stacks (Storage, McpServer, Ingestion,
+          Observability); McpServerStack exposes `self.fn` so
+          ObservabilityStack can graph it without a second Lambda lookup.
+          Verified: 14 unit tests (2 new + existing McpServerStack tests
+          still passing with `self.fn` added), full suite 258/258, ruff
+          clean, and a real `app.synth()` of all 4 stacks together
+          (bundling skipped via the same `aws:cdk:bundling-stacks: []`
+          context trick the existing tests use -- real for CFN template
+          shape, not a live deploy). Not yet deployed to AWS -- next
+          action is `cdk deploy FinragObservabilityStack`.
 
 PHASE D -- Corpus & eval completeness
   [ ] D1. Backfill PYPL (Pinecone monthly write cap has reset)

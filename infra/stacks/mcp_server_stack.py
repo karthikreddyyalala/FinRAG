@@ -148,7 +148,7 @@ class McpServerStack(Stack):
             ),
         )
 
-        fn = lambda_.Function(
+        self.fn = fn = lambda_.Function(
             self,
             "McpServerFunction",
             function_name="finrag-mcp-server",
