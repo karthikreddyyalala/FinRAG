@@ -9,26 +9,10 @@ irrelevant LIBOR passage scored 0.769 against the correct cash-flow table's
 Terms are weighted by how well they discriminate within the candidate set:
 a word in nearly every candidate says nothing about which one to pick.
 
-Every test here calls rerank() but is really testing the LEXICAL scorer's
-own behavior -- so `_crossencoder_available` is force-disabled for the
-whole module. Without this, these tests only ever ran the intended path
-by accident: the real CrossEncoder is gated off only on macOS + Python
-3.13 (the dev machine this was written on), so on CI (Linux + 3.12) real
-model inference silently replaced the lexical scorer these tests assert
-specific behavior of, and a real semantic model disagreeing with a
-hand-crafted lexical-weakness scenario is not a regression, just the
-wrong thing under test."""
-from unittest.mock import patch
-
-import pytest
-
+Every test here calls rerank() and is really testing the LEXICAL scorer's
+own behavior. conftest.py's autouse `_force_lexical_reranker` fixture
+forces that path for the whole tests/unit/ suite -- see it for why."""
 from server.retrieval.reranker import rerank
-
-
-@pytest.fixture(autouse=True)
-def _force_lexical_fallback():
-    with patch("server.retrieval.reranker._crossencoder_available", return_value=False):
-        yield
 
 # Shape mirrors the real failure: verbose prose padded with generic finance
 # vocabulary vs. the concise table holding the answer.
