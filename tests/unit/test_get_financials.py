@@ -172,3 +172,24 @@ def test_ticker_and_period_become_retrieval_filters():
     kwargs = mock_hybrid.call_args.kwargs
     assert kwargs["ticker"] == "MMM"
     assert kwargs["period_range"] == ("2018-01-01", "2019-12-31")
+
+
+def test_returns_nonzero_cost_usd():
+    """Phase C (CLAUDE.md): cost_usd must no longer be the Week 1-3 stub."""
+    bedrock = MagicMock()
+    bedrock.converse.return_value = {
+        "output": {"message": {"content": [{"text": "$(1,577) million [MMM 10-K 2019-02-07]"}]}}
+    }
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = [CHUNK]
+    pinecone_index = MagicMock()
+    pinecone_index.query.return_value = {"matches": []}
+
+    with patch("server.mcp_tools.get_financials.rerank", return_value=[CHUNK]):
+        result = build_financials_answer(
+            ticker="MMM", metric="capital expenditure", period="FY2018",
+            bedrock_client=bedrock, pinecone_index=pinecone_index,
+            keyword_index=keyword_index, embed_fn=lambda t: [0.0],
+        )
+
+    assert result["cost_usd"] > 0.0

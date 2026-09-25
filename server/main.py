@@ -50,7 +50,7 @@ KEYWORD_INDEX_KEY = "keyword/index.sqlite"
 # /tmp is the only writable path on Lambda and persists across warm invocations.
 KEYWORD_INDEX_LOCAL_PATH = "/tmp/finrag/keyword.sqlite"
 
-ProductionDependencies = tuple[Any, Any, Any, Callable[[str], list[float]]]
+ProductionDependencies = tuple[Any, Any, Any, Callable[[str], list[float]], Any]
 
 
 def create_app(
@@ -58,6 +58,7 @@ def create_app(
     pinecone_index: Any,
     keyword_index: Any,
     embed_fn: Callable[[str], list[float]],
+    dynamodb_resource: Any = None,
 ) -> FastAPI:
     """Build the FastAPI app with the MCP server mounted at /mcp.
 
@@ -66,12 +67,18 @@ def create_app(
         pinecone_index: A Pinecone Index handle for the search tool.
         keyword_index: sync_pinecone.KeywordIndex over the full corpus.
         embed_fn: Callable(text) -> embedding vector for embedding queries.
+        dynamodb_resource: A boto3 DynamoDB resource for per-query cost/
+            latency logging (server/observability/logger.py). None skips
+            logging.
 
     Returns:
         A FastAPI app ready to serve via Mangum on Lambda.
     """
     mcp = MCPServer("FinRAG")
-    register_search_filings_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
+    register_search_filings_tool(
+        mcp, bedrock_client, pinecone_index, keyword_index, embed_fn,
+        dynamodb_resource=dynamodb_resource,
+    )
     register_get_financials_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
     register_compare_companies_tool(mcp, bedrock_client, pinecone_index, keyword_index, embed_fn)
     register_get_latest_filing_tool(mcp, bedrock_client, keyword_index)
@@ -154,7 +161,8 @@ def _build_production_dependencies() -> ProductionDependencies:
     # querying Pinecone with another model's vectors returns unrelated chunks
     # without any error. get_embed_fn() is shared with the eval harness.
     embed_fn = get_embed_fn()
-    return bedrock_client, pinecone_index, keyword_index, embed_fn
+    dynamodb_resource = boto3.resource("dynamodb")
+    return bedrock_client, pinecone_index, keyword_index, embed_fn, dynamodb_resource
 
 
 @lru_cache(maxsize=1)

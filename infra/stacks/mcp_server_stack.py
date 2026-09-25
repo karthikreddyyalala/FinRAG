@@ -183,6 +183,15 @@ class McpServerStack(Stack):
                 f"arn:aws:bedrock:*:{self.account}:inference-profile/us.anthropic.*",
             ],
         ))
+        # Per-query cost/latency logging (Phase C, CLAUDE.md). Table itself
+        # lives in StorageStack; referenced by name here rather than a CDK
+        # cross-stack construct import, matching how PROCESSED_BUCKET is
+        # already a hardcoded name constant in server/main.py, not a passed
+        # reference. Write-only: this Lambda never needs to read its own logs.
+        fn.add_to_role_policy(iam.PolicyStatement(
+            actions=["dynamodb:PutItem"],
+            resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/finrag-query-logs"],
+        ))
 
         url = fn.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)
         CfnOutput(self, "McpEndpoint", value=f"{url.url}mcp")

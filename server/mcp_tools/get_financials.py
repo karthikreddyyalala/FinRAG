@@ -14,6 +14,7 @@ from typing import Any
 from mcp.server import MCPServer
 
 from server.generation.answer_generator import generate_answer
+from server.observability.logger import estimate_cost_usd
 from server.retrieval.hybrid_retriever import hybrid_search
 from server.retrieval.numerical_verifier import verify_answer
 from server.retrieval.query_filters import extract_filters, period_window
@@ -68,6 +69,8 @@ def build_financials_answer(
     raw_answer = generate_answer(bedrock_client, query, top_chunks)
     source_texts = [chunk["text"] for chunk in top_chunks]
     verified_answer = verify_answer(raw_answer, source_texts)
+    generate_input = "\n\n".join(source_texts) + query
+    cost_usd = estimate_cost_usd("sonnet", generate_input, raw_answer)
 
     citations = [
         {
@@ -86,7 +89,7 @@ def build_financials_answer(
         "period": period,
         "answer": verified_answer,
         "citations": citations,
-        "cost_usd": 0.0,
+        "cost_usd": round(cost_usd, 6),
         "latency_ms": int((time.monotonic() - start) * 1000),
     }
 

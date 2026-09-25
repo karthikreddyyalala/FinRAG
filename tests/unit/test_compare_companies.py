@@ -15,7 +15,7 @@ TSLA_RESULT = {
     "citations": [
         {"ticker": "TSLA", "filing_type": "10-K", "period": "2024", "page": None, "text": "..."}
     ],
-    "cost_usd": 0.0, "latency_ms": 100,
+    "cost_usd": 0.002, "latency_ms": 100,
 }
 FORD_RESULT = {
     "ticker": "F", "metric": "gross margin", "period": "2024",
@@ -23,7 +23,7 @@ FORD_RESULT = {
     "citations": [
         {"ticker": "F", "filing_type": "10-K", "period": "2024", "page": None, "text": "..."}
     ],
-    "cost_usd": 0.0, "latency_ms": 120,
+    "cost_usd": 0.003, "latency_ms": 120,
 }
 
 
@@ -88,6 +88,27 @@ def test_one_ticker_failing_does_not_drop_the_others():
     assert result["companies"][0]["ticker"] == "TSLA"
     assert result["companies"][1]["ticker"] == "ZZZZ"
     assert "error" in result["companies"][1]
+
+
+def test_cost_usd_sums_successful_hops_only():
+    """A failed hop never reached generation, so it contributes 0 -- not a
+    KeyError, and not double-counted against the successful hops."""
+    def side_effect(ticker, metric, period, **kwargs):
+        if ticker == "ZZZZ":
+            raise RuntimeError("no chunks for ticker")
+        return TSLA_RESULT if ticker == "TSLA" else FORD_RESULT
+
+    with patch(
+        "server.mcp_tools.compare_companies.build_financials_answer",
+        side_effect=side_effect,
+    ):
+        result = build_comparison_answer(
+            tickers=["TSLA", "F", "ZZZZ"], metric="gross margin", period="2024",
+            bedrock_client=MagicMock(), pinecone_index=MagicMock(),
+            keyword_index=MagicMock(), embed_fn=lambda t: [0.0],
+        )
+
+    assert result["cost_usd"] == round(TSLA_RESULT["cost_usd"] + FORD_RESULT["cost_usd"], 6)
 
 
 def test_registers_as_an_mcp_tool():
