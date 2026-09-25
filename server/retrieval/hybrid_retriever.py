@@ -83,6 +83,30 @@ def _search_once(
     return merge_and_dedup(bm25_results, pinecone_matches)
 
 
+def dense_only_search(
+    query: str,
+    pinecone_index: Any,
+    embed_fn: Callable[[str], list[float]],
+    top_k: int = 5,
+) -> list[dict[str, Any]]:
+    """Baseline A: Pinecone dense search only, no BM25, no rewrite, no rerank.
+
+    Used by evals/run_eval.py --mode dense_only to measure what the hybrid
+    pipeline's other stages actually buy over naive vector search.
+    """
+    matches = pinecone_index.query(
+        vector=embed_fn(query), top_k=top_k, include_metadata=True
+    )["matches"]
+    return [_normalize_pinecone_match(m) for m in matches]
+
+
+def bm25_only_search(
+    query: str, keyword_index: Any, top_k: int = 5
+) -> list[dict[str, Any]]:
+    """Baseline B: BM25 keyword search only, no dense, no rewrite, no rerank."""
+    return keyword_index.search(query, top_k)
+
+
 def hybrid_search(
     rewritten_query: str,
     keyword_index: Any,

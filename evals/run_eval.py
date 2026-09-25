@@ -36,7 +36,7 @@ def _init_clients():
 
 
 def _call_pipeline(
-    question: str, bedrock, pinecone_index, keyword_index, embed_fn
+    question: str, bedrock, pinecone_index, keyword_index, embed_fn, mode: str = "full"
 ) -> dict:
     from server.mcp_tools.search_filings import build_search_filings_answer
     return build_search_filings_answer(
@@ -45,11 +45,12 @@ def _call_pipeline(
         pinecone_index=pinecone_index,
         keyword_index=keyword_index,
         embed_fn=embed_fn,
+        mode=mode,
     )
 
 
 def _run_dataset(
-    items: list[dict], label: str, clients: tuple, checkpoint: Path
+    items: list[dict], label: str, clients: tuple, checkpoint: Path, mode: str = "full"
 ) -> tuple[list, list, list, list]:
     """Answer every item, checkpointing after each so a crash resumes cheaply.
 
@@ -73,7 +74,7 @@ def _run_dataset(
             continue
 
         print(f"  [{label} {i}/{len(items)}] {question[:80]}", flush=True)
-        result = _call_pipeline(question, *clients)
+        result = _call_pipeline(question, *clients, mode=mode)
         row = {
             "question": question,
             "answer": result.get("answer", ""),
@@ -93,7 +94,20 @@ def _run_dataset(
     )
 
 
+MODES = ("full", "dense_only", "bm25_only")
+
+
 def main() -> None:
+    # --mode dense_only|bm25_only runs CLAUDE.md Phase 4's Baseline A/B
+    # instead of the full pipeline, against the same FinanceBench 150 set,
+    # so the comparison table is apples-to-apples.
+    mode = "full"
+    if len(sys.argv) > 1:
+        if sys.argv[1] != "--mode" or len(sys.argv) < 3 or sys.argv[2] not in MODES:
+            print(f"Usage: run_eval.py [--mode {'|'.join(MODES)}]")
+            sys.exit(1)
+        mode = sys.argv[2]
+
     RESULTS_DIR.mkdir(exist_ok=True)
     if not FINANCEBENCH.exists():
         print(f"ERROR: {FINANCEBENCH} not found.")
@@ -103,10 +117,11 @@ def main() -> None:
     clients = _init_clients()
 
     fb_items = _load(FINANCEBENCH)
-    print(f"Running full eval: {len(fb_items)} FinanceBench questions")
+    print(f"Running {mode} eval: {len(fb_items)} FinanceBench questions")
 
-    checkpoint = RESULTS_DIR / "financebench_answers.json"
-    q, a, c, g = _run_dataset(fb_items, "Q", clients, checkpoint)
+    suffix = "" if mode == "full" else f"_{mode}"
+    checkpoint = RESULTS_DIR / f"financebench_answers{suffix}.json"
+    q, a, c, g = _run_dataset(fb_items, "Q", clients, checkpoint, mode=mode)
 
     from evals.metrics.numerical_accuracy import numerical_accuracy
     from evals.metrics.ragas_metrics import score_dataset
@@ -119,12 +134,13 @@ def main() -> None:
         "numerical_accuracy": num_acc,
         "n_questions": len(q),
         "dataset": "financebench_150",
+        "mode": mode,
     }
     ts = int(time.time())
-    out_path = RESULTS_DIR / f"eval_{ts}.json"
+    out_path = RESULTS_DIR / f"eval{suffix}_{ts}.json"
     out_path.write_text(json.dumps(output, indent=2))
-    RESULTS_DIR.joinpath("latest.json").write_text(json.dumps(output, indent=2))
-    print(f"\nFull eval results: {output}")
+    RESULTS_DIR.joinpath(f"latest{suffix}.json").write_text(json.dumps(output, indent=2))
+    print(f"\n{mode} eval results: {output}")
     print(f"Saved → {out_path}")
 
 
