@@ -31,7 +31,7 @@ light/dark toggle with a distinct display/body/mono stack).
 | Text | `#EDEDEF` | `#18181B` | `--color-text` |
 | Muted text | `#8A8F98` | `#52525B` | `--color-muted` |
 | Accent — "grounded" (verified) | `#45C98F` | `#1B7A51` | `--color-grounded` |
-| Status — "flagged" (unverified) | `#E0A84F` | `#A86A12` | `--color-flagged` |
+| Status — "flagged" (unverified) | `#E0A84F` | `#975F10` (corrected from `#A86A12`, which was 4.25:1 — below AA; see contrast note below) | `--color-flagged` |
 | Destructive | `#EF4444` | `#DC2626` | `--color-destructive` |
 
 Single accent only (grounded green). Amber is a functional status colour

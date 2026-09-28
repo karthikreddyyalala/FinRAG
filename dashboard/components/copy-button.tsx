@@ -20,7 +20,7 @@ export function CopyButton({ text }: { text: string }) {
       type="button"
       onClick={handleCopy}
       aria-label={copied ? "Copied" : "Copy to clipboard"}
-      className="cursor-pointer rounded-lg border border-[var(--color-border)] p-1.5 text-[var(--color-muted)] transition-colors duration-200 hover:text-[var(--color-text)]"
+      className="cursor-pointer rounded-lg border border-[var(--color-border)] p-1.5 text-[var(--color-muted)] transition-colors duration-200 hover:text-[var(--color-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-grounded)]"
     >
       {copied ? <CheckIcon size={14} weight="bold" className="text-[var(--color-grounded)]" /> : <CopyIcon size={14} weight="regular" />}
     </button>
