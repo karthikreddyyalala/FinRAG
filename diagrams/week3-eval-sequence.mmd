@@ -9,11 +9,11 @@ sequenceDiagram
     participant GS as GitHub PR Comment
 
     GH->>UT: pytest tests/unit/ -v
-    UT-->>GH: 32 tests pass
+    UT-->>GH: all unit tests pass (260 as of 2026-09-28, grows over time)
 
     GH->>DL: python scripts/download_financebench.py
-    DL->>DL: fetch patronusai/financebench CSV (150 rows)
-    DL-->>GH: evals/datasets/financebench_150.json
+    DL->>DL: fetch PatronusAI/financebench JSONL from HuggingFace<br/>(financebench_merged.jsonl, not GitHub/CSV), take first 150 rows
+    DL-->>GH: evals/eval_data/financebench_150.json
 
     GH->>CI: python evals/run_ci_eval.py
     loop For each of 30 questions
@@ -42,6 +42,6 @@ sequenceDiagram
 
     GH->>GS: post scores table as PR comment
 
-    Note over RA: ragas uses Claude Haiku via Bedrock as the LLM judge
+    Note over RA: ragas judges with OpenAI gpt-4o-mini, not Bedrock --<br/>deliberate: Bedrock's rate limits throttle 4 LLM calls per<br/>question x 30 questions, gpt-4o-mini doesn't (ragas_metrics.py)
     Note over NA: custom metric -- ragas has no financial number grounding check
-    Note over CI: 30 questions = fast CI gate (~8 min); full 300Q runs weekly
+    Note over CI: 30 questions = fast CI gate. The planned weekly full-eval<br/>workflow (nightly_eval.yml) does not exist yet -- evals/run_eval.py<br/>is run manually (see CLAUDE.md "Known gaps")
