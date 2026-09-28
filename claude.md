@@ -604,7 +604,7 @@ rank-bm25 replaced with SQLite FTS5 (server/*, pipeline/sync_pinecone.py
   (get_embed_fn() now shared between server and eval harness); DNS-rebinding
   host check rejected every Function URL request (421); MCP session
   manager's run-once-per-instance broke warm Lambda invocations.
-Corpus: 71/72 companies ingested. FY2018-2026 depth for the 32 FinanceBench
+Corpus: 70/72 companies ingested (1,030 filings, 164,092 chunks; SPOT has an empty cache). FY2018-2026 depth for the 32 FinanceBench
   companies, 2025-2026 for the other 40. SPOT out of scope (20-F filer, not
   10-K/10-Q). PYPL temporarily absent (Pinecone free-tier write cap hit
   mid-project; resets monthly; costs 1 FinanceBench question).
@@ -793,7 +793,7 @@ DONE -- EventBridge weekly refresh
       the cache (by filing_date) and ingests only what's new, instead of
       bootstrap_corpus.py's "cached ticker = skip forever" (wrong for a
       recurring job) or blindly re-ingesting everything (would re-embed and
-      re-upsert 2000+ unchanged filings weekly, burning OpenAI spend and
+      re-upsert ~1,000 unchanged filings weekly, burning OpenAI spend and
       re-tripping the Pinecone write cap that already cost a FinanceBench
       question). All-or-nothing per ticker, same discipline as bootstrap.
   [x] Persisted the chunk cache to S3 (chunk_cache/ prefix in
@@ -1430,8 +1430,17 @@ PHASE F -- Launch & polish (Week 6)
             SPOT - PYPL), both already accurate. week1 is explicitly
             labeled a historical snapshot and is correct for that point
             in time -- left as-is, not "corrected" to the current state.
-  [ ] F3. Phase 14: switch to the "Final version" resume bullets, every
-          claim backed by something live
+  [x] F3. Phase 14 resume bullets -- DONE 2026-09-28. Not a copy-paste
+          of the template: re-checking each claim turned up 4 wrong ones.
+          "2,000+ filings / 71 companies" was really 1,030 filings / 70
+          companies (SPOT's cache file is empty). "Automated regression
+          gates" would fail today (gate is faithfulness >= 0.85, real is
+          ~0.80). "~$0.003/query" was one spot-check, not an average.
+          The Phase 15 interview story claimed $0.035 -> $0.011 cost,
+          CrossEncoder reranking, 300 questions, and a live dashboard,
+          none of which were true. All fixed, plus the same 2,000+ figure
+          in 5 code/diagram comments. An evidence table now sits under
+          the bullets.
   [ ] F4. (USER) 3-minute demo video: Claude Desktop answering with citations
   [ ] F5. Blog post: "What I learned building production RAG on AWS Bedrock"
   [ ] F6. Submit to the official MCP registry
@@ -1531,60 +1540,50 @@ Use for: when you already understand the context and just need the code
 
 ## Phase 14: Resume Bullets (Copy-Paste Ready)
 
-### Current version (accurate as of this Week 3 close -- use this one now)
+### Final version (F3, verified 2026-09-28 -- USE THIS ONE)
 
-Verified against the actual codebase and eval results on this date. Every
-claim below is either shipped and tested, or explicitly marked in-progress
--- nothing here should be indefensible if an interviewer asks to see it.
-
-```
-FinRAG MCP | Python, AWS Bedrock, MCP SDK, FastAPI, ragas    [In Progress]
-
-• Built an EDGAR ingestion pipeline covering 71 companies and 2,000+ SEC
-  filings (10-K/10-Q/8-K, up to 8 years of history per company) with
-  table-aware HTML extraction, hierarchical chunking, and content-addressed
-  chunk IDs for idempotent re-ingestion into Pinecone and a SQLite FTS5
-  keyword index
-
-• Engineered a four-stage retrieval pipeline — query rewriting (Claude Haiku
-  plus a deterministic GAAP line-item expansion), parallel BM25/dense hybrid
-  search, IDF-weighted reranking, and a custom numerical grounding verifier
-  — achieving 91.0% numerical accuracy and 80.1% faithfulness on the
-  150-question FinanceBench benchmark, with all 150 questions answered and
-  independently spot-verified end to end
-
-• Deployed serverless on AWS (Lambda behind a Function URL, arm64,
-  SSM-managed secrets, scoped IAM); currently adding Cognito OAuth 2.1/PKCE
-  and 3 additional MCP tools on top of the one already live
-```
-
-### Final version (DO NOT USE YET -- template for after Week 5 deployment)
-
-Every claim here requires Lambda + API Gateway deployed, Cognito wired, and
-a live endpoint to be true. Using this before that work is done would be a
-bullet an interviewer could ask to see and find nothing behind. Fill in
-cost-per-query numbers only after Week 4 observability produces them.
+Every number below was re-checked against evidence on this date, not
+copied from an earlier draft. The old "Week 3" and "Final template"
+versions are deleted: both claimed "2,000+ filings across 71 companies",
+which was wrong (see the evidence table below).
 
 ```
-FinRAG MCP | Python, AWS Bedrock, MCP SDK, FastAPI, ragas               2026
+FinRAG MCP | Python, AWS Bedrock, MCP SDK, FastAPI, Pinecone, ragas     2026
 
-• Built and deployed a production MCP server providing cited financial
-  intelligence over 2,000+ SEC filings across 71 companies; automated the
-  full EDGAR ingestion pipeline with table-aware document extraction,
-  hierarchical chunking, and content-addressed chunk IDs for idempotent
-  weekly refresh via EventBridge
+• Built and deployed an MCP server (4 tools) giving any MCP client cited,
+  number-verified answers over 1,000+ SEC filings (10-K/10-Q/8-K, 164K
+  chunks, 70 companies, up to 8 years of history), with table-aware HTML
+  extraction, content-addressed chunking, and a scheduled weekly EDGAR
+  refresh via EventBridge
 
-• Engineered a four-stage retrieval pipeline — query rewriting (Claude Haiku
-  plus deterministic GAAP line-item expansion), parallel BM25/dense hybrid
-  search, IDF-weighted reranking, and a custom numerical grounding verifier
-  — achieving 91.0% numerical accuracy and 80.1% faithfulness on the
-  150-question FinanceBench benchmark
+• Engineered a hybrid retrieval pipeline -- LLM query rewriting plus GAAP
+  line-item expansion, ticker/fiscal-year metadata filtering, parallel
+  BM25 (SQLite FTS5) + dense (Pinecone) search, reranking, and a custom
+  numerical grounding verifier -- reaching 91.0% numerical accuracy on
+  FinanceBench (150Q) and 89.9% across 198 questions incl. 48 ground
+  truths hand-verified against SEC filings
 
-• Deployed serverless on AWS (Lambda behind a Function URL, no API Gateway)
-  with Cognito OAuth 2.1/PKCE; ~$0.013/query average, cut to ~$0.003/query
-  on single-metric lookups via model-tier routing (Haiku vs. Sonnet); ragas
-  eval metrics wired into GitHub Actions CI with automated regression gates
+• Shipped serverless on AWS Lambda with Cognito OAuth 2.1/PKCE, per-query
+  cost/latency logging to DynamoDB, a 24h query-result cache, CloudWatch
+  dashboards, and Haiku/Sonnet model-tier routing (~3x cheaper on
+  single-metric lookups); ragas eval runs in GitHub Actions on every PR
 ```
+
+Evidence behind each number (check before an interview, these drift):
+
+| Claim | Evidence |
+|---|---|
+| 1,000+ filings, 164K chunks, 70 companies | chunk_cache/ count 2026-09-28: 1,030 filings (506 10-Q, 284 10-K, 240 8-K), 164,092 chunks. 72 targets - SPOT (20-F, empty cache) - PYPL (Pinecone cap) = 70 |
+| 91.0% / 89.9% numerical accuracy | evals/results/eval_combined_1790613849.json (D3) |
+| 48 hand-verified ground truths | custom_150.json rows with _verified_source (D2) |
+| ~3x cheaper via routing | ONE spot-check: MMM FY2018 capex, Haiku $0.002472 vs Sonnet $0.007415, identical answer (C5). Say "on a spot-check", not "on average" |
+| ragas in CI on every PR | .github/workflows/ci.yml ci-eval job. Do NOT say "passing gates": run_ci_eval.py asserts faithfulness >= 0.85, real faithfulness is ~0.80, so that gate would fail today |
+| weekly EventBridge refresh | Deployed + 14 unit tests. Never live-invoked (costs real spend). "Scheduled" is true, "proven in production" is not |
+
+Faithfulness (79.4% FinanceBench) is deliberately left out of the bullet:
+it's middling for production RAG (teams target 85%+), and a number you
+have to apologize for in an interview is weaker than no number. Have it
+ready if asked, with the ragas-metric-fit caveat from README.
 
 ---
 
@@ -1598,16 +1597,24 @@ because they are working from training data, not actual filings. My system downl
 real filings from EDGAR, processes them to handle tables properly, and exposes them
 via MCP so any AI client can call my tools and get cited, accurate answers.
 
-The retrieval stack is four stages: query rewriting with Haiku, parallel BM25 plus
-dense search via Pinecone, CrossEncoder reranking, and a custom numerical grounding
-verifier that checks every number in the answer actually exists in a retrieved chunk.
+The retrieval stack: query rewriting with Haiku plus a deterministic GAAP
+line-item expansion, ticker and fiscal-year metadata filters, parallel BM25 plus
+dense search via Pinecone, reranking, and a custom numerical grounding verifier
+that checks every number in the answer actually exists in a retrieved chunk.
 
-I measured everything against FinanceBench, a real benchmark with 300 labeled
-financial questions. My pipeline hit [X]% faithfulness and [Y]% numerical accuracy
-versus [Z]% for naive vector search alone. Cost per query dropped from $0.035 to
-$0.011 after caching and model tier routing. All metrics are live on a public dashboard.
+I measured it against FinanceBench, a public benchmark of 150 financial questions,
+plus 48 questions whose answers I verified by hand against the actual SEC filings.
+The pipeline hit 91.0% numerical accuracy on FinanceBench, versus 86.5% for dense
+vector search alone. The honest part: keyword-only search scored even higher on
+that benchmark (94.4%), because FinanceBench questions are phrased close to how
+filings word things -- I published that rather than hiding it."
 
-The thing I am most proud of is the numerical verifier. Financial RAG fails hardest
+(Only if asked about cost: ~$0.013/query average on the full pipeline. Model-tier
+routing cut a single-metric lookup ~3x on a spot-check, and a repeat query hits a
+24h cache for $0 in 67ms. Don't claim a big average drop -- the before/after on
+the fixed 15-question set barely moved, for reasons explained in README.)
+
+"The thing I am most proud of is the numerical verifier. Financial RAG fails hardest
 on numbers. The model confidently states a wrong revenue figure. Building a
 post-generation check that catches ungrounded numbers before the answer reaches
 the user was the hardest engineering problem in the project."

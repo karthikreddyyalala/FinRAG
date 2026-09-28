@@ -4,7 +4,7 @@ bootstrap_corpus.py's cache is "ingested once, skip forever" -- correct for
 a one-time seed, wrong for a recurring job: re-running it against an
 already-seeded corpus would skip every ticker (cache file exists) and never
 notice a new 10-Q. Blindly re-ingesting everything instead would re-embed
-and re-upsert 2,000+ unchanged filings every week, burning OpenAI budget and
+and re-upsert ~1,000 unchanged filings every week, burning OpenAI budget and
 re-tripping the same Pinecone free-tier write cap that already cost a
 FinanceBench question this project. Correct behavior: diff EDGAR's current
 filing list against what's cached (by filing_date) and touch only the new
@@ -215,7 +215,7 @@ def test_handler_still_uploads_cache_when_main_fails(
 def test_download_from_s3_populates_the_local_cache_dir(tmp_path):
     """A weekly Lambda cold start starts with an empty /tmp every time --
     without this, refresh_ticker would see an empty cache for every ticker,
-    read every EDGAR filing as new, and re-ingest the whole 2000+ filing
+    read every EDGAR filing as new, and re-ingest the whole ~1,000-filing
     corpus weekly instead of just what's new."""
     s3 = MagicMock()
     s3.get_paginator.return_value.paginate.return_value = [
