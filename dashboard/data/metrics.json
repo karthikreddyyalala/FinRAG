@@ -1,0 +1,128 @@
+{
+  "numerical_accuracy_financebench": {
+    "value": 0.9104858246328835,
+    "display": "91.0%",
+    "source_file": "evals/results/latest.json",
+    "source_detail": "FinanceBench 150Q, numerical_accuracy"
+  },
+  "faithfulness_financebench": {
+    "value": 0.7940295815295815,
+    "display": "79.4%",
+    "source_file": "evals/results/latest.json",
+    "source_detail": "FinanceBench 150Q, faithfulness"
+  },
+  "numerical_accuracy_custom": {
+    "value": 0.8616071428571428,
+    "display": "86.2%",
+    "source_file": "evals/results/eval_custom_1790613849.json",
+    "source_detail": "Custom verified 48Q, numerical_accuracy"
+  },
+  "faithfulness_custom": {
+    "value": 0.8541666666666666,
+    "display": "85.4%",
+    "source_file": "evals/results/eval_custom_1790613849.json",
+    "source_detail": "Custom verified 48Q, faithfulness"
+  },
+  "numerical_accuracy_combined": {
+    "value": 0.898636447232704,
+    "display": "89.9%",
+    "source_file": "evals/results/eval_combined_1790613849.json",
+    "source_detail": "Combined 198Q, numerical_accuracy"
+  },
+  "faithfulness_combined": {
+    "value": 0.8016753028116664,
+    "display": "80.2%",
+    "source_file": "evals/results/eval_combined_1790613849.json",
+    "source_detail": "Combined 198Q, faithfulness"
+  },
+  "answer_relevancy_combined": {
+    "value": 0.1621412728127228,
+    "display": "16.2%",
+    "source_file": "evals/results/eval_combined_1790613849.json",
+    "source_detail": "Combined 198Q, answer_relevancy (ragas, low — see caveat)"
+  },
+  "context_precision_combined": {
+    "value": 0.15302328842923724,
+    "display": "15.3%",
+    "source_file": "evals/results/eval_combined_1790613849.json",
+    "source_detail": "Combined 198Q, context_precision (ragas, low — see caveat)"
+  },
+  "context_recall_combined": {
+    "value": 0.08922558922558921,
+    "display": "8.9%",
+    "source_file": "evals/results/eval_combined_1790613849.json",
+    "source_detail": "Combined 198Q, context_recall (ragas, low — see caveat)"
+  },
+  "baseline_dense_only_numerical_accuracy": {
+    "value": 0.8652624434389141,
+    "display": "86.5%",
+    "source_file": "evals/results/eval_dense_only_1790314408.json",
+    "source_detail": "Baseline A (dense only), FinanceBench 150Q, numerical_accuracy"
+  },
+  "baseline_dense_only_faithfulness": {
+    "value": 0.7938518518518519,
+    "display": "79.4%",
+    "source_file": "evals/results/eval_dense_only_1790314408.json",
+    "source_detail": "Baseline A (dense only), FinanceBench 150Q, faithfulness"
+  },
+  "baseline_bm25_only_numerical_accuracy": {
+    "value": 0.9440103415103416,
+    "display": "94.4%",
+    "source_file": "evals/results/eval_bm25_only_1790318145.json",
+    "source_detail": "Baseline B (BM25 only), FinanceBench 150Q, numerical_accuracy"
+  },
+  "baseline_bm25_only_faithfulness": {
+    "value": 0.8380148005148005,
+    "display": "83.8%",
+    "source_file": "evals/results/eval_bm25_only_1790318145.json",
+    "source_detail": "Baseline B (BM25 only), FinanceBench 150Q, faithfulness"
+  },
+  "baseline_full_pipeline_numerical_accuracy": {
+    "value": 0.91,
+    "display": "91.0%",
+    "source_file": "README.md",
+    "source_detail": "Baseline comparison table, full pipeline, FinanceBench 150Q"
+  },
+  "filings_count": {
+    "value": 1030,
+    "display": "1,030",
+    "source_file": "claude.md",
+    "source_detail": "chunk_cache/ count, 2026-09-28: 506 10-Q + 284 10-K + 240 8-K"
+  },
+  "chunks_count": {
+    "value": 164092,
+    "display": "164,092",
+    "source_file": "claude.md",
+    "source_detail": "chunk_cache/ count, 2026-09-28"
+  },
+  "companies_count": {
+    "value": 70,
+    "display": "70",
+    "source_file": "claude.md",
+    "source_detail": "72 targets minus SPOT (20-F, out of scope, empty cache file) minus PYPL (Pinecone write-cap blocked)"
+  },
+  "avg_cost_per_query": {
+    "value": 0.0137,
+    "display": "$0.0137",
+    "source_file": "README.md",
+    "source_detail": "Cost & latency section, avg cost_usd on fixed 15Q set"
+  },
+  "avg_latency_ms": {
+    "value": 24074,
+    "display": "24.1s",
+    "source_file": "README.md",
+    "source_detail": "Cost & latency section, avg latency_ms on fixed 15Q set (after C3-C5)"
+  },
+  "cache_miss_latency_ms": {
+    "value": 23209,
+    "display": "23,209ms",
+    "source_file": "claude.md",
+    "source_detail": "C4 live verification, query-cache miss"
+  },
+  "cache_hit_latency_ms": {
+    "value": 67,
+    "display": "67ms",
+    "source_file": "claude.md",
+    "source_detail": "C4 live verification, query-cache hit"
+  }
+}
