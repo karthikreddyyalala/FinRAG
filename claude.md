@@ -1317,22 +1317,46 @@ PHASE D -- Corpus & eval completeness
           Done when: PYPL chunks in Pinecone + FTS5, weekly refresh sees it
   [ ] D2. custom_150.json: replace VERIFY_AFTER_BOOTSTRAP placeholders
           with verified ground truths -- IN PROGRESS on branch
-          d2-custom-150-ground-truths, 23/151 done (2026-09-28).
-          Method: SEC XBRL companyconcept API, then every number confirmed
-          by searching the filing's own HTML text for it and reading the
-          row label beside it. Q4 = 10-K full year minus Q3 10-Q 9-month
-          YTD, asserted to share the same start date.
-          Bug caught in the first pass: a 10-Q's XBRL carries the
-          prior-year comparative under the SAME fy/fp labels, so v1 took
-          last year's quarter for AAPL/NVDA/META/GOOGL (e.g. NVDA $26,044M
-          instead of $44,062M). Fix: take the max end date within the
-          filing. Also: the ASC 606 tag is sometimes a sub-line (GM
-          "Automotive" only, CVX "Sales and other operating revenues"),
-          so check the printed label, not just the tag.
-          Still open (128): JPM, XOM, UPS, GS, MS, TMUS, CMCSA (tags not
-          found); WMT/HD/COST/AVGO/QCOM/V/DIS (fiscal-year offset);
-          segment/margin/income easy rows; all medium/hard/table rows.
-          SPOT row should be dropped (20-F filer, not in corpus).
+          d2-custom-150-ground-truths, 37/149 done (2026-09-28, dataset
+          now 149 after dropping 2 SPOT questions -- see below).
+          Method: SEC XBRL companyconcept API where available, direct
+          filing-text search where it isn't; every number confirmed by
+          finding it verbatim in the filing's own HTML next to its row
+          label. Q4 = 10-K full year minus Q3 10-Q 9-month YTD, asserted
+          to share the same period start date before subtracting.
+          Bugs caught along the way (each verified against the real
+          filing before/after fixing, not just re-run):
+          - A 10-Q's XBRL tags the prior-year comparative under the SAME
+            fy/fp as the current quarter -- v1 took last year's number for
+            AAPL/NVDA/META/GOOGL (e.g. NVDA $26,044M instead of $44,062M).
+            Fixed: take the max end date within the filing.
+          - GM/CVX's ASC 606 tag was a sub-line (GM "Automotive" segment
+            only, CVX "Sales and other operating revenues" only) --
+            switched both to their us-gaap:Revenues consolidated total.
+          - Banks (JPM/GS/MS) don't use plain "Revenues" -- they use
+            "RevenuesNetOfInterestExpense".
+          - XOM's ticker resolves to a NEW holding-company CIK (2115436,
+            "ExxonMobil Holdings Corp") with no 10-K history at all -- a
+            2026 corporate restructuring. The real 10-Ks are still under
+            the original CIK 34088 ("EXXON MOBIL CORP"). Sourced XOM's
+            number directly from that CIK's filing text, not
+            companyconcept (their income statement line is literally
+            "Total revenues and other income", not a plain "Revenues" tag).
+          - Visa's companyconcept API returns an empty units.USD for every
+            standard revenue tag (RevenueFromContractWithCustomerExcluding
+            AssessedTax, Revenues) -- sourced directly from the 10-K/10-Q
+            text instead ("Net revenue" line).
+          - COST's XBRL revenue tag returns "Total revenue" (net sales +
+            membership fees, $67,307M), but the question asks "net sales"
+            specifically -- the line above it in the same table, $65,978M.
+          - Dropped both SPOT questions (Q4 2025 revenue, 2025 MAU/
+            subscribers): Spotify files a 20-F, not 10-K/10-Q, so it's
+            permanently out of this corpus and the questions are
+            unanswerable by design, not a retrieval gap. 151 -> 149 rows.
+          Still open (112): segment/margin/income easy rows (iPhone,
+          Azure, data-center, gross margin, net income); all 51 medium +
+          30 hard + 20 table rows -- these need multiple numbers per
+          question or a table breakdown, not just one XBRL lookup.
   [ ] D3. Full 300Q eval (FinanceBench 150 + custom 150), README updated
 
 PHASE E -- Public dashboard
