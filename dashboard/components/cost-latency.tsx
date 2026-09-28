@@ -9,7 +9,7 @@ export function CostLatency() {
   const maxMs = missMs.value;
 
   return (
-    <section className="px-4 py-16 md:px-8">
+    <section className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
           Cost and latency.

@@ -16,19 +16,16 @@ const STACK = [
 
 export function StackGrid() {
   return (
-    <section className="px-4 py-16 md:px-8">
+    <section className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
           And everything underneath.
         </h2>
-        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
+        <div className="mt-10 flex flex-wrap gap-x-10 gap-y-6">
           {STACK.map(({ name, icon: Icon }) => (
-            <div
-              key={name}
-              className="flex flex-col items-center gap-2 rounded-2xl border border-[var(--color-border)] p-4 text-center"
-            >
-              <Icon size={24} weight="regular" className="text-[var(--color-muted)]" />
-              <span className="font-[family-name:var(--font-mono)] text-xs text-[var(--color-text)]">{name}</span>
+            <div key={name} className="flex items-center gap-2.5">
+              <Icon size={18} weight="regular" className="text-[var(--color-muted)]" />
+              <span className="font-[family-name:var(--font-mono)] text-sm text-[var(--color-text)]">{name}</span>
             </div>
           ))}
         </div>
