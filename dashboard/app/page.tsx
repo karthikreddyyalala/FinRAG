@@ -7,6 +7,9 @@ import { Problem } from "@/components/problem";
 import { HowItWorks } from "@/components/how-it-works";
 import { VerifierDemo } from "@/components/verifier-demo";
 import { ToolsBento } from "@/components/tools-bento";
+import { IncidentLog } from "@/components/incident-log";
+import { StackGrid } from "@/components/stack-grid";
+import { DeploySteps } from "@/components/deploy-steps";
 
 export default function Home() {
   return (
@@ -23,8 +26,9 @@ export default function Home() {
         <VerifierDemo />
         <ToolsBento />
         <div id="results" className="h-[60vh]" />
-        <div id="incidents" className="h-[60vh]" />
-        <div id="deploy" className="h-[60vh]" />
+        <IncidentLog />
+        <StackGrid />
+        <DeploySteps />
       </main>
       <Footer />
     </>
