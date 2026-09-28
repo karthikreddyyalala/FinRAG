@@ -283,6 +283,7 @@ class KeywordIndex:
         top_k: int = 10,
         ticker: str | None = None,
         period_range: tuple[str, str] | None = None,
+        filing_type: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return up to top_k chunks, best BM25 match first.
 
@@ -292,6 +293,8 @@ class KeywordIndex:
             ticker: Only chunks from this company, when given.
             period_range: Only chunks whose filing date (ISO string) falls in
                 this inclusive (start, end) range, when given.
+            filing_type: Only chunks of this form type ("10-K"/"10-Q"/"8-K"),
+                when given.
 
         Returns:
             Chunk dicts with exactly BM25_CHUNK_FIELDS.
@@ -303,6 +306,9 @@ class KeywordIndex:
         if ticker:
             where += " AND ticker = ?"
             params.append(ticker)
+        if filing_type:
+            where += " AND filing_type = ?"
+            params.append(filing_type)
         if period_range:
             where += " AND period BETWEEN ? AND ?"
             params.extend(period_range)

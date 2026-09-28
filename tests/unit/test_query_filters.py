@@ -66,6 +66,35 @@ def test_numbers_that_are_not_years_are_ignored():
     assert extract_filters("3M capex of $1577 million")["years"] is None
 
 
+def test_q4_question_prefers_the_annual_10k():
+    """Live bug (2026-09-28, root-caused via evals/results/custom_answers.json):
+    "AT&T total revenues in Q4 2025" retrieved and confidently cited a Q1 2026
+    10-Q's prior-year comparative column instead of anything about Q4 2025 --
+    the period_range filter alone let ANY filing dated in the 2025-2026 window
+    through, 10-Qs included. Merck and Disney showed the identical pattern.
+    Q4 is virtually never itself a separately-filed period -- it's read off
+    the annual 10-K -- so a "Q4 <year>" question should only ever match 10-Ks."""
+    assert extract_filters("What was AT&T total revenues in Q4 2025?")["filing_type"] == "10-K"
+    assert extract_filters("Merck total revenues in Q4 2025")["filing_type"] == "10-K"
+
+
+def test_q1_q2_q3_question_prefers_the_10q():
+    assert extract_filters("Q2 2022 revenue for Nike")["filing_type"] == "10-Q"
+    assert extract_filters("Q1 FY2026 Costco net sales")["filing_type"] == "10-Q"
+
+
+def test_annual_or_fy_wording_without_a_quarter_prefers_the_10k():
+    assert extract_filters("3M capex FY2018")["filing_type"] == "10-K"
+    assert extract_filters("Apple full year revenue 2024")["filing_type"] == "10-K"
+
+
+def test_no_period_wording_means_no_filing_type_filter():
+    """A wrong filter hides the right answer -- same conservatism as the
+    ticker/year filters. Don't guess when the question doesn't say."""
+    assert extract_filters("What is Apple's latest revenue?")["filing_type"] is None
+    assert extract_filters("Nvidia revenue from 2023 to 2025")["filing_type"] is None
+
+
 def test_period_window_covers_both_fiscal_year_conventions():
     """Dec year-end (3M): FY2018 10-K filed 2019-02-07. Jan year-end
     (Walmart): FY2018 ended 2018-01-31, 10-K filed 2018-03. One window,

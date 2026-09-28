@@ -113,6 +113,7 @@ def build_search_filings_answer(
             rewritten, keyword_index, pinecone_index, embed_fn,
             ticker=filters["ticker"],
             period_range=period_window(filters["years"]) if filters["years"] else None,
+            filing_type=filters["filing_type"],
         )
         stage_latency_ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
 

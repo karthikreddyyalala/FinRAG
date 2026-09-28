@@ -82,6 +82,24 @@ def test_filters_reach_both_sources_and_period_is_applied_to_dense_hits():
     assert pinecone_index.query.call_args.kwargs["filter"] == {"ticker": {"$eq": "MMM"}}
 
 
+def test_filing_type_filter_reaches_both_sources():
+    """Live bug (2026-09-28): "Q4 <year>" questions retrieved a wrong-quarter
+    10-Q (period_range alone let any filing in the window through). ticker
+    and filing_type must both reach Pinecone's filter dict together."""
+    keyword_index = MagicMock()
+    keyword_index.search.return_value = [{"chunk_id": "any", "text": "x"}]
+    pinecone_index = MagicMock()
+    pinecone_index.query.return_value = {"matches": []}
+
+    hybrid_search("AT&T Q4 2025 revenue", keyword_index, pinecone_index, lambda t: [0.0],
+                  ticker="T", filing_type="10-K")
+
+    assert keyword_index.search.call_args.kwargs["filing_type"] == "10-K"
+    assert pinecone_index.query.call_args.kwargs["filter"] == {
+        "ticker": {"$eq": "T"}, "filing_type": {"$eq": "10-K"},
+    }
+
+
 def test_empty_filtered_result_falls_back_to_unfiltered_search():
     """A wrong filter must never be worse than no filter: if nothing
     survives, search again without it."""

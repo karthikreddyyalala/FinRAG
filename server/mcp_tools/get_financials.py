@@ -61,11 +61,13 @@ def build_financials_answer(
     query = f"What was {ticker}'s {metric} for {period}?"
     lexical_query = expand_financial_terms(f"{ticker} {metric} {period}")
 
-    years = extract_filters(period)["years"]
+    period_filters = extract_filters(period)
+    years = period_filters["years"]
     candidates = hybrid_search(
         lexical_query, keyword_index, pinecone_index, embed_fn,
         ticker=ticker.upper(),
         period_range=period_window(years) if years else None,
+        filing_type=period_filters["filing_type"],
     )
     # The ticker is a known input here, unlike search_sec_filings' free-text
     # queries -- a short ticker like "F" is too weak a lexical signal for

@@ -56,12 +56,19 @@ def _search_once(
     top_k: int,
     ticker: str | None,
     period_range: tuple[str, str] | None,
+    filing_type: str | None = None,
 ) -> list[dict[str, Any]]:
     kw_filters: dict[str, Any] = {}
     pc_kwargs: dict[str, Any] = {"top_k": top_k, "include_metadata": True}
+    pc_filter: dict[str, Any] = {}
     if ticker:
         kw_filters["ticker"] = ticker
-        pc_kwargs["filter"] = {"ticker": {"$eq": ticker}}
+        pc_filter["ticker"] = {"$eq": ticker}
+    if filing_type:
+        kw_filters["filing_type"] = filing_type
+        pc_filter["filing_type"] = {"$eq": filing_type}
+    if pc_filter:
+        pc_kwargs["filter"] = pc_filter
     if period_range:
         kw_filters["period_range"] = period_range
         pc_kwargs["top_k"] = top_k * DENSE_OVERFETCH
@@ -115,6 +122,7 @@ def hybrid_search(
     top_k: int = 10,
     ticker: str | None = None,
     period_range: tuple[str, str] | None = None,
+    filing_type: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run BM25 and Pinecone search in parallel, merge and dedup the results.
 
@@ -127,6 +135,11 @@ def hybrid_search(
         ticker: Restrict both sources to this company, when given.
         period_range: Restrict both sources to filings dated in this
             inclusive ISO (start, end) window, when given.
+        filing_type: Restrict both sources to this form type ("10-K" or
+            "10-Q"), when given -- e.g. a "Q4 <year>" question should only
+            ever match the annual 10-K, never a same-window 10-Q (see
+            query_filters.py's _extract_filing_type for the live bug this
+            closes: a Q4 question citing a wrong-quarter 10-Q).
 
     Returns:
         Up to 2*top_k deduplicated candidate chunks. If filters leave
@@ -134,8 +147,8 @@ def hybrid_search(
         never do worse than no filter.
     """
     args = (rewritten_query, keyword_index, pinecone_index, embed_fn, top_k)
-    if ticker or period_range:
-        results = _search_once(*args, ticker, period_range)
+    if ticker or period_range or filing_type:
+        results = _search_once(*args, ticker, period_range, filing_type)
         if results:
             return results
-    return _search_once(*args, None, None)
+    return _search_once(*args, None, None, None)
