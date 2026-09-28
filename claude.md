@@ -844,20 +844,19 @@ RESOLVED 2026-09-25: GitHub Actions CI was red on main from 07:58 UTC
   passing) before pushing either fix, then confirmed green on the actual
   Actions run.
 
-Where we are (updated 2026-09-28): Phase A (all), Phase B (all), C1-C7
-  DONE and deployed. D1 blocked (Pinecone cap), D2 stopped by deliberate
-  user choice at the easy tier (48/49 answerable verified, 1 documented
-  unanswerable, 101 medium/hard/table rows left as future work, NOT
-  silently dropped), D3 DONE on FinanceBench 150 + custom verified 48 =
-  198Q (see below for real numbers). F2 started (query-sequence.mmd
-  updated for Cognito/A1/C4). CI green since 2026-09-25 (see below for
-  root cause). Also stripped Co-Authored-By: Claude trailers from 4
-  commits since 429ec17 that same day.
-  NEXT = finish Phase F (remaining diagrams, final README pass) --
-  that's what an interviewer or HN reader actually sees, and none of it
-  had been touched before today. Work the MASTER CHECKLIST below
-  strictly one item at a time; explain in plain language, stop after
-  each item for the user's go-ahead.
+Where we are (updated 2026-09-28, end of session): A, B, C1-C7 DONE and
+  deployed. D1 blocked (Pinecone cap). D2 stopped at the easy tier by user
+  choice. D3 DONE (198Q). F2 (all 4 diagrams) and F3 (resume bullets +
+  interview story, 4 false claims fixed) DONE.
+  Branch d2-custom-150-ground-truths holds 9 commits NOT yet on main
+  (rebased onto main 2026-09-28, clean) -- user merges via GitHub:
+  https://github.com/karthikreddyyalala/FinRAG/compare/main...d2-custom-150-ground-truths
+  NEXT = Phase E: public website (landing page + eval dashboard) in
+  dashboard/, deployed to Vercel -- being started in a fresh chat.
+  Then F1 (README final pass, link the site). See "Known gaps" below
+  for everything else still open.
+  `git push` works from this environment as of 2026-09-28 (it failed
+  earlier the same day; `gh` is still NOT authenticated).
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
   onward uses a feature branch + PR (user rebase-merges via GitHub),
   not direct pushes to main like C1-C4. `gh` is NOT authenticated in
@@ -1455,40 +1454,35 @@ DEFERRED -- revisit only if a reason appears
       caps traffic. Revisit if the account limit is ever raised
 ```
 
-### Known gaps / debt
+### Known gaps / debt (refreshed 2026-09-28 -- every item re-checked)
 
 ```
-- custom_150.json ground truths are placeholders (VERIFY_AFTER_BOOTSTRAP);
-  full eval currently scores FinanceBench 150 only, not the planned 300
+- SECURITY, open longest: an OpenAI API key was pasted in plaintext in a
+  chat during setup and is still not rotated (checklist A4, user action).
+  Revoke on platform.openai.com, then update SSM /finrag/openai-api-key
+- CI eval gate cannot pass today: run_ci_eval.py asserts faithfulness >=
+  0.85, real faithfulness is ~0.80. Either raise faithfulness or make an
+  explicit decision about the threshold -- don't leave it silently red
+- custom_150.json: easy tier verified (48 + 1 documented unanswerable);
+  51 medium / 30 hard / 20 table rows still VERIFY_AFTER_BOOTSTRAP by
+  deliberate scope choice (D2). run_eval.py skips unverified rows
+- Custom set scores lower on numerical accuracy (86.2%) than FinanceBench
+  (91.0%) despite hand-verified ground truths -- not root-caused
 - Three ragas metrics (answer_relevancy, context_precision, context_recall)
-  score 11-20% despite verified-correct retrieval; likely a metric-fit issue
-  for terse numeric QA over table-heavy context, not yet root-caused -- see
-  README.md "Eval results" and Phase 11 caveat above
-- PYPL missing from corpus: Pinecone free-tier monthly write-unit cap (2M)
-  exhausted by repeated corpus rebuilds today. Resets monthly; backfill by
-  deleting evals/results/chunk_cache/PYPL.json and re-running bootstrap
-- CrossEncoder still disabled everywhere, including on the now-deployed
-  Lambda (reranker.py's lexical fallback is what's live); needs a
-  container-image Lambda (Docker not installed locally) -- deferred, see
-  Phase 11 "NEXT" above for the reasoning
-- infra/ has storage_stack.py and mcp_server_stack.py; pinecone_stack.py and
-  observability_stack.py do not exist yet
-- Cognito is deployed and wired (dual-accept), but not yet confirmed by an
-  actual browser login -- the static bearer token is still the only path
-  verified working end to end. Token lives in SSM and in Claude Desktop's
-  local config file, not in any short-lived credential flow, until Cognito
-  login is confirmed and the static path is retired
-- get_company_financials/compare_companies filter retrieval candidates by
-  exact ticker match on chunk metadata (fixes the Ford/Pfizer bug) but do
-  not filter by period. Live test: querying MMM capex for FY2018 retrieved
-  only 2023-2025 chunks and correctly refused rather than hallucinating --
-  safe, but it won't find a period-specific answer that exists deeper in
-  the corpus than hybrid_search's top_k=10 reaches. The full search tool
-  handles this via Haiku's date-constraint extraction; tools 2/3 skip that
-  call by design (see Phase 11 above), so they're weaker on ambiguous dates
-- An OpenAI API key was pasted in plaintext in a chat session during setup
-  this week and is considered exposed; rotate it in the OpenAI dashboard and
-  update the /finrag/openai-api-key SSM parameter
+  score 2-20% despite verified-correct retrieval; working theory is metric
+  fit (terse numeric ground truth vs long table chunks), not proven
+- PYPL missing: Pinecone free-tier write cap (2M/month). A 2026-09-25 retry
+  hit the same cap -- check the Pinecone dashboard's real reset date first
+- CrossEncoder disabled everywhere incl. Lambda (lexical reranker is live);
+  needs a container-image Lambda -- deferred
+- pinecone_stack.py (planned in Phase 2) was never built -- the index is
+  managed outside CDK. nightly_eval.yml (planned weekly full eval) was
+  never built -- run_eval.py is manual
+- Weekly EventBridge refresh is deployed + unit-tested but has never been
+  live-invoked (a live run costs real OpenAI/Pinecone spend)
+- MCP server is single-user (Cognito pool, no self-signup): nobody else can
+  connect to the deployed endpoint. Any public site or README quickstart
+  must say "deploy your own", not "connect to mine"
 ```
 
 ---
