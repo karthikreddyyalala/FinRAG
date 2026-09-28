@@ -8,7 +8,9 @@
   --color-text: #18181b;
   --color-muted: #52525b;
   --color-grounded: #1b7a51;
-  --color-flagged: #a86a12;
+  /* #A86A12 (spec default) is only 4.25:1 on this background, below AA for
+     normal text — darkened to #975F10 (5.08:1) via web-perf pass. */
+  --color-flagged: #975f10;
   --color-destructive: #dc2626;
   --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.05);
 }
