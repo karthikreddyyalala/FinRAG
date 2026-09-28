@@ -1,26 +1,73 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-elevated: #f4f4f5;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-text: #18181b;
+  --color-muted: #52525b;
+  --color-grounded: #1b7a51;
+  --color-flagged: #a86a12;
+  --color-destructive: #dc2626;
+  --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.05);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root[data-theme="dark"] {
+  --color-bg: #09090b;
+  --color-surface: #111114;
+  --color-elevated: #18181b;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text: #ededef;
+  --color-muted: #8a8f98;
+  --color-grounded: #45c98f;
+  --color-flagged: #e0a84f;
+  --color-destructive: #ef4444;
+  --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.4);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --color-bg: #09090b;
+    --color-surface: #111114;
+    --color-elevated: #18181b;
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-text: #ededef;
+    --color-muted: #8a8f98;
+    --color-grounded: #45c98f;
+    --color-flagged: #e0a84f;
+    --color-destructive: #ef4444;
+    --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.4);
   }
 }
 
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-elevated: var(--color-elevated);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-muted: var(--color-muted);
+  --color-grounded: var(--color-grounded);
+  --color-flagged: var(--color-flagged);
+  --color-destructive: var(--color-destructive);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
