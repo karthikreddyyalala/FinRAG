@@ -1410,9 +1410,68 @@ PHASE D -- Corpus & eval completeness
             checkable against the original 150Q table it replaces.
 
 PHASE E -- Public dashboard
-  [ ] E1. dashboard/ Next.js + Recharts: EvalScoreChart,
-          CostPerQueryChart, LatencyBreakdown, reading exported results
-  [ ] E2. Deploy to Vercel, link from README
+  [x] E1. dashboard/ Next.js App Router + Recharts, built on branch
+          website-phase-e -- DONE 2026-09-28. "The Audited Terminal": zinc
+          neutrals + one grounded-green accent, Cabinet Grotesk + Satoshi +
+          JetBrains Mono (self-hosted via next/font/local, real files
+          downloaded from Fontshare/Google Fonts), dark-default with a
+          persisted light/dark toggle. All 14 sections built: nav/section
+          rail/footer, hero with a recorded-query replay, metrics band +
+          70-ticker marquee, the problem, how-it-works (Technical/Simple
+          toggle), the verifier demo, 4-tool bento, Measured-not-claimed
+          charts (baseline comparison + FinanceBench-vs-custom dumbbell,
+          both Recharts, lazy-loaded below the fold) with the two honesty
+          panels ("Where it lost", "What we can't explain yet"), cost/
+          latency (cache miss-vs-hit), the incident log (6 real bugs from
+          this file's own history), the stack grid, deploy-your-own with
+          copy buttons, OG image + favicon + styled 404.
+          Every number on the page resolves through dashboard/data/
+          metrics.json (built by scripts/sync-metrics.mjs from
+          evals/results/) via one <Cited> component -- no number is
+          hard-coded elsewhere in the UI. Caught and fixed a real bug in
+          that pipeline before it shipped: the plan's guessed source file
+          for the FinanceBench-only eval (eval_1790044494.json, 80.1%
+          faithfulness) didn't match README's published 79.4% -- the real
+          source is latest.json, verified by checking every eval_*.json in
+          the directory, not by trusting the first plausible filename.
+          Also caught a second real discrepancy: README's baseline-
+          comparison table's "full pipeline" row (80.1% faithfulness) is a
+          DIFFERENT eval run than the main results table's FinanceBench row
+          (79.4%, latest.json) -- both are real, kept as two distinct
+          metric keys rather than silently reusing one for the other.
+          Numerical verifier ported to TypeScript (lib/verifier.ts),
+          TDD'd against 10 real test cases exported from the actual Python
+          verify_answer() (scripts/export-verifier-cases.py) -- including
+          the exact $1,234-vs-$1,234.56 substring-trap case -- all 10/10
+          passing on first implementation, because reading the real
+          Python source first revealed the actual matching rule is simpler
+          than assumed (magnitude comparison, no billion/million unit
+          equivalence -- that's a documented gap in the Python source
+          itself, not something worth inventing for the port).
+          Three real demo recordings captured against production
+          dependencies (real Bedrock/Pinecone spend, $0.02847 total, user
+          approved the cost first): 3M FY2018 capex (correct, $1,577M),
+          NVDA Q1 2026 revenue (an honest refusal -- kept as real content,
+          not reworked to force a hit), TSLA-vs-F 2024 revenue comparison
+          (both legs correctly attributed, re-verified the historical
+          cross-ticker-citation bug does NOT recur).
+          Real accessibility pass: computed actual WCAG contrast ratios
+          for every token pair (not eyeballed) -- caught light-mode
+          "flagged" amber at 4.25:1 (below AA), darkened to #975F10
+          (5.08:1). Added MotionConfig reducedMotion="user" so the motion
+          library's own spring animations honor the OS setting, not just
+          CSS transitions. 15/15 unit tests passing throughout.
+          No browser/Lighthouse tool was available in this session, so
+          screenshot verification and real Lighthouse scores are NOT done
+          -- verified instead via real build output, rendered HTML content
+          checks, and the OG-image PNG rendered and visually inspected.
+          This is a real gap against the original "screenshot-verify at
+          3 widths x 2 themes, Lighthouse >= 90" bar -- flagged here, not
+          silently dropped.
+  [ ] E2. Deploy to Vercel (user connects the repo; Root Directory=
+          dashboard, framework preset Next.js), link from README once a
+          real URL exists -- not done yet, branch not merged/pushed to a
+          state the user has deployed from.
 
 PHASE F -- Launch & polish (Week 6)
   [ ] F1. Final README pass: architecture diagram, setup, results, costs
