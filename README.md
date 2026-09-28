@@ -54,9 +54,9 @@ Measured on the same fixed set of 15 FinanceBench questions run individually aga
 
 ### Corpus coverage
 
-- 71 of 72 target companies ingested (10-K, 10-Q, 8-K; 2018–2026 for the 32 companies FinanceBench asks about, 2025–2026 for the remaining 40)
+- 70 of 72 target companies ingested: 1,030 filings (506 10-Q, 284 10-K, 240 8-K), 164,092 chunks. 2018–2026 depth for the 31 ingested companies FinanceBench asks about, 2025–2026 for the other 39
 - **SPOT** (Spotify) has no 10-K/10-Q filings — it's a foreign private issuer that files Form 20-F, outside this project's scope by design
-- **PYPL** is temporarily absent — Pinecone's free-tier monthly write-unit cap (2M) was exhausted mid-project; resets monthly. Costs exactly 1 FinanceBench question.
+- **PYPL** is temporarily absent — Pinecone's free-tier monthly write-unit cap (2M) was exhausted mid-project; a retry on 2026-09-25 hit the same cap, so check the Pinecone dashboard for the real reset date before retrying. Costs exactly 1 FinanceBench question.
 
 ### Question coverage
 

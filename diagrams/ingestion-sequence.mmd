@@ -6,7 +6,7 @@
 %%     Lambda + EventBridge, rate(7 days)): diffs EDGAR's current filing list
 %%     against the cache by filing_date and ingests only what's new -- see
 %%     the box at the bottom. Re-running bootstrap's logic on a schedule
-%%     would re-embed and re-upsert 2000+ unchanged filings every week.
+%%     would re-embed and re-upsert ~1,000 unchanged filings every week.
 %% Embeddings are OpenAI text-embedding-3-small (1536-dim), not Titan: the
 %% local fastembed/ONNX path was ~100x slower and Titan's dimensions do not
 %% match the 1536-dim Pinecone index.

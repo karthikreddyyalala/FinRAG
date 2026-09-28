@@ -4,7 +4,7 @@ bootstrap_corpus.py's per-ticker cache means "ingested once, skip forever" --
 right for a one-time seed, wrong for a recurring refresh, since re-running it
 against an already-seeded corpus would skip every ticker without ever
 checking EDGAR again. Re-ingesting everything on a schedule instead would
-re-embed and re-upsert 2,000+ unchanged filings every week -- real OpenAI
+re-embed and re-upsert ~1,000 unchanged filings every week -- real OpenAI
 spend, and the same Pinecone free-tier write cap that already cost this
 project a FinanceBench question. This script diffs EDGAR's current filing
 list against the cache (by filing_date) and touches only what's new.
