@@ -83,6 +83,12 @@
     "source_file": "README.md",
     "source_detail": "Baseline comparison table, full pipeline, FinanceBench 150Q"
   },
+  "baseline_full_pipeline_faithfulness": {
+    "value": 0.801,
+    "display": "80.1%",
+    "source_file": "README.md",
+    "source_detail": "Baseline comparison table, full pipeline, FinanceBench 150Q"
+  },
   "filings_count": {
     "value": 1030,
     "display": "1,030",
