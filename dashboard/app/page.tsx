@@ -3,6 +3,10 @@ import { SectionRail } from "@/components/section-rail";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
 import { MetricsBand } from "@/components/metrics-band";
+import { Problem } from "@/components/problem";
+import { HowItWorks } from "@/components/how-it-works";
+import { VerifierDemo } from "@/components/verifier-demo";
+import { ToolsBento } from "@/components/tools-bento";
 
 export default function Home() {
   return (
@@ -12,9 +16,12 @@ export default function Home() {
       <main id="main" className="min-h-[100dvh]">
         <Hero />
         <MetricsBand />
-        <div id="how-it-works" className="h-[60vh]" />
-        <div id="verifier" className="h-[60vh]" />
-        <div id="tools" className="h-[60vh]" />
+        <Problem />
+        <div id="how-it-works">
+          <HowItWorks />
+        </div>
+        <VerifierDemo />
+        <ToolsBento />
         <div id="results" className="h-[60vh]" />
         <div id="incidents" className="h-[60vh]" />
         <div id="deploy" className="h-[60vh]" />
