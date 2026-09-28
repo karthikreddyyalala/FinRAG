@@ -1,0 +1,82 @@
+[
+  {
+    "name": "exact match passes (comma-formatted number)",
+    "answer": "3M's capital expenditure in FY2018 was $1,577.",
+    "chunks": [
+      "Purchases of property, plant and equipment (PP&E) ... $1,577 ... 2018"
+    ],
+    "expected": "3M's capital expenditure in FY2018 was $1,577."
+  },
+  {
+    "name": "substring trap: 1,234 must not match inside 1,234.56",
+    "answer": "Revenue was $1,234 million.",
+    "chunks": [
+      "Total revenue for the period was $1,234.56 million."
+    ],
+    "expected": "Revenue was [exact figure unavailable in retrieved context]."
+  },
+  {
+    "name": "percentage match",
+    "answer": "Gross margin was 47.2%.",
+    "chunks": [
+      "Gross margin percentage: 47.2%"
+    ],
+    "expected": "Gross margin was 47.2%."
+  },
+  {
+    "name": "parenthesized negative in source matches unsigned answer",
+    "answer": "Cash used in operations was $1,577.",
+    "chunks": [
+      "Net cash used: $(1,577) thousand"
+    ],
+    "expected": "Cash used in operations was $1,577."
+  },
+  {
+    "name": "number not in any chunk gets replaced",
+    "answer": "Revenue was $9,999 million.",
+    "chunks": [
+      "Total revenue: $1,234 million"
+    ],
+    "expected": "Revenue was [exact figure unavailable in retrieved context]."
+  },
+  {
+    "name": "multiple numbers, one grounded one not",
+    "answer": "Revenue was $1,234 and margin was 99.9%.",
+    "chunks": [
+      "Total revenue: $1,234 million. Gross margin: 47.2%"
+    ],
+    "expected": "Revenue was $1,234 and margin was [exact figure unavailable in retrieved context]."
+  },
+  {
+    "name": "bare percentage with decimal, no dollar sign",
+    "answer": "Growth rate was 3.5%, up from 2%.",
+    "chunks": [
+      "The company reported 3.5% growth this quarter, compared to 2% last year."
+    ],
+    "expected": "Growth rate was 3.5%, up from 2%."
+  },
+  {
+    "name": "large number without dollar sign or percent (comma-grouped)",
+    "answer": "Total assets were 1,234,567.",
+    "chunks": [
+      "Total assets: 1,234,567"
+    ],
+    "expected": "Total assets were 1,234,567."
+  },
+  {
+    "name": "number with billion suffix, dollar sign required for that branch",
+    "answer": "Revenue was $23.4 billion.",
+    "chunks": [
+      "Revenue: $23.4 billion in the period"
+    ],
+    "expected": "Revenue was $23.4 billion."
+  },
+  {
+    "name": "no numbers in answer at all",
+    "answer": "The company did not disclose a specific figure.",
+    "chunks": [
+      "Some unrelated source text with $500 in it."
+    ],
+    "expected": "The company did not disclose a specific figure."
+  }
+]
