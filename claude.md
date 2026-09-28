@@ -1413,8 +1413,23 @@ PHASE E -- Public dashboard
 
 PHASE F -- Launch & polish (Week 6)
   [ ] F1. Final README pass: architecture diagram, setup, results, costs
-  [ ] F2. Update all diagrams (query-sequence.mmd still shows 1 tool,
-          no Cognito, no time filters)
+  [x] F2. Update all diagrams -- DONE 2026-09-28, all 4 checked against
+          real code, not just skimmed:
+          - query-sequence.mmd: added Cognito JWT auth (A3 retired the
+            static token), the C4 query-cache check, and A1's ticker+
+            fiscal-year metadata filters on hybrid_search -- all three
+            were missing entirely
+          - week3-eval-sequence.mmd: fixed 4 real inaccuracies, not just
+            staleness -- FinanceBench source is HuggingFace JSONL, not a
+            GitHub CSV; output path is evals/eval_data/ not evals/datasets/;
+            ragas judges with OpenAI gpt-4o-mini, not Bedrock Haiku; a
+            weekly full-eval workflow doesn't exist (run_eval.py is
+            manual). Also degeneralized the stale "32 tests pass" count.
+          - ingestion-sequence.mmd, week1-sequence.mmd: checked against
+            real code (72 tickers, sha256 chunk_id, 70 ingested = 72 -
+            SPOT - PYPL), both already accurate. week1 is explicitly
+            labeled a historical snapshot and is correct for that point
+            in time -- left as-is, not "corrected" to the current state.
   [ ] F3. Phase 14: switch to the "Final version" resume bullets, every
           claim backed by something live
   [ ] F4. (USER) 3-minute demo video: Claude Desktop answering with citations
