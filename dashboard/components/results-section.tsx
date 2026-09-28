@@ -16,13 +16,13 @@ function ChartSkeleton() {
 
 export function ResultsSection() {
   return (
-    <section id="results" className="px-4 py-16 md:px-8">
+    <section id="results" className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
           Measured, not claimed.
         </h2>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <BaselineComparisonChart />
           </div>
@@ -31,8 +31,8 @@ export function ResultsSection() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          <div className="rounded-2xl border border-[var(--color-flagged)] p-6">
+        <div className="mt-12 grid gap-8 md:grid-cols-2">
+          <div className="border-l-2 border-[var(--color-flagged)] pl-5">
             <h3 className="font-semibold text-[var(--color-flagged)]">Where it lost</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
               On this benchmark, BM25-only retrieval alone scores <em>higher</em> than the full four-stage pipeline
@@ -43,7 +43,7 @@ export function ResultsSection() {
               open finding, not a foregone conclusion.
             </p>
           </div>
-          <div className="rounded-2xl border border-[var(--color-flagged)] p-6">
+          <div className="border-l-2 border-[var(--color-flagged)] pl-5">
             <h3 className="font-semibold text-[var(--color-flagged)]">What we can&apos;t explain yet</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
               Three ragas metrics — answer relevancy, context precision, context recall — score consistently low

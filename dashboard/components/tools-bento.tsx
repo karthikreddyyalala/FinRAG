@@ -36,7 +36,7 @@ const TOOLS = [
 
 export function ToolsBento() {
   return (
-    <section id="tools" className="px-4 py-16 md:px-8">
+    <section id="tools" className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
           Four tools, one grounded answer each.

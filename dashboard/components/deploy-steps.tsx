@@ -4,7 +4,7 @@ import { DEPLOY_STEPS } from "@/lib/deploy-steps";
 
 export function DeploySteps() {
   return (
-    <section id="deploy" className="px-4 py-16 md:px-8">
+    <section id="deploy" className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
           Deploy your own.

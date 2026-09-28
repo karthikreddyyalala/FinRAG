@@ -20,7 +20,7 @@ export function MetricsBand() {
   const companies = getMetric("companies_count");
 
   return (
-    <section className="px-4 py-16 md:px-8">
+    <section className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
           <Stat metricKey="numerical_accuracy_financebench" label="Numerical accuracy, FinanceBench 150Q" />

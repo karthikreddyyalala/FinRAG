@@ -7,7 +7,7 @@ export function HowItWorks() {
   const [mode, setMode] = useState<"technical" | "simple">("simple");
 
   return (
-    <section className="px-4 py-16 md:px-8">
+    <section className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">

@@ -15,7 +15,7 @@ const FAILURES = [
 
 export function Problem() {
   return (
-    <section className="px-4 py-16 md:px-8">
+    <section className="px-4 py-24 md:px-8">
       <div className="mx-auto grid max-w-[1400px] gap-10 md:grid-cols-[2fr_1fr]">
         <div>
           <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
