@@ -1316,7 +1316,23 @@ PHASE D -- Corpus & eval completeness
           already.
           Done when: PYPL chunks in Pinecone + FTS5, weekly refresh sees it
   [ ] D2. custom_150.json: replace VERIFY_AFTER_BOOTSTRAP placeholders
-          with verified ground truths (needs USER review of answers)
+          with verified ground truths -- IN PROGRESS on branch
+          d2-custom-150-ground-truths, 23/151 done (2026-09-28).
+          Method: SEC XBRL companyconcept API, then every number confirmed
+          by searching the filing's own HTML text for it and reading the
+          row label beside it. Q4 = 10-K full year minus Q3 10-Q 9-month
+          YTD, asserted to share the same start date.
+          Bug caught in the first pass: a 10-Q's XBRL carries the
+          prior-year comparative under the SAME fy/fp labels, so v1 took
+          last year's quarter for AAPL/NVDA/META/GOOGL (e.g. NVDA $26,044M
+          instead of $44,062M). Fix: take the max end date within the
+          filing. Also: the ASC 606 tag is sometimes a sub-line (GM
+          "Automotive" only, CVX "Sales and other operating revenues"),
+          so check the printed label, not just the tag.
+          Still open (128): JPM, XOM, UPS, GS, MS, TMUS, CMCSA (tags not
+          found); WMT/HD/COST/AVGO/QCOM/V/DIS (fiscal-year offset);
+          segment/margin/income easy rows; all medium/hard/table rows.
+          SPOT row should be dropped (20-F filer, not in corpus).
   [ ] D3. Full 300Q eval (FinanceBench 150 + custom 150), README updated
 
 PHASE E -- Public dashboard
