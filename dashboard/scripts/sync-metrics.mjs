@@ -67,6 +67,14 @@ const documented = {
     value: 0.910, display: "91.0%",
     source_file: "README.md", source_detail: "Baseline comparison table, full pipeline, FinanceBench 150Q",
   },
+  // Note: this run's faithfulness (80.1%) differs slightly from the main
+  // results table's FinanceBench faithfulness (79.4%, latest.json) — the
+  // baseline comparison table captured a separate eval run. Both are real;
+  // this one is what README's own baseline table reports for "full pipeline".
+  baseline_full_pipeline_faithfulness: {
+    value: 0.801, display: "80.1%",
+    source_file: "README.md", source_detail: "Baseline comparison table, full pipeline, FinanceBench 150Q",
+  },
   filings_count: {
     value: 1030, display: "1,030",
     source_file: "claude.md", source_detail: "chunk_cache/ count, 2026-09-28: 506 10-Q + 284 10-K + 240 8-K",

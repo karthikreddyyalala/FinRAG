@@ -10,6 +10,8 @@ import { ToolsBento } from "@/components/tools-bento";
 import { IncidentLog } from "@/components/incident-log";
 import { StackGrid } from "@/components/stack-grid";
 import { DeploySteps } from "@/components/deploy-steps";
+import { ResultsSection } from "@/components/results-section";
+import { CostLatency } from "@/components/cost-latency";
 
 export default function Home() {
   return (
@@ -25,7 +27,8 @@ export default function Home() {
         </div>
         <VerifierDemo />
         <ToolsBento />
-        <div id="results" className="h-[60vh]" />
+        <ResultsSection />
+        <CostLatency />
         <IncidentLog />
         <StackGrid />
         <DeploySteps />
