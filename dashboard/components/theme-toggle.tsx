@@ -1,24 +1,25 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { SunIcon, MoonIcon } from "@phosphor-icons/react";
-import { getStoredTheme, setStoredTheme, type Theme } from "@/lib/theme";
+import { getStoredTheme, setStoredTheme, subscribeToStoredTheme, type Theme } from "@/lib/theme";
+
+function getSnapshot(): Theme {
+  return getStoredTheme() ?? "dark";
+}
+
+function getServerSnapshot(): Theme {
+  return "dark";
+}
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const theme = useSyncExternalStore(subscribeToStoredTheme, getSnapshot, getServerSnapshot);
 
-  useEffect(() => {
-    const stored = getStoredTheme();
-    if (stored) {
-      setTheme(stored);
-      document.documentElement.setAttribute("data-theme", stored);
-    }
-  }, []);
+  if (typeof document !== "undefined") {
+    document.documentElement.setAttribute("data-theme", theme);
+  }
 
   function toggle() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    setStoredTheme(next);
+    setStoredTheme(theme === "dark" ? "light" : "dark");
   }
 
   return (

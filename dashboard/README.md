@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FinRAG MCP dashboard
 
-## Getting Started
+The public site for FinRAG MCP: landing page and eval dashboard in one place. Live at [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app).
 
-First, run the development server:
+Next.js App Router, TypeScript, Tailwind, `motion`, and Recharts. Every number on the page is pulled from `data/metrics.json` through one `<Cited>` component, so nothing is hard-coded in the UI. See the root [README.md](../README.md) and [claude.md](../claude.md) for the full project writeup.
+
+## Running it locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tests
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx vitest run
+```
 
-## Learn More
+Covers the theme storage helper, the metrics loader, and the numerical verifier (a TypeScript port of `server/retrieval/numerical_verifier.py`, tested against real cases exported from the Python original).
 
-To learn more about Next.js, take a look at the following resources:
+## Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `app/` — pages, layout, fonts, OG image, favicon, 404
+- `components/` — one file per section, plus shared pieces like `<Cited>` and the theme toggle
+- `lib/` — typed data access (metrics, recordings, verifier port) and static content (pipeline copy, incidents, deploy steps)
+- `data/` — `metrics.json` (built by `scripts/sync-metrics.mjs` from `../evals/results/`) and the three real demo recordings used in the hero replay
+- `design-system/` — the design tokens and component specs this site follows
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Updating the numbers
 
-## Deploy on Vercel
+```bash
+node scripts/sync-metrics.mjs
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Reads the real eval results from `../evals/results/` and rewrites `data/metrics.json`. Run it after a new eval, then check the diff before committing, since some values (corpus size, cost figures) are sourced from the root `claude.md` and `README.md` rather than a file this script can read directly.

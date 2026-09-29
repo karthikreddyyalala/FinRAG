@@ -63,7 +63,7 @@ sequenceDiagram
 
 ## Eval results
 
-Scored against [FinanceBench](https://huggingface.co/datasets/PatronusAI/financebench) (150 public questions with verified answers) plus a set of custom questions I wrote and verified by hand against the actual filings (`evals/eval_data/custom_150.json`, 48 done so far, the easy tier; medium, hard, and table tiers are still open, see `CLAUDE.md` Phase D2). Scored with [ragas](https://github.com/explodinggraphs/ragas) plus a custom numerical grounding verifier I wrote myself.
+Scored against [FinanceBench](https://huggingface.co/datasets/PatronusAI/financebench) (150 public questions with verified answers) plus a set of custom questions I wrote and verified by hand against the actual filings (`evals/eval_data/custom_150.json`, 48 done so far, the easy tier; medium, hard, and table tiers are still open, see `claude.md` Phase D2). Scored with [ragas](https://github.com/explodinggradients/ragas) plus a custom numerical grounding verifier I wrote myself.
 
 | Metric | FinanceBench (150Q) | Custom verified (48Q) | Combined (198Q) | What it measures |
 |---|---|---|---|---|
@@ -170,4 +170,4 @@ Claude Desktop only reads its config at launch, so after editing it you need to 
 | Public dashboard site | Done, live at the link above |
 | Observability dashboard | Done |
 
-See `CLAUDE.md` for the full build history and everything still open, including the CI faithfulness gate, the remaining custom question tiers, and the PYPL backfill.
+See `claude.md` for the full build history and everything still open, including the CI faithfulness gate, the remaining custom question tiers, and the PYPL backfill.

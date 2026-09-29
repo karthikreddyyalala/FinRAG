@@ -13,7 +13,14 @@ export function getStoredTheme(): Theme | null {
 export function setStoredTheme(theme: Theme): void {
   try {
     localStorage.setItem(KEY, theme);
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, newValue: theme }));
   } catch {
     // per-viewer convenience only; ignore write failures
   }
+}
+
+/** For useSyncExternalStore: notifies subscribers when the stored theme changes. */
+export function subscribeToStoredTheme(callback: () => void): () => void {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
 }
