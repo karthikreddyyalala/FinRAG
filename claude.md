@@ -1542,47 +1542,30 @@ DEFERRED -- revisit only if a reason appears
 - custom_150.json: easy tier verified (48 + 1 documented unanswerable);
   51 medium / 30 hard / 20 table rows still VERIFY_AFTER_BOOTSTRAP by
   deliberate scope choice (D2). run_eval.py skips unverified rows
-- RESOLVED 2026-09-28: custom-set numerical accuracy gap (86.2% vs
-  FinanceBench's 91.0%) root-caused, not left as "not yet root-caused".
-  Investigated question-by-question against evals/results/
-  custom_answers.json (free -- no new pipeline spend, just re-read
-  already-cached contexts):
-  1. ~half is a measurement artifact in evals/metrics/numerical_accuracy.py:
-     its regex parses "Q4" as the number 4. 11/48 custom questions were
-     honest, correctly-grounded refusals ("context does not provide") --
-     exactly right per Phase 9 constraint #3 -- and every one got docked
-     for a "number" (4) it never claimed. Verified directly:
-     _extract_numbers("...Q4 2025.") == [4.0, 2025.0]. Not fixed in code
-     yet (fixing the eval metric doesn't change product behavior, lower
-     priority than the real bug below) -- would need the regex to not
-     match a bare digit immediately preceded by "Q".
-  2. The rest is a REAL, reproducible retrieval bug, confirmed by reading
-     the actual retrieved chunks, not assumed: for "Q4 202X"-phrased
-     questions, the pipeline sometimes retrieves and confidently answers
-     from the WRONG FISCAL QUARTER's filing entirely -- not a
-     column-in-the-right-doc mixup. AT&T: asked for Q4 2025, answered
-     $30,626M citing [T 10-Q 2026-04-27] (a Q1 2026 filing) -- and 30,626
-     turned out to be that Q1 2026 10-Q's OWN prior-year-Q1 comparative
-     column, not even Q1 2026's figure. Merck and Disney show the
-     identical wrong-quarter pattern. Bank of America is a DIFFERENT
-     failure: retrieved the correct FY2025 10-K, but a SEGMENT subtotal
-     ("Merrill Wealth Management" + "BAC Private Bank" = $24,883M) that
-     shares the identical line label ("Total revenue, net of interest
-     expense") with the real consolidated total elsewhere in the same
-     filing -- nothing currently disambiguates segment-scope from
-     company-scope when the label text is identical.
-  3. NOT YET FIXED: A1's ticker + fiscal-year filter isn't tight enough
-     for fiscal QUARTER on some tickers (AT&T/Merck/Disney), and there's
-     no segment-vs-consolidated disambiguation (BAC). Both are real next
-     steps for hybrid_retriever.py / query_filters.py, not done here --
-     this investigation was diagnosis only, no code changed. Would need:
-     (a) extend period_window()/extract_filters() to constrain by quarter,
-     not just fiscal year, when the question says "QN"; (b) either a
-     chunking-time tag for segment-vs-consolidated scope, or a
-     generation-prompt instruction to prefer the line appearing in the
-     primary consolidated statement over a segment note.
-  README's Eval results section rewritten with this finding instead of
-  "worth investigating further" / "not root-caused".
+- ROOT-CAUSED AND PARTIALLY FIXED 2026-09-28: custom set scores lower on
+  numerical accuracy (86.2%) than FinanceBench (91.0%) despite hand-
+  verified ground truths. Investigated question-by-question against
+  evals/results/custom_answers.json (free, no new pipeline spend):
+  (1) ~half is a measurement artifact -- numerical_accuracy's regex
+  reads "Q4" as the number 4, docking 11/48 honest correct refusals for
+  a number they never claimed. Not fixed (it's the eval metric, not
+  product behavior). (2) The rest was a real bug: "Q4 <year>" questions
+  sometimes retrieved and confidently cited an entirely wrong fiscal
+  quarter's filing (AT&T/Merck/Disney each cited a Q1 2026 10-Q for a
+  Q4 2025 question). FIXED: query_filters.py now extracts a filing_type
+  ("10-K" for Q4/annual wording, "10-Q" for Q1-Q3) threaded through
+  hybrid_search()/KeywordIndex.search(). Live-verified: AT&T and Merck
+  now honestly refuse instead of citing the wrong quarter; Disney finds
+  the right filing and the verifier redacts the unstated figure instead
+  of asserting a wrong one. None of the three give the actually-correct
+  number yet -- the pipeline still doesn't compute Q4 via FY-minus-9mo
+  subtraction the way the D2 ground-truth script did by hand -- but
+  confidently-wrong -> honestly-refuses is Phase 9's real safety
+  property, not cosmetic. Bank of America's case is UNFIXED and
+  deliberately out of scope here: different root cause (a segment
+  subtotal sharing an identical line label with the consolidated total,
+  not a wrong-period retrieval). See fix-q4-wrong-quarter-retrieval
+  branch/commit for the full writeup.
 - Three ragas metrics (answer_relevancy, context_precision, context_recall)
   score 2-20% despite verified-correct retrieval; working theory is metric
   fit (terse numeric ground truth vs long table chunks), not proven

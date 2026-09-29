@@ -63,6 +63,13 @@ _FY_SHORT = re.compile(r"\bFY\s?(\d{2})\b", re.IGNORECASE)
 # so "$1577" or "12,018" never read as years.
 _YEAR = re.compile(r"(?<![\d,.$])((?:19|20)\d{2})(?![\d,])")
 
+_QUARTER = re.compile(r"\bQ([1-4])\b", re.IGNORECASE)
+# "FY2018"/"fiscal year"/"full year"/"annual" with no Qn mentioned reads the
+# same as Q4: these questions are answered off the 10-K, never a 10-Q.
+_ANNUAL_WORDING = re.compile(
+    r"\bfull[\s-]year\b|\bannual\b|\bfiscal\s+year\b|\bFY\s?\d", re.IGNORECASE
+)
+
 
 def _extract_ticker(query: str) -> str | None:
     lowered = query.lower()
@@ -77,9 +84,35 @@ def _extract_years(query: str) -> tuple[int, int] | None:
     return (min(years), max(years)) if years else None
 
 
+def _extract_filing_type(query: str) -> str | None:
+    """Q4 (or annual/FY wording with no quarter) -> 10-K, Q1-Q3 -> 10-Q.
+
+    Live bug (2026-09-28, root-caused via evals/results/custom_answers.json):
+    "AT&T total revenues in Q4 2025" retrieved and confidently cited a Q1
+    2026 10-Q's prior-year comparative column -- period_range alone let ANY
+    filing in the 2025-2026 window through, 10-Qs included. Q4 is virtually
+    never itself a separately-filed period, so a "Q4 <year>" question should
+    only ever match the annual 10-K. Merck and Disney showed the identical
+    pattern. Conservative like every other filter here: only a bare "QN"
+    match or explicit annual wording sets it; anything else returns None
+    rather than guess.
+    """
+    quarter = _QUARTER.search(query)
+    if quarter:
+        return "10-K" if quarter.group(1) == "4" else "10-Q"
+    if _ANNUAL_WORDING.search(query):
+        return "10-K"
+    return None
+
+
 def extract_filters(query: str) -> dict[str, Any]:
-    """Return {"ticker": str | None, "years": (first, last) | None}."""
-    return {"ticker": _extract_ticker(query), "years": _extract_years(query)}
+    """Return {"ticker", "years", "filing_type"} -- each str | None (or
+    "years" a (first, last) tuple | None)."""
+    return {
+        "ticker": _extract_ticker(query),
+        "years": _extract_years(query),
+        "filing_type": _extract_filing_type(query),
+    }
 
 
 def period_window(years: tuple[int, int]) -> tuple[str, str]:
