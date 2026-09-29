@@ -28,7 +28,7 @@ sequenceDiagram
         L-->>U: 401 -- before any index download, SSM, or Pinecone call
     end
     L->>SSM: GetParameters /finrag/* (first cold start only)
-    Note over L,BM: cold start only: download ~900 MB index to /tmp<br/>(temp name, renamed when complete); warm starts reuse it
+    Note over L,BM: cold start only: download ~900 MB index to /tmp<br/>(temp name, renamed when complete), warm starts reuse it
     L->>M: fresh app per invocation (MCP run() is once-per-instance)
     M->>S: search_sec_filings(query) -- stateless JSON response
 
@@ -70,7 +70,7 @@ sequenceDiagram
         RR->>RR: ms-marco-MiniLM-L-6-v2 scores each (query, chunk) pair
     else macOS + Python 3.13
         RR->>RR: lexical overlap scorer
-        Note over RR: torch deadlocks on a mutex during the first<br/>forward pass locally; blind chunks[:k] is NOT a<br/>valid fallback since BM25 and cosine scores<br/>are not comparable across sources
+        Note over RR: torch deadlocks on a mutex during the first<br/>forward pass locally, blind chunks[:k] is NOT a<br/>valid fallback since BM25 and cosine scores<br/>are not comparable across sources
     end
     RR-->>S: top 5 by relevance
 
@@ -91,4 +91,4 @@ sequenceDiagram
     S-->>M: {answer, citations[{ticker,form,period,page,text}], cost_usd, latency_ms}
     M-->>U: cited answer rendered in chat
 
-    Note over S: citations carry `text` -- the eval harness reads it<br/>as ragas `contexts`; omitting it scores every<br/>context metric as 0 against empty strings
+    Note over S: citations carry `text` -- the eval harness reads it<br/>as ragas `contexts`, omitting it scores every<br/>context metric as 0 against empty strings

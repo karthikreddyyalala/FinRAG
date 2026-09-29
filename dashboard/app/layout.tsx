@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import { cabinetGrotesk, satoshi, jetbrainsMono } from "./fonts";
 import { MotionProvider } from "@/components/motion-provider";
 
@@ -7,10 +8,7 @@ const description =
   "Cited, grounded financial intelligence over SEC filings, exposed as MCP tools any AI assistant can call.";
 
 export const metadata: Metadata = {
-  // NEXT_PUBLIC_SITE_URL should be set to the real Vercel URL once deployed
-  // (Task 22) — this fallback only resolves relative OG/Twitter image URLs
-  // during local builds and is never the real production domain.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard-weld-nine-28.vercel.app"),
   title: "FinRAG MCP",
   description,
   openGraph: {
@@ -32,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${cabinetGrotesk.variable} ${satoshi.variable} ${jetbrainsMono.variable} font-[family-name:var(--font-body)] min-h-[100dvh] bg-[var(--color-bg)] text-[var(--color-text)] antialiased`}
       >
         <MotionProvider>{children}</MotionProvider>
+        <Analytics />
       </body>
     </html>
   );

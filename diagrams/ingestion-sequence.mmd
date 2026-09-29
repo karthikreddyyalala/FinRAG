@@ -22,6 +22,8 @@ sequenceDiagram
     participant OA as OpenAI (text-embedding-3-small)
     participant PC as Pinecone (finrag-filings, 1536-dim)
     participant S3P as S3 (finrag-processed-filings)
+    participant EB as EventBridge, every 7 days
+    participant WR as weekly_refresh.py
 
     Note over B: run once locally to seed the corpus
 
@@ -32,7 +34,7 @@ sequenceDiagram
         else not yet ingested
             B->>E: get_cik_for_ticker(ticker)
             E->>E: GET sec.gov/files/company_tickers.json
-            Note over E: lists CURRENT registrants only; acquired or<br/>renamed firms (SQ->XYZ, ATVI, FL) fall back<br/>to CIK_OVERRIDES so their filings stay reachable
+            Note over E: lists CURRENT registrants only, acquired or<br/>renamed firms (SQ, ATVI, FL) fall back<br/>to CIK_OVERRIDES so their filings stay reachable
             E->>E: GET data.sec.gov/submissions/CIK{cik}.json
 
             loop for each 10-K / 10-Q
@@ -72,8 +74,6 @@ sequenceDiagram
 
     rect rgb(240, 248, 255)
     Note over B,S3P: DEPLOYED WEEKLY CRON (actual production path -- FinragIngestionStack)
-    participant EB as EventBridge (rate(7 days))
-    participant WR as weekly_refresh.py (Lambda, IngestionStack)
 
     EB->>WR: trigger
     WR->>S3P: download chunk_cache/*.json (Lambda cold start wipes local /tmp every time)

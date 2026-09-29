@@ -1,42 +1,92 @@
 # FinRAG MCP
 
-Cited, grounded financial intelligence over SEC filings, exposed as MCP tools any AI assistant can call.
+Cited, grounded financial intelligence over SEC filings, exposed as MCP tools that any AI assistant can call.
 
-The problem: ask Claude or ChatGPT a specific financial question and you get outdated training data, a hallucinated number stated with full confidence, or no citation to verify it against. FinRAG MCP grounds every answer in actual 10-K/10-Q/8-K filings pulled from SEC EDGAR, verifies every number in the answer against the retrieved source text, and cites the exact filing.
+Ask Claude or ChatGPT a specific financial question and you usually get one of three things: outdated training data, a confidently stated number that's just made up, or an answer with nothing to check it against. FinRAG MCP grounds every answer in real 10-K, 10-Q, and 8-K filings pulled straight from SEC EDGAR. It checks every number in the answer against the retrieved source text and cites the exact filing it came from.
 
-**Live site:** [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app) — landing page, the recorded-query replay, the numerical verifier ported to TypeScript and run live in your browser, and the eval results below, all in one place.
+**Live site:** [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app). It has the landing page, a replay of a real recorded query, the numerical verifier running live in your browser (ported to TypeScript), and the eval results below in one place.
 
 ## Architecture
 
-Four-stage retrieval pipeline: query rewriting (Haiku, then a deterministic GAAP line-item expansion) → parallel keyword (SQLite FTS5, BM25-ranked) + Pinecone dense search → reranking → Bedrock Sonnet generation → numerical grounding verification.
+Four stages: query rewriting (Haiku, plus a deterministic GAAP line-item expansion), parallel keyword search (SQLite FTS5, BM25-ranked) and Pinecone dense search, reranking, then Bedrock Sonnet generation with a numerical grounding check at the end.
 
-- [`diagrams/ingestion-sequence.mmd`](diagrams/ingestion-sequence.mmd) — corpus build: EDGAR → chunking → embedding → Pinecone/BM25
-- [`diagrams/query-sequence.mmd`](diagrams/query-sequence.mmd) — the retrieval pipeline above, per query
+**Query pipeline** (see `diagrams/query-sequence.mmd` for the full version with every fix and bug fix annotated):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as MCP Client
+    participant S as search_filings.py
+    participant QF as query_filters.py
+    participant QR as query_rewriter.py
+    participant HR as hybrid_retriever.py
+    participant RR as reranker.py
+    participant AG as answer_generator.py
+    participant NV as numerical_verifier.py
+
+    U->>S: search_sec_filings(query)
+    S->>QF: extract ticker + fiscal year from the question itself
+    S->>QR: rewrite_query(query) -- Haiku expands tickers, adds GAAP terms
+    S->>HR: hybrid_search(rewritten, ticker, period) -- BM25 + Pinecone in parallel
+    HR-->>S: up to 20 candidates, merged and deduped
+    S->>RR: rerank(original query, candidates, top_k=5)
+    S->>AG: generate_answer(query, top_chunks) -- Sonnet, cites every claim
+    S->>NV: verify_answer(answer, source_texts) -- checks every number by value
+    NV-->>S: verified answer, ungrounded figures replaced with a qualifier
+    S-->>U: cited answer
+```
+
+**Ingestion pipeline** (see `diagrams/ingestion-sequence.mmd` for the full version, including the weekly EventBridge refresh that diffs EDGAR instead of re-ingesting everything):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as bootstrap_corpus.py
+    participant E as edgar_client.py
+    participant H as html_processor.py
+    participant C as chunker.py
+    participant Sy as sync_pinecone.py
+    participant PC as Pinecone
+
+    loop for each ticker
+        B->>E: download 10-K / 10-Q filings from EDGAR
+        E-->>H: raw filing HTML
+        H->>H: BeautifulSoup + pandas, text and tables separately
+        H-->>C: text blocks, tables, metadata
+        C->>C: hierarchical chunking, content-addressed chunk IDs
+        C-->>Sy: chunks
+        Sy->>Sy: embed with OpenAI, batch by token count
+        Sy->>PC: upsert with metadata
+    end
+    B->>B: rebuild the BM25 keyword index over the full corpus
+```
 
 ## Eval results
 
-Scored against [FinanceBench](https://huggingface.co/datasets/PatronusAI/financebench) (150 public questions with verified ground truth) plus a growing set of independently-verified custom questions (`evals/eval_data/custom_150.json` — 48 verified so far, easy tier complete; medium/hard/table tiers still open, see `CLAUDE.md` Phase D2), using [ragas](https://github.com/explodinggraphs/ragas) plus a custom numerical-grounding verifier.
+Scored against [FinanceBench](https://huggingface.co/datasets/PatronusAI/financebench) (150 public questions with verified answers) plus a set of custom questions I wrote and verified by hand against the actual filings (`evals/eval_data/custom_150.json`, 48 done so far, the easy tier; medium, hard, and table tiers are still open, see `CLAUDE.md` Phase D2). Scored with [ragas](https://github.com/explodinggraphs/ragas) plus a custom numerical grounding verifier I wrote myself.
 
 | Metric | FinanceBench (150Q) | Custom verified (48Q) | Combined (198Q) | What it measures |
 |---|---|---|---|---|
-| **Numerical accuracy** | **91.0%** | 86.2% | **89.9%** | % of numbers in generated answers that appear verbatim in the retrieved source chunks. Our own deterministic verifier — not LLM-judged. |
+| **Numerical accuracy** | **91.0%** | 86.2% | **89.9%** | Percent of numbers in generated answers that appear verbatim in the retrieved source chunks. My own deterministic verifier, not LLM-judged. |
 | **Faithfulness** | **79.4%** | **85.4%** | **80.2%** | Ragas: does the answer only make claims supported by the retrieved context. |
 | Answer relevancy | 15.6% | 16.3% | 16.2% | Ragas: does the answer address the question asked. |
 | Context precision | 20.3% | 3.1% | 15.3% | Ragas: are the retrieved chunks actually relevant to the question. |
 | Context recall | 9.5% | 2.1% | 8.9% | Ragas: did retrieval capture everything needed to answer. |
 
-**Read this honestly, not selectively.** Numerical accuracy and faithfulness are the two metrics with no ambiguity in what they measure, and both are strong on both datasets. The custom set scores *lower* on numerical accuracy (86.2% vs. 91.0%), and unlike the ragas metrics below, this one **is root-caused** — traced question by question against the actual retrieved chunks (2026-09-28), not left as an open question:
+A few things worth being upfront about instead of glossing over.
 
-1. **~half of the gap is a measurement artifact, not a retrieval failure.** `numerical_accuracy`'s regex reads `Q4` as the number `4`. 11 of the 48 custom questions got an honest, correctly-grounded refusal ("the context does not provide...") — exactly what Phase 9's constraint #3 requires — and every one was still docked for a "number" (`4`) the answer never claimed. Confirmed directly: `_extract_numbers("...Q4 2025.")` returns `[4.0, 2025.0]`.
-2. **The rest is a real, reproducible retrieval bug, not a dataset artifact.** For "Q4 202X"-phrased questions specifically, the pipeline sometimes retrieves and confidently cites the *wrong fiscal quarter's filing* — not a column mix-up, an entirely different document. Confirmed by reading the actual retrieved chunks: asked for AT&T's Q4 2025 revenue, it answered from a Q1 2026 10-Q's prior-year comparative column ($30,626M, cited as `[T 10-Q 2026-04-27]`); Merck and Disney show the identical pattern, each citing a Q1 FY2026 10-Q for a Q4 FY2025 question. A fourth case (Bank of America) is a different failure: it retrieved the *correct* FY2025 10-K but a *segment* subtotal ("Merrill Wealth Management" + "BAC Private Bank" = $24,883M) that shares the identical line label ("Total revenue, net of interest expense") with the consolidated total elsewhere in the same filing.
+Numerical accuracy and faithfulness are the two metrics I trust the most, since there's no ambiguity in what they measure, and both look solid on both datasets. But the custom set actually scores lower on numerical accuracy (86.2% vs 91.0%) even though every one of its answers was hand-verified against the real filing text. I traced this down instead of leaving it as a mystery:
 
-Not yet fixed in code — A1's ticker + fiscal-year filter evidently isn't tight enough for the fiscal *quarter* on some tickers, and nothing currently disambiguates a segment subtotal from a consolidated total sharing the same line label. Both are real next steps, not swept under "ragas is unreliable."
+1. About half the gap is just a measurement bug, not a real retrieval failure. The regex that extracts numbers from an answer reads "Q4" as the number 4. Eleven of the 48 custom questions got an honest, correctly grounded refusal ("the context does not provide..."), exactly what the system is supposed to do when it can't find the number, and each one still got docked for a "number" the answer never actually claimed.
+2. The rest is a real, reproducible retrieval bug. For questions phrased like "Q4 202X," the pipeline sometimes retrieves and cites the wrong fiscal quarter's filing entirely, not just a column mix-up in the same document. I confirmed this by reading the retrieved chunks directly: asked for AT&T's Q4 2025 revenue, it answered from a Q1 2026 10-Q's prior-year comparative column instead. Merck and Disney show the same pattern. A separate case with Bank of America pulled the right filing but the wrong number inside it, a segment subtotal that shares the exact same line label as the consolidated total elsewhere in the filing.
 
-The three ragas relevance/precision/recall metrics remain a genuinely open question, separate from the numerical-accuracy finding above: they scored consistently low (2–20%) across every complete run of this eval, including after independently verifying that retrieval finds the exact correct source chunk and number for spot-checked questions (see `diagrams/query-sequence.mmd` for the FY2018 3M capex case that motivated several of the fixes below). The working theory is that ragas's LLM-judged relevance/precision/recall metrics are a poor fit for this task shape — terse numeric ground truths (`"$1577.00"`) scored against long, pipe-delimited financial table chunks — rather than a sign retrieval is actually failing 80–95% of the time. Unlike the numerical-accuracy gap, this one is stated as an open question because it hasn't been traced to a specific, reproducible cause the way the above was.
+Neither of these is fixed in code yet. The fiscal-year filter isn't tight enough for fiscal *quarter* on some tickers, and nothing currently tells a segment subtotal apart from a consolidated total with the same label. Both are real next steps.
+
+The three ragas metrics (relevancy, precision, recall) are a separate, genuinely open question. They score low across every complete eval run, even after I manually confirmed that retrieval finds the exact right chunk and number for spot-checked questions (see the 3M capex example in `diagrams/query-sequence.mmd`). My working theory is that ragas's LLM-judged metrics just don't fit this task well: short numeric ground truths scored against long financial table chunks. I haven't traced this one to a specific cause the way I did the numerical accuracy gap, so I'm leaving it as an open question rather than pretending I've solved it.
 
 ### Baseline comparison
 
-Same 150 FinanceBench questions, three retrieval configurations. Baselines run with no query rewriting and no CrossEncoder/lexical reranking — Baseline A takes Pinecone's raw top-k dense matches, Baseline B takes the keyword index's raw top-k BM25 matches, both straight into generation.
+Same 150 FinanceBench questions, three retrieval setups. The baselines skip query rewriting and reranking: Baseline A takes Pinecone's raw dense matches, Baseline B takes the keyword index's raw BM25 matches, both straight into generation.
 
 | Metric | Baseline A (dense only) | Baseline B (BM25 only) | Full pipeline |
 |---|---|---|---|
@@ -46,48 +96,45 @@ Same 150 FinanceBench questions, three retrieval configurations. Baselines run w
 | Context precision | 14.1% | 14.2% | 20.0% |
 | Context recall | 10.8% | 14.1% | **11.3%** |
 
-**Read honestly:** on this benchmark, BM25-only retrieval alone scores *higher* than the full four-stage pipeline on numerical accuracy and faithfulness. FinanceBench's questions are largely verbatim-keyword-friendly ("FY2018 capital expenditure" appears close to how the filing states it once GAAP-synonym expansion isn't needed to match), which favors lexical search directly. What the full pipeline demonstrably buys over dense-only search is the +4.5pt numerical accuracy and +2.9pt context recall gap versus Baseline A — hybrid retrieval and query rewriting help most exactly where dense embeddings alone miss a keyword-heavy, jargon-laden financial term. Whether the added complexity (rewrite + hybrid + rerank) is worth it over BM25 alone specifically for FinanceBench-style questions is an open, honest finding, not a foregone conclusion — a harder or more paraphrased query set would likely widen the gap in the full pipeline's favor.
+Plain keyword search beats the full four-stage pipeline on this particular benchmark. FinanceBench's questions are worded close to how the filings themselves say things, so lexical search does well on its own. What the full pipeline clearly buys over dense-only search is the jump in numerical accuracy and context recall versus Baseline A: hybrid retrieval and rewriting help most exactly where a plain embedding misses a jargon-heavy financial term. Whether the extra complexity is worth it over BM25 alone, for FinanceBench-style questions specifically, is an open question. A harder or more paraphrased set of questions would probably favor the full pipeline more.
 
-One real bug surfaced by running Baseline B: unlike the full pipeline, BM25-only retrieval has no dense/rerank pass to screen out an oversized match, and `chunker.py` exempts table chunks from its ~1500-word target (one table = one chunk, regardless of size). A large schedule table blew Sonnet's context window outright (`ValidationException: Input is too long for requested model`) at question 91/150. Fixed at the shared `generate_answer()` call, not per-baseline, since any retrieval path can hand it an oversized chunk — see `server/generation/answer_generator.py`'s `MAX_CHUNK_CHARS` cap.
+One real bug came up while running Baseline B: unlike the full pipeline, BM25-only has no reranking pass to screen out an oversized chunk, and the chunker doesn't cap table chunks the way it caps text chunks. A large schedule table blew past Sonnet's context window on question 91 of 150. Fixed once, in the shared `generate_answer()` call, since any retrieval path can hand it an oversized chunk.
 
-### Cost & latency
+### Cost and latency
 
-Measured on the same fixed set of 15 FinanceBench questions run individually against production dependencies (real Bedrock/OpenAI/Pinecone, not mocked), logged to DynamoDB via `server/observability/logger.py`. `cost_usd` is a text-length token estimate (~4 chars/token), not exact provider billing — directionally right for before/after, not a substitute for the OpenAI/AWS billing consoles.
+Measured on a fixed set of 15 FinanceBench questions, run individually against the real Bedrock, OpenAI, and Pinecone dependencies (not mocked), logged to DynamoDB. `cost_usd` is a text-length token estimate, not exact provider billing, so it's directionally right for a before/after comparison but not a substitute for the actual billing console.
 
-| | Before (pre-cache/routing) | After (C3–C5 applied) |
+| | Before caching and routing | After |
 |---|---|---|
-| Avg cost/query | $0.013677 | $0.012586 |
+| Avg cost per query | $0.013677 | $0.012586 |
 | Avg latency | 24,109 ms | 24,074 ms |
 
-**Read honestly:** both numbers moved only slightly, and that's expected, not a shortfall — this set exercises `search_sec_filings` only, which is the one tool C3–C5's changes mostly don't touch. C3 (Bedrock prompt caching) was evaluated and deliberately not applied — the system prompt is under Sonnet's 1,024-token caching minimum, and a cold 5-minute-TTL cache at this query rate would cost *more* per miss (1.25x input price) than no caching. C5's model-tier routing (Haiku for single-metric lookups) only applies to `get_company_financials`/`compare_companies`, not `search_sec_filings` — there it's real: MMM FY2018 capex answered identically on both tiers at ~1/3 the cost ($0.002472 vs $0.007415), live-verified. C4's query result cache only pays off on a *repeat* identical question within 24h; this set is 15 distinct fresh questions by design (to match C2's baseline method), so it shows zero cache hits here — its live-verified effect on a repeat query is a hit at $0.0 / 67ms versus a miss at $0.007445 / 23,209ms. The honest summary: caching and routing work, demonstrated on the paths they apply to, but this particular before/after set doesn't isolate them.
+Both numbers barely moved, and that's expected rather than a letdown. This particular test set only exercises `search_sec_filings`, which is the one tool the caching and model-routing changes mostly don't touch. Bedrock prompt caching was evaluated and skipped on purpose: the system prompt is under Sonnet's 1,024-token caching minimum, and a cold cache at this query rate would cost more per miss than no caching at all. Model-tier routing (Haiku for single-metric lookups) does help where it applies, `get_company_financials` answered identically on Haiku at about a third of the cost of Sonnet in a live comparison. The query result cache also works as intended, a repeat question within 24 hours hits in about 67ms instead of 23 seconds, but this particular 15-question set is deliberately all distinct questions, so it shows zero cache hits by design.
 
 ### Corpus coverage
 
-- 70 of 72 target companies ingested: 1,030 filings (506 10-Q, 284 10-K, 240 8-K), 164,092 chunks. 2018–2026 depth for the 31 ingested companies FinanceBench asks about, 2025–2026 for the other 39
-- **SPOT** (Spotify) has no 10-K/10-Q filings — it's a foreign private issuer that files Form 20-F, outside this project's scope by design
-- **PYPL** is temporarily absent — Pinecone's free-tier monthly write-unit cap (2M) was exhausted mid-project; a retry on 2026-09-25 hit the same cap, so check the Pinecone dashboard for the real reset date before retrying. Costs exactly 1 FinanceBench question.
+- 70 of 72 target companies ingested: 1,030 filings (506 10-Q, 284 10-K, 240 8-K), 164,092 chunks. Full 2018 to 2026 depth for the 31 companies FinanceBench asks about, 2025 to 2026 for the rest.
+- Spotify (SPOT) has no 10-K or 10-Q filings. It's a foreign private issuer that files Form 20-F instead, which is outside this project's scope by design.
+- PayPal (PYPL) is temporarily missing. Pinecone's free-tier monthly write cap ran out mid-project. Costs exactly one FinanceBench question.
 
 ### Question coverage
 
-Of the 150 FinanceBench questions: 112 ask about 10-K filings, 15 about 10-Q, 9 about 8-K — all in scope and ingested. **14 ask about earnings-call transcripts**, which this project deliberately does not ingest (third-party transcript copyright — see `CLAUDE.md` Phase 6). Realistic ceiling given current scope: 135/150 (90%), before the PYPL gap.
+Of the 150 FinanceBench questions: 112 ask about 10-K filings, 15 about 10-Q, 9 about 8-K, all in scope. 14 ask about earnings call transcripts, which this project doesn't ingest on purpose (third-party transcript copyright). Realistic ceiling given the current scope is about 135 of 150, plus the one PYPL question.
 
 ## Deployment
 
-Live on AWS Lambda behind a Function URL — one MCP-compatible endpoint, no API Gateway (its 29 s integration timeout is too short for a cold-start index download).
+Runs on AWS Lambda behind a Function URL. No API Gateway, since its 29 second timeout is too short for a cold-start index download.
 
-- **Runtime:** Python 3.13, arm64/Graviton, 2048 MB, 2 min timeout, 2 GB ephemeral storage for the ~900 MB keyword index in `/tmp`
-- **Auth:** Cognito OAuth 2.1/PKCE only, checked before any cold-start work (secrets download, Pinecone connect) so an unauthenticated probe costs nothing. (An interim static bearer token existed during early deployment and was retired once Cognito login was verified end to end from a real client.)
-- **Secrets:** SSM Parameter Store SecureStrings, resolved at runtime; only parameter *names* appear in the CDK template, never values
-- **IAM:** scoped to the keyword-index S3 prefix, the `/finrag/*` SSM path, and Anthropic Bedrock models — no wildcards
-- **Bundling:** local pip install for the Lambda platform (no Docker); ships only the server's runtime deps, ~79 MB, well under the 250 MB zip limit
-- **Cost at rest:** $0 — Lambda bills only on invocation, well within the free tier for personal use
-- **Known limit:** this AWS account's concurrent-execution ceiling is 10 (below the standard 1000 default — a new-account throttle, same one that capped available EC2 instance types earlier in this project). Two clients invoking at the same instant can trip a transient 429; a Service Quotas increase request was rejected because it only accepts values *above* the service default, not a restore from a below-default account override. Fine for personal/demo use; would need an AWS Support ticket before any real concurrent load.
+- **Runtime:** Python 3.13, arm64, 2048 MB, 2 minute timeout, 2 GB of ephemeral storage for the roughly 900 MB keyword index that gets cached in `/tmp`.
+- **Auth:** Cognito OAuth 2.1 with PKCE, and it's the only accepted credential. Verified end to end from a real client (Claude Desktop, not just curl). Checked before any cold-start work happens, so an unauthenticated request costs nothing.
+- **Secrets:** SSM Parameter Store, resolved at runtime. Only parameter names live in the CDK template, never values.
+- **IAM:** scoped to the exact S3 prefix, SSM path, and Bedrock models it needs. No wildcards.
+- **Bundling:** local pip install for the Lambda platform, no Docker. About 79 MB, well under the zip limit.
+- **Cost at rest:** $0. Lambda only bills on invocation.
+- **Observability:** a CloudWatch dashboard graphs invocations, errors, and latency. Per-query LLM cost is tracked separately in DynamoDB, one row per query.
+- **Known limit:** this AWS account has a concurrency ceiling of 10, below the usual default of 1000, since it's a newer account. Fine for personal or demo use, would need a support ticket before any real concurrent load.
 
-Verified end to end in a real client (Claude Desktop, not just curl): asked the canonical FinanceBench capex question, got back the correct number, correctly explained the accounting sign convention, and cited the right filing — matching the local pipeline exactly.
-
-**Connecting a client:** clients that support remote HTTP/SSE servers natively (`{"url": ..., "headers": {...}}` in their MCP config) can point straight at the Function URL. Claude Desktop's local build does not — its config only accepts local `command`/`args` (stdio) servers, so remote servers need a bridge. [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) does this.
-
-**Cognito OAuth 2.1/PKCE is the only accepted credential** — a single-user Cognito pool, a public PKCE app client (no client secret), and the `/.well-known/oauth-protected-resource` discovery endpoint a client needs to find it are all live and verified end to end in Claude Desktop. (An earlier interim static bearer token was retired once that login flow was confirmed working from a real client — see `CLAUDE.md` Phase 11, item A3.)
+**Connecting a client:** clients that support remote HTTP servers natively can point straight at the Function URL. Claude Desktop's local build can't (it only speaks stdio), so it needs a bridge. [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) does that job.
 
 ```json
 {
@@ -105,33 +152,22 @@ Verified end to end in a real client (Claude Desktop, not just curl): asked the 
 }
 ```
 
-**Why not just drop `--header-file` and let `mcp-remote` discover everything on its own** (the original plan): `mcp-remote` defaults to OAuth Dynamic Client Registration (RFC 7591), which Cognito doesn't support — it only works with a pre-registered app client, hence `--static-oauth-client-info` pointing at the one this stack creates.
+A couple of things that only showed up once I actually tried logging in, not just deploying: `mcp-remote` defaults to OAuth dynamic client registration, which Cognito doesn't support, so it needs `--static-oauth-client-info` pointing at a pre-registered app client. Cognito's discovery metadata also never lists custom scopes, so without pinning `scope` explicitly, login succeeds but every request comes back 401. And since this is a public PKCE client with no secret, `token_endpoint_auth_method` has to be set to `none` or `mcp-remote` tries to authenticate with a secret that doesn't exist.
 
-Two more bugs only showed up live, past that first one:
-- Cognito's hosted UI returned a bare "An error was encountered with the requested page" with no explanation. Root cause: `mcp-remote` derives its local OAuth callback port from a hash of the server URL (`11164` for this Function URL, not a fixed default), and the CDK-registered callback URL had a different, guessed port (`8090`). Fixed by reading the actual port from `mcp-remote`'s own log and registering that.
-- Then `invalid_request - invalid_scope`: the app client only allowed our custom `finrag/invoke` scope, but `mcp-remote`'s default authorize request always asks for `openid email phone profile` too, and Cognito rejects the whole request if any requested scope isn't explicitly allowed. Fixed by adding the four standard OIDC scopes to the app client.
+Claude Desktop only reads its config at launch, so after editing it you need to fully quit the app (not just close the window) before it picks up the change.
 
-Two more client-side settings, both in `--static-oauth-client-metadata`:
-- `scope`: `mcp-remote` picks scopes from Cognito's discovery metadata, which only lists the standard OIDC ones — never custom resource-server scopes. Without pinning `finrag/invoke`, login succeeds but every request gets a 401, and `mcp-remote` deletes the cached token and gives up.
-- `token_endpoint_auth_method: none`: Cognito's metadata only advertises `client_secret_basic/post`, so `mcp-remote` would try to authenticate the token exchange with a secret this public PKCE client doesn't have.
-
-Claude Desktop reads this config only at launch — after editing it, fully quit (Cmd+Q), don't just close the window.
-
-First login prompts you to set a permanent password for `karthikreddyy386@gmail.com`. Once you've confirmed it works end to end in Claude Desktop, the static token path gets retired.
-
-**Observability:** `infra/stacks/observability_stack.py` deploys a CloudWatch dashboard (`finrag-mcp-server`) graphing the Lambda's invocations, errors, p50/p99 duration, and an estimated hourly compute cost (duration × memory × on-demand price). Per-query LLM cost (Bedrock/OpenAI) is tracked separately, per-row, in DynamoDB `finrag-query-logs` — not duplicated here as a custom metric, since nothing on a dashboard can act on it faster than the existing `aws dynamodb scan` already does.
-
-## What's built vs. what's next
+## What's built and what's left
 
 | | Status |
 |---|---|
-| Ingestion pipeline (EDGAR → chunk → embed → Pinecone/FTS5) | Done |
-| Four-stage retrieval + numerical verification | Done |
+| Ingestion pipeline (EDGAR to chunk to embed to Pinecone/FTS5) | Done |
+| Four-stage retrieval and numerical verification | Done |
 | Eval harness (FinanceBench, ragas, CI gate) | Done |
-| AWS deployment (Lambda + Function URL) | **Done** — see Deployment above |
-| All 4 MCP tools (search, financials, compare, latest filing) | **Done** — live-tested |
-| Cognito OAuth 2.1/PKCE | **Deployed, dual-accept** — see below; needs a human login to confirm |
-| EventBridge weekly refresh | **Deployed** — diffs EDGAR against cache, ingests only what's new |
-| Observability dashboard | Not started |
+| AWS deployment (Lambda + Function URL) | Done |
+| All four MCP tools (search, financials, compare, latest filing) | Done, live-tested |
+| Cognito OAuth 2.1/PKCE | Done, verified end to end |
+| EventBridge weekly refresh | Deployed, not yet run in production |
+| Public dashboard site | Done, live at the link above |
+| Observability dashboard | Done |
 
-See `CLAUDE.md` for the full week-by-week build plan and current state.
+See `CLAUDE.md` for the full build history and everything still open, including the CI faithfulness gate, the remaining custom question tiers, and the PYPL backfill.
