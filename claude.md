@@ -848,17 +848,20 @@ RESOLVED 2026-09-25: GitHub Actions CI was red on main from 07:58 UTC
   passing) before pushing either fix, then confirmed green on the actual
   Actions run.
 
-Where we are (updated 2026-09-28, end of session): A, B, C1-C7 DONE and
-  deployed. D1 blocked (Pinecone cap). D2 stopped at the easy tier by user
-  choice. D3 DONE (198Q). F2 (all 4 diagrams) and F3 (resume bullets +
-  interview story, 4 false claims fixed) DONE.
-  Branch d2-custom-150-ground-truths holds 9 commits NOT yet on main
-  (rebased onto main 2026-09-28, clean) -- user merges via GitHub:
-  https://github.com/karthikreddyyalala/FinRAG/compare/main...d2-custom-150-ground-truths
-  NEXT = Phase E: public website (landing page + eval dashboard) in
-  dashboard/, deployed to Vercel -- being started in a fresh chat.
-  Then F1 (README final pass, link the site). See "Known gaps" below
-  for everything else still open.
+Where we are (updated 2026-09-28, later same day): A, B, C1-C7, D1(blocked),
+  D2(stopped at easy tier by choice), D3, E1, E2, F2, F3 all DONE.
+  d2-custom-150-ground-truths was merged to main. website-phase-e (the
+  public site, built in a separate session) was PR'd and merged to main
+  too, then deployed to Vercel: https://dashboard-weld-nine-28.vercel.app
+  (live, verified 200, linked from README).
+  NEXT = F1 (final README pass) is largely done as a side effect of E2's
+  README link; worth one more read-through for staleness. Otherwise see
+  "Known gaps" below for everything still open (CI faithfulness gate,
+  D2 medium/hard/table tiers, PYPL backfill, the three low ragas metrics,
+  and -- new from the site build -- no real Lighthouse/screenshot
+  verification was done on dashboard/, since no browser tool was available
+  in that session; only build output, rendered HTML, and computed
+  contrast ratios).
   `git push` works from this environment as of 2026-09-28 (it failed
   earlier the same day; `gh` is still NOT authenticated).
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
@@ -1468,10 +1471,18 @@ PHASE E -- Public dashboard
           This is a real gap against the original "screenshot-verify at
           3 widths x 2 themes, Lighthouse >= 90" bar -- flagged here, not
           silently dropped.
-  [ ] E2. Deploy to Vercel (user connects the repo; Root Directory=
-          dashboard, framework preset Next.js), link from README once a
-          real URL exists -- not done yet, branch not merged/pushed to a
-          state the user has deployed from.
+  [x] E2. Deploy to Vercel -- DONE 2026-09-28. website-phase-e PR'd and
+          merged to main by the user (not pushed direct, per standing
+          rule), then deployed via the Vercel dashboard: Root Directory=
+          dashboard, framework preset Next.js, branch main, default
+          build/install commands. Live: https://dashboard-weld-nine-28.vercel.app
+          (verified: 200 response). Linked from README's opening section.
+          One real snag hit and fixed along the way: Vercel's root-
+          directory picker reads the file tree from the repo's default
+          branch -- since dashboard/ only existed on website-phase-e at
+          first, it didn't show up in the picker until the PR was merged
+          to main. Resolved by merging first rather than fighting the
+          picker.
 
 PHASE F -- Launch & polish (Week 6)
   [ ] F1. Final README pass: architecture diagram, setup, results, costs

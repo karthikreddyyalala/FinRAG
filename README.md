@@ -4,6 +4,8 @@ Cited, grounded financial intelligence over SEC filings, exposed as MCP tools an
 
 The problem: ask Claude or ChatGPT a specific financial question and you get outdated training data, a hallucinated number stated with full confidence, or no citation to verify it against. FinRAG MCP grounds every answer in actual 10-K/10-Q/8-K filings pulled from SEC EDGAR, verifies every number in the answer against the retrieved source text, and cites the exact filing.
 
+**Live site:** [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app) — landing page, the recorded-query replay, the numerical verifier ported to TypeScript and run live in your browser, and the eval results below, all in one place.
+
 ## Architecture
 
 Four-stage retrieval pipeline: query rewriting (Haiku, then a deterministic GAAP line-item expansion) → parallel keyword (SQLite FTS5, BM25-ranked) + Pinecone dense search → reranking → Bedrock Sonnet generation → numerical grounding verification.
