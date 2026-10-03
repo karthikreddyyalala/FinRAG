@@ -147,7 +147,7 @@ and 67ms.
 There are four `.mmd` files. Do not show all four. Pick based on what they
 asked.
 
-### `diagrams/query-sequence.mmd` — your default
+### `diagrams/query-sequence.mmd`: your default
 **Show this one for almost every question.** It's the per-query pipeline:
 auth, cache, filters, rewrite, hybrid retrieval, rerank, generate, verify,
 log. It also has notes embedded explaining three real bugs, which gives you
@@ -156,18 +156,18 @@ natural places to go deeper if they're interested.
 Use it when they ask: how does it work, walk me through a request, where does
 the LLM fit, how do you prevent hallucination.
 
-### `diagrams/ingestion-sequence.mmd` — the data pipeline
+### `diagrams/ingestion-sequence.mmd`: the data pipeline
 Show this when they ask about data engineering, scale, how you got the
 filings, how you keep it fresh, or what happens when a company files
 something new. It covers both the one-time corpus build and the weekly
 refresh cron.
 
-### `diagrams/week3-eval-sequence.mmd` — the eval harness
+### `diagrams/week3-eval-sequence.mmd`: the eval harness
 Show this when they ask how you know it works, how you measure quality, or
 about testing and CI. This is the one that separates you from people who
 built a demo, so don't skip it if evaluation comes up.
 
-### `diagrams/week1-sequence.mmd` — do not show
+### `diagrams/week1-sequence.mmd`: do not show
 It's a deliberately preserved historical snapshot of the Week 1 architecture.
 It's accurate for that point in time and wrong about the current system.
 It exists to show evolution, not current state. If you show it by accident
