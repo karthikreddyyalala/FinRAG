@@ -1,4 +1,5 @@
 import { HeroReplay } from "@/components/hero-replay";
+import { Cited } from "@/components/cited";
 
 export function Hero() {
   return (
@@ -19,8 +20,8 @@ export function Hero() {
             Financial answers you can check.
           </h1>
           <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-[var(--color-muted)]">
-            FinRAG MCP gives Claude, Cursor, or any MCP client answers grounded in 1,030 SEC filings, and flags
-            any number it can&apos;t find in the source.
+            FinRAG MCP gives Claude, Cursor, or any MCP client answers grounded in{" "}
+            <Cited metric="filings_count" /> SEC filings, and flags any number it can&apos;t find in the source.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
