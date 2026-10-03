@@ -5,7 +5,7 @@ const FAILURES = [
   },
   {
     title: "Invented numbers",
-    body: "Ask for a specific figure and you get one — stated with full confidence, sourced from nothing.",
+    body: "Ask for a specific figure and you get one, stated with full confidence and sourced from nothing.",
   },
   {
     title: "No citation",

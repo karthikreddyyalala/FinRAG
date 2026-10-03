@@ -10,7 +10,7 @@ const TOOLS = [
   },
   {
     name: "get_company_financials",
-    description: "Targeted lookup for a known ticker, metric, and period. Routed to Haiku — ~3x cheaper on a spot-check.",
+    description: "Targeted lookup for a known ticker, metric, and period. Routed to Haiku, about 3x cheaper on a spot-check.",
     request: { ticker: "MMM", metric: "capital_expenditure", period: "FY2018" },
     response: { answer: "$1,577 million", citation: "MMM 10-K 2019-02-07" },
     span: "",

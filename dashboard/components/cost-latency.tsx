@@ -22,7 +22,7 @@ export function CostLatency() {
 
         <div className="mt-8 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           <h3 className="font-semibold text-[var(--color-text)]">
-            The cache race — {speedup}x faster on a repeat question
+            The cache race: {speedup}x faster on a repeat question
           </h3>
           <div className="mt-6 space-y-4">
             <div>

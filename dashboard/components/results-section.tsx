@@ -36,8 +36,8 @@ export function ResultsSection() {
             <h3 className="font-semibold text-[var(--color-flagged)]">Where it lost</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
               On this benchmark, BM25-only retrieval alone scores <em>higher</em> than the full four-stage pipeline
-              on numerical accuracy and faithfulness. FinanceBench&apos;s questions are largely keyword-friendly —
-              close to how filings actually word things — which favors lexical search directly. What the full
+              on numerical accuracy and faithfulness. FinanceBench&apos;s questions are largely keyword-friendly,
+              close to how filings actually word things, which favors lexical search directly. What the full
               pipeline demonstrably buys over dense-only search is a real gap in numerical accuracy and context
               recall; whether the added complexity is worth it specifically for FinanceBench-style questions is an
               open finding, not a foregone conclusion.
@@ -46,7 +46,7 @@ export function ResultsSection() {
           <div className="border-l-2 border-[var(--color-flagged)] pl-5">
             <h3 className="font-semibold text-[var(--color-flagged)]">What we can&apos;t explain yet</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
-              Three ragas metrics — answer relevancy, context precision, context recall — score consistently low
+              Three ragas metrics (answer relevancy, context precision, context recall) score consistently low
               (2–20%) across every complete eval run, including after independently verifying that retrieval finds
               the exact correct source chunk and number for spot-checked questions. The working theory is that
               ragas&apos;s LLM-judged metrics are a poor fit for this task shape: terse numeric ground truths scored

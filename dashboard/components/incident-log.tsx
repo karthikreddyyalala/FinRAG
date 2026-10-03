@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { BugIcon } from "@phosphor-icons/react";
 import { INCIDENTS } from "@/lib/incidents";
 
@@ -10,9 +11,15 @@ export function IncidentLog() {
           Bugs that looked like answers.
         </h2>
         <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
-          Financial RAG fails quietly — a wrong number looks exactly like a right one until you check it. These are
+          Financial RAG fails quietly. A wrong number looks exactly like a right one until you check it. These are
           real bugs from building this system, not hypotheticals.
         </p>
+        <Link
+          href="/blog/bugs-that-looked-like-answers"
+          className="mt-4 inline-flex cursor-pointer items-center gap-1.5 text-sm text-[var(--color-grounded)] underline underline-offset-4 transition-opacity duration-200 hover:opacity-80"
+        >
+          Read the full write-up on these bugs
+        </Link>
 
         <div className="mt-12 divide-y divide-[var(--color-border)]">
           {INCIDENTS.map((incident) => (

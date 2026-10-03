@@ -10,7 +10,7 @@ export function DeploySteps() {
           Deploy your own.
         </h2>
         <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
-          The deployed server behind this page is single-user — there&apos;s no public endpoint to connect to.
+          The deployed server behind this page is single-user, so there&apos;s no public endpoint to connect to.
           These are the exact steps to run your own.
         </p>
         <ol className="mt-8 space-y-4">

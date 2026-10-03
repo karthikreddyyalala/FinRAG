@@ -16,7 +16,7 @@ export const PIPELINE_COPY = [
   {
     id: "filters",
     stage: "Ticker + fiscal-year filters",
-    technical: "The rewriter extracts a ticker and fiscal year, passed as metadata filters to Pinecone and the FTS5 index — this is what stops a 2018 answer being drowned out by near-identical 2022 filings.",
+    technical: "The rewriter extracts a ticker and fiscal year, passed as metadata filters to Pinecone and the FTS5 index. This is what stops a 2018 answer being drowned out by near-identical 2022 filings.",
     simple: "We figure out which company and which year you actually mean.",
   },
   {
@@ -29,7 +29,7 @@ export const PIPELINE_COPY = [
     id: "retrieve",
     stage: "Parallel BM25 + Pinecone",
     technical: "Keyword search (SQLite FTS5) and dense vector search (Pinecone) run in parallel, then results are merged and deduplicated by chunk ID.",
-    simple: "We search two different ways at once — by keyword and by meaning — so neither one's blind spots are fatal.",
+    simple: "We search two different ways at once, by keyword and by meaning, so neither one's blind spots are fatal.",
   },
   {
     id: "rerank",
@@ -47,7 +47,7 @@ export const PIPELINE_COPY = [
     id: "verify",
     stage: "Numerical verifier",
     technical: "Every number in the answer is checked by parsed magnitude against every number in the source chunks; anything ungrounded is replaced with an explicit qualifier.",
-    simple: "We double-check every number in the answer is really in the source — or we say so.",
+    simple: "We double-check every number in the answer is really in the source, or we say so.",
   },
   {
     id: "log",

@@ -25,7 +25,7 @@ export function VerifierDemo() {
           The part that says no.
         </h2>
         <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
-          Edit the number below. If it doesn&apos;t match what&apos;s in the source chunk, the verifier flags it —
+          Edit the number below. If it doesn&apos;t match what&apos;s in the source chunk, the verifier flags it,
           live, in your browser. This is a TypeScript port of the production verifier&apos;s matching rule.
         </p>
 
@@ -87,7 +87,7 @@ export function VerifierDemo() {
             <code className="font-[family-name:var(--font-mono)]">&quot;$1,234&quot;</code> appeared anywhere in the
             source text. That passed a fabricated <code className="font-[family-name:var(--font-mono)]">$1,234</code>{" "}
             whenever the source actually said{" "}
-            <code className="font-[family-name:var(--font-mono)]">$1,234.56</code> — the shorter string is a literal
+            <code className="font-[family-name:var(--font-mono)]">$1,234.56</code>, since the shorter string is a literal
             substring of the longer one. The fix compares parsed numeric magnitude instead of text, which is what
             you&apos;re running above.
           </p>
