@@ -854,23 +854,37 @@ Where we are (updated 2026-09-28, later same day): A, B, C1-C7, D1(blocked),
   public site, built in a separate session) was PR'd and merged to main
   too, then deployed to Vercel: https://dashboard-weld-nine-28.vercel.app
   (live, verified 200, linked from README).
-  NEXT = F1 (final README pass) is largely done as a side effect of E2's
-  README link; worth one more read-through for staleness. Otherwise see
-  "Known gaps" below for everything still open (CI faithfulness gate,
+  UPDATE 2026-10-03: F1 done (README rewritten in plain prose, no em
+  dashes, stale facts corrected, both sequence diagrams now embedded as
+  inline mermaid blocks). MIT LICENSE added. Repo description, homepage
+  and 9 topics set on GitHub (all were empty). F6 evaluated and
+  deliberately declined, see its entry below. dashboard/ now has its own
+  CI job (npm ci / lint / test / build on every push and PR) -- that gap
+  was real: `npm run build` with Turbopack does NOT run ESLint, so two
+  genuine setState-inside-effect errors had sat unnoticed in
+  theme-toggle.tsx and hero-replay.tsx until `npm run lint` was run by
+  hand for the first time. Both fixed properly (useSyncExternalStore for
+  the first, key-based remount for the second), not suppressed.
+  Verified on real CI run 37101778178: dashboard job success, every step
+  (lint, unit tests, build) genuinely executed.
+  STILL OPEN: see "Known gaps" below (CI faithfulness gate at 0.75,
   D2 medium/hard/table tiers, PYPL backfill, the three low ragas metrics,
-  and -- new from the site build -- no real Lighthouse/screenshot
-  verification was done on dashboard/, since no browser tool was available
-  in that session; only build output, rendered HTML, and computed
-  contrast ratios).
-  `git push` works from this environment as of 2026-09-28 (it failed
-  earlier the same day; `gh` is still NOT authenticated).
+  and no real Lighthouse/screenshot verification on dashboard/ since no
+  browser tool was available in that session; only build output, rendered
+  HTML, and computed contrast ratios).
+  `git push` works from this environment as of 2026-09-28. `gh` IS
+  authenticated as of 2026-10-03 (this was previously documented as not
+  authenticated -- that is now stale; `gh run list`, `gh api`, and
+  `gh repo edit` all work, so CI status can be checked directly rather
+  than guessed at from screenshots).
 Branch: main, up to date with origin. GIT WORKFLOW CHANGED TODAY: C5
   onward uses a feature branch + PR (user rebase-merges via GitHub),
-  not direct pushes to main like C1-C4. `gh` is NOT authenticated in
-  this environment -- `gh pr create` fails with exit 4 ("gh auth
-  login" needed, which is an interactive browser flow only the user
-  can run). Push the branch and hand the user the "compare" URL
-  (`git push` prints it) instead of trying `gh pr create`. Last commit
+  not direct pushes to main like C1-C4. (The "`gh` is NOT authenticated"
+  note that used to live here was true at the time and is now stale --
+  see the Gotchas section: `gh` is authenticated as of 2026-10-03.)
+  The user still prefers to review and merge PRs themselves on GitHub,
+  so push the branch and hand them the compare URL rather than
+  self-merging. Last commit
   on main: aae6c7e "C5: model tier routing...".
 
 GIT HISTORY WAS RE-WRITTEN TODAY (2026-09-25) -- if anything references
@@ -1026,10 +1040,12 @@ Gotchas learned the hard way:
   re-suggests it every session -- check for it before every commit, don't
   trust that "I did it right last time" carries forward. If it slips
   through again, see "GIT HISTORY WAS RE-WRITTEN TODAY" above for the fix.
-- `gh` is not authenticated in this environment -- `gh pr create`/`gh
-  auth login` need an interactive browser flow only the user can run.
-  Push the branch and hand the user the compare/PR URL `git push` prints
-  instead.
+- `gh` IS authenticated as of 2026-10-03 (as karthikreddyyalala). This
+  reverses the long-standing note that it was not -- `gh run list`,
+  `gh api`, `gh repo view/edit` all work now, so check real CI status
+  and repo metadata directly instead of guessing or asking for
+  screenshots. `gh pr create` should work too, but the user's standing
+  preference is still to review and merge PRs themselves via GitHub.
 - Bedrock daily token quota can be exhausted after heavy runs; every LLM
   call site falls back to OpenAI gpt-4o-mini automatically.
 - Neither AWS Cost Explorer (this IAM identity isn't enabled for it) nor
@@ -1516,7 +1532,32 @@ PHASE F -- Launch & polish (Week 6)
           the bullets.
   [ ] F4. (USER) 3-minute demo video: Claude Desktop answering with citations
   [ ] F5. Blog post: "What I learned building production RAG on AWS Bedrock"
-  [ ] F6. Submit to the official MCP registry
+  [~] F6. Submit to the official MCP registry -- EVALUATED 2026-10-03 AND
+          DELIBERATELY NOT DONE. This project does not fit the registry's
+          requirements as built, checked against the registry's own docs
+          (github.com/modelcontextprotocol/registry, docs/
+          modelcontextprotocol-io/), not assumed:
+          - REMOTE route is out: remote-servers.mdx states "A remote server
+            MUST be publicly accessible at its specified URL." The deployed
+            Lambda is a single-user Cognito pool with no self-signup, so it
+            returns 401 to everyone except the owner. moderation-policy.mdx
+            also lists "non-functioning servers" as removable, and a URL
+            that rejects every visitor qualifies.
+          - PACKAGE route is out: npm/PyPI entries need something an
+            installer can actually run. The server depends on a deployed
+            AWS stack (populated Pinecone index, ~900MB keyword index in
+            S3, Bedrock access). A fresh installer would have to run the
+            whole ingestion pipeline first -- hours of work and real API
+            spend -- before it answered anything.
+          - MAKING IT PUBLIC is a bad trade, not a missing step: it would
+            mean opening Cognito self-signup, exposing a personal AWS
+            account, a personal OpenAI key, and the Pinecone free tier to
+            the public, with no rate limiting (deferred, since API Gateway
+            was never deployed) behind a 10-concurrency ceiling. Unbounded
+            cost exposure on personal credentials to gain a listing.
+          Revisit only if the server is ever repackaged as a self-contained
+          installable, or deployed as a genuinely multi-tenant service with
+          rate limiting and its own billing.
   [ ] F7. (USER) Post on Hacker News (Show HN), r/LocalLLaMA, r/LangChain
 
 DEFERRED -- revisit only if a reason appears
