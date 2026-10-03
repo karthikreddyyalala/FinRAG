@@ -21,6 +21,16 @@ npx vitest run
 
 Covers the theme storage helper, the metrics loader, and the numerical verifier (a TypeScript port of `server/retrieval/numerical_verifier.py`, tested against real cases exported from the Python original).
 
+### A note on `npm audit`
+
+It reports high-severity findings in `braces`, reached through
+`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch`.
+These are dev dependencies used only when linting, never bundled into the site,
+and the vulnerability needs attacker-controlled glob patterns to trigger, which
+isn't reachable here. `npm audit fix --force` "fixes" it by downgrading
+`eslint-config-next` to 14.x, which breaks linting on Next 16. Left as-is
+deliberately rather than taking a breaking downgrade for no real exposure.
+
 ## Structure
 
 - `app/` — pages, layout, fonts, OG image, favicon, 404

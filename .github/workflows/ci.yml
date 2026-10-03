@@ -26,6 +26,41 @@ jobs:
       - name: Unit tests
         run: pytest tests/unit/ -v
 
+  dashboard:
+    # The public site (dashboard/) is a real deployed artifact, so it gets
+    # the same gate as the Python side. Kept as its own job rather than
+    # steps on lint-and-test: a Node failure should read as a Node failure,
+    # not bury a Python result.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # 22.x is what this app is developed and verified against locally,
+          # and matches Vercel's current default runtime. Next 16 only needs
+          # >=20.9, but shipping the version actually tested beats shipping
+          # one that merely satisfies the engine field.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   ci-eval:
     runs-on: ubuntu-latest
     needs: lint-and-test
