@@ -52,7 +52,16 @@ TARGET_TICKERS = [
 RAW_BUCKET = "finrag-raw-filings"
 PROCESSED_BUCKET = "finrag-processed-filings"
 KEYWORD_INDEX_KEY = "keyword/index.sqlite"
-CHUNK_CACHE = Path(__file__).parent.parent / "evals" / "results" / "chunk_cache"
+# Overridable because Lambda's filesystem is read-only outside /tmp: deriving
+# this from __file__ alone resolves to /var/task/evals/... in the ingestion
+# Lambda, where mkdir fails with "Read-only file system". The default keeps
+# local runs and the eval harness writing to the repo as before.
+CHUNK_CACHE = Path(
+    os.environ.get(
+        "FINRAG_CHUNK_CACHE_DIR",
+        Path(__file__).parent.parent / "evals" / "results" / "chunk_cache",
+    )
+)
 
 # Companies FinanceBench asks about. They get deep history; the rest of the
 # corpus exists for breadth and keeps the cheap default depth.

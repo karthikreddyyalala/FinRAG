@@ -96,8 +96,17 @@ class IngestionStack(Stack):
             architecture=lambda_.Architecture.ARM_64,
             handler="scripts.weekly_refresh.handler",
             code=code,
-            memory_size=1024,
-            ephemeral_storage_size=Size.mebibytes(1024),  # downloaded filings + chunk cache in /tmp
+            # Pegged at 1024 MiB on the first real run (reported 1025 MiB
+            # used), so the FTS5 build was memory-starved as well as
+            # disk-starved. More memory also buys proportionally more CPU.
+            memory_size=2048,
+            # Must hold the rebuilt keyword index (~884 MiB) AND the chunk
+            # cache pulled from S3 (~820 MiB across 71 files) at the same
+            # time, plus downloaded filings and SQLite's build scratch. At
+            # 1 GiB this died with "database or disk is full" after
+            # processing all 72 tickers, wasting the entire run on the last
+            # step. 4 GiB leaves real headroom as the corpus grows.
+            ephemeral_storage_size=Size.mebibytes(4096),
             # Lambda's hard maximum, not a margin: a week where many
             # companies file simultaneously (earnings season) could still
             # exceed it. Known, accepted limitation for personal-scale use --
@@ -106,7 +115,13 @@ class IngestionStack(Stack):
             # succeeds, and the next week's run just picks up where this one
             # left off.
             timeout=Duration.minutes(15),
-            environment={"FINRAG_SSM_PREFIX": "/finrag"},  # names only, never values
+            environment={
+                "FINRAG_SSM_PREFIX": "/finrag",  # names only, never values
+                # Must live under /tmp: everything else in a Lambda is
+                # read-only, and the default (derived from __file__) resolves
+                # to /var/task/evals/... here, where mkdir raises OSError.
+                "FINRAG_CHUNK_CACHE_DIR": "/tmp/finrag/chunk_cache",
+            },
             log_group=log_group,
         )
 

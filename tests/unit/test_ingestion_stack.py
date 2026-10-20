@@ -72,3 +72,33 @@ def test_logs_expire_so_storage_cost_cannot_grow_unbounded():
     _template().has_resource_properties("AWS::Logs::LogGroup", {
         "RetentionInDays": Match.any_value(),
     })
+
+
+def test_chunk_cache_points_at_tmp_the_only_writable_path():
+    """Regression guard: this Lambda failed every scheduled run without it.
+
+    The default cache dir derives from __file__, which is /var/task/evals/...
+    inside Lambda -- read-only, so mkdir raised OSError and the refresh died
+    before touching EDGAR. Only /tmp is writable.
+    """
+    _template().has_resource_properties("AWS::Lambda::Function", {
+        "Environment": {
+            "Variables": Match.object_like({"FINRAG_CHUNK_CACHE_DIR": "/tmp/finrag/chunk_cache"})
+        }
+    })
+
+
+def test_tmp_fits_the_keyword_index_and_the_chunk_cache_together():
+    """Regression guard: 1 GiB of /tmp was not enough and the run died.
+
+    The weekly refresh holds BOTH artifacts on local disk at once: the
+    keyword index it rebuilds (~884 MiB as of 2026-10) and the chunk cache
+    it pulls from S3 (~820 MiB across 71 files). That is ~1.7 GiB before
+    SQLite's own build scratch, against a 1 GiB /tmp -- the build failed
+    with "OperationalError: database or disk is full" after processing all
+    72 tickers, so the whole run was wasted at the very last step.
+    """
+    _template().has_resource_properties("AWS::Lambda::Function", {
+        "EphemeralStorage": {"Size": 4096},
+        "MemorySize": 2048,
+    })

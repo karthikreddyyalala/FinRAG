@@ -167,3 +167,32 @@ def test_main_resumes_from_cache_without_reingesting(
     # A known-unavailable ticker must never be attempted -- it would embed
     # every filing via OpenAI before failing at upsert.
     assert not (set(ingested) & KNOWN_UNAVAILABLE.keys())
+
+
+def test_chunk_cache_dir_defaults_to_the_repo_path():
+    """Local runs and the eval harness keep writing to evals/results/chunk_cache."""
+    import importlib
+
+    import scripts.bootstrap_corpus as bc
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("FINRAG_CHUNK_CACHE_DIR", None)
+        importlib.reload(bc)
+        assert bc.CHUNK_CACHE.parts[-3:] == ("evals", "results", "chunk_cache")
+
+
+def test_chunk_cache_dir_is_overridable_by_env():
+    """Lambda's filesystem is read-only except /tmp, so the path must move.
+
+    The ingestion Lambda sets FINRAG_CHUNK_CACHE_DIR=/tmp/... -- without this
+    the weekly refresh dies on mkdir with 'Read-only file system: /var/task'.
+    """
+    import importlib
+
+    import scripts.bootstrap_corpus as bc
+
+    with patch.dict(os.environ, {"FINRAG_CHUNK_CACHE_DIR": "/tmp/finrag/chunk_cache"}):
+        importlib.reload(bc)
+        assert str(bc.CHUNK_CACHE) == "/tmp/finrag/chunk_cache"
+
+    importlib.reload(bc)  # restore the default for any later test
