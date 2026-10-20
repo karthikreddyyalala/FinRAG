@@ -14,9 +14,9 @@ export const POSTS: Post[] = [
     slug: "bugs-that-looked-like-answers",
     title: "Bugs that looked like answers",
     description:
-      "Five real bugs in a financial RAG system that never crashed, never errored, and produced confident, well-cited, wrong answers the whole time.",
+      "Six real bugs in a financial RAG system that never crashed, never errored, and produced confident, well-cited, wrong answers the whole time. Including the benchmark that ranked the worst system first.",
     date: "2026-10-03",
-    readingMinutes: 8,
+    readingMinutes: 10,
   },
 ];
 

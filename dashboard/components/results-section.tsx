@@ -33,14 +33,15 @@ export function ResultsSection() {
 
         <div className="mt-12 grid gap-8 md:grid-cols-2">
           <div className="border-l-2 border-[var(--color-flagged)] pl-5">
-            <h3 className="font-semibold text-[var(--color-flagged)]">Where it lost</h3>
+            <h3 className="font-semibold text-[var(--color-flagged)]">Where the metric lied</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
-              On this benchmark, BM25-only retrieval alone scores <em>higher</em> than the full four-stage pipeline
-              on numerical accuracy and faithfulness. FinanceBench&apos;s questions are largely keyword-friendly,
-              close to how filings actually word things, which favors lexical search directly. What the full
-              pipeline demonstrably buys over dense-only search is a real gap in numerical accuracy and context
-              recall; whether the added complexity is worth it specifically for FinanceBench-style questions is an
-              open finding, not a foregone conclusion.
+              BM25-only scores <em>higher</em> here than the full pipeline, and for a while I published that as an
+              honest loss. It was a measurement artifact. Numerical accuracy asks what fraction of the numbers an
+              answer states are grounded, and an answer with no numbers in it scores a perfect 1.0, so the metric
+              is maximised by refusing. BM25-only refuses the most (133 of 150, against 121 for the other two),
+              which is exactly why it came first. Scored on whether the answer actually states the number the
+              ground truth says it should, the ordering reverses: full pipeline 47.3%, dense-only 47.3%,
+              BM25-only 43.6%. A precision metric with no recall term can be gamed by silence.
             </p>
           </div>
           <div className="border-l-2 border-[var(--color-flagged)] pl-5">

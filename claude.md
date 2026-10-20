@@ -1121,14 +1121,28 @@ PHASE B -- Prove the design choices (strongest interview material) -- DONE
           answer_generator.py), not per-mode, then resumed from checkpoint.
   [x] B3. Comparison table in README: Baseline A vs B vs full pipeline --
           DONE, "Baseline comparison" section under Eval results.
-          Honest finding, not spun: BM25-only actually scored *higher*
-          than the full pipeline on this benchmark (FinanceBench's
-          questions are largely keyword-friendly). What the full pipeline
-          demonstrably buys is the gap over dense-only search (+4.5pt
-          numerical accuracy, +2.9pt context recall) -- hybrid retrieval
-          and rewriting help most where dense embeddings alone miss a
-          jargon-heavy financial term. Stated as an open finding in README,
-          not resolved in the pipeline's favor by fiat.
+          Originally recorded as "BM25-only scored higher than the full
+          pipeline because FinanceBench is keyword-friendly."
+          **SUPERSEDED 2026-10-03 -- that conclusion was a metric
+          artifact, see evals/analyze_baseline_gap.py.**
+          numerical_accuracy scores an answer containing NO numbers as a
+          perfect 1.0 (numerical_accuracy.py ~L55), so it is a precision
+          metric with no recall term and is maximised by refusing. The
+          configs line up exactly with refusal rate: bm25_only refuses
+          133/150 and scores 94.4%; full and dense_only both refuse
+          121/150 and score 91.0% and 86.5%. The config that says least
+          wins.
+          Scored on correctness instead (does the answer state the
+          ground truth's number): full 47.3%, dense_only 47.3%,
+          bm25_only 43.6% -- the ordering reverses. Robust across
+          tolerances 0.5%-5% and both significance floors tested.
+          Caveats kept honest: the correctness check is a crude proxy,
+          not an LLM judge, so it is valid for comparing these three
+          configs on identical questions and NOT an absolute accuracy
+          figure; and full only TIES dense_only, so this shows hybrid
+          beating keyword-only, not hybrid beating dense.
+          Corrected in README, the live blog post, the site's results
+          panel, and docs/interview-prep.md on 2026-10-03.
 
 PHASE C -- Cost & observability (Week 4, deferred until now)
   [x] C1. server/observability/logger.py -- per-query record to DynamoDB --
@@ -1765,10 +1779,18 @@ that checks every number in the answer actually exists in a retrieved chunk.
 
 I measured it against FinanceBench, a public benchmark of 150 financial questions,
 plus 48 questions whose answers I verified by hand against the actual SEC filings.
-The pipeline hit 91.0% numerical accuracy on FinanceBench, versus 86.5% for dense
-vector search alone. The honest part: keyword-only search scored even higher on
-that benchmark (94.4%), because FinanceBench questions are phrased close to how
-filings word things -- I published that rather than hiding it."
+The pipeline hit 91.0% numerical accuracy on FinanceBench.
+
+The part I'd actually lead with: that benchmark initially ranked plain keyword
+search ABOVE my full pipeline, and I published that as an honest negative
+result. It was wrong. My numerical_accuracy metric scores an answer containing
+no numbers as a perfect 1.0, so it has no recall term and is maximised by
+refusing to answer. Keyword-only refused 133 of 150 questions, which is the
+entire reason it 'won'. Scored on whether the answer states the correct
+number, the order reverses: full pipeline 47.3%, dense-only 47.3%,
+keyword-only 43.6%. The lesson I took is to write down the degenerate
+strategy that maximises any metric before trusting it -- if that strategy is
+'do nothing', the metric can't rank systems."
 
 (Only if asked about cost: ~$0.013/query average on the full pipeline. Model-tier
 routing cut a single-metric lookup ~3x on a spot-check, and a repeat query hits a

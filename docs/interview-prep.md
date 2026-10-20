@@ -225,12 +225,16 @@ limiting, which I've documented as a real gap rather than pretending it isn't
 one. It's acceptable only because the account's concurrency ceiling is 10.
 
 ### 6. Why hybrid search instead of just vectors
-Everyone reaches for vector search. On this benchmark, dense-only scored
-86.5% and hybrid scored 91.0%. Financial language is full of exact tokens
-(ticker symbols, line-item names, specific years) where keyword matching is
-simply better, and embeddings alone miss them. **But be honest here**: plain
-keyword search scored 94.4%, higher than my full pipeline. See the weak spots
-section.
+Everyone reaches for vector search. Financial language is full of exact
+tokens (ticker symbols, line-item names, specific years) where keyword
+matching is simply better, and embeddings alone miss them. Measured on
+whether the answer states the correct number, the full pipeline gets 47.3%
+against dense-only's 47.3% and keyword-only's 43.6%.
+
+Note the number I am *not* quoting: on `numerical_accuracy`, keyword-only
+scores 94.4% against the pipeline's 91.0%. That ranking is an artifact and
+I can explain exactly why. See decision 16 and the weak spots section,
+because this is the question most likely to come up.
 
 ### 7. Why a hardcoded synonym table alongside an LLM rewrite
 "Capital expenditure" appears nowhere in a cash flow statement. The line item
@@ -298,10 +302,31 @@ the scheme would have validated.
 
 ### 15. Why the eval harness is the actual centerpiece
 Anyone can build a RAG demo that answers a few questions impressively. The
-reason I can tell you hybrid beats dense-only by 4.5 points is that I built
-the measurement before trusting the system. Nearly every real bug in this
-project was found by a metric disagreeing with another metric, not by looking
-at output.
+reason I can tell you anything about which retrieval strategy wins is that I
+built the measurement before trusting the system. Nearly every real bug in
+this project was found by a metric disagreeing with another metric, not by
+looking at output.
+
+### 16. Why I no longer trust my own headline metric
+This is the strongest thing you can say about evaluation, so don't bury it.
+
+`numerical_accuracy` measures what fraction of the numbers in an answer are
+grounded in the retrieved sources. It is a *precision* metric with no recall
+term, and the implementation scores an answer containing no numbers as a
+perfect 1.0. The degenerate strategy that maximises it is therefore "refuse
+every question."
+
+That isn't theoretical. It silently inverted my own baseline comparison:
+keyword-only search refused 133 of 150 questions, scored highest, and I
+published "keyword search beat my pipeline" as an honest negative result. It
+had simply declined more often. Measured on correctness, the ordering
+reverses.
+
+What I'd do differently: before trusting any metric, write down the
+degenerate strategy that maximises it. If that strategy is "do nothing," the
+metric cannot rank systems, only describe one property of them. Mine was
+useful for what it was designed for (is this specific answer grounded) and
+useless for what I used it for (which retrieval design is better).
 
 ---
 
@@ -311,13 +336,34 @@ Do not hide these. Being the person who already knows their system's
 limitations is a much stronger position than being caught by them.
 
 ### "Keyword search beat your pipeline. Why keep the complexity?"
-This is the sharpest question and it's fair. Answer: on this benchmark, yes,
-94.4% versus 91.0%. FinanceBench's questions are worded close to how filings
-word things, which is near best case for lexical matching. What I can defend
-with data is that the full pipeline beats dense-only by 4.5 points. What I
-*can't* claim without measuring is that it would win on paraphrased or harder
-questions, and I'm not going to claim it. I published the table that makes me
-look worse because the alternative is believing my own architecture diagram.
+This is the sharpest question and it's the best answer you have, so take your
+time on it.
+
+"It doesn't, and the reason I know is more interesting than if it had. That
+ranking comes from a metric I wrote called numerical accuracy, which measures
+what fraction of the numbers in an answer are grounded in the sources. It has
+no recall term, and an answer containing no numbers scores a perfect 1.0. So
+the metric is maximised by refusing to answer.
+
+Look at what the configurations actually do: keyword-only refuses 133 of 150
+questions, the other two refuse 121. The one that says least scores highest.
+It wasn't retrieving better, it was declining more.
+
+When I scored them on whether the answer states the number the ground truth
+says it should, the order reverses: full pipeline 47.3%, dense-only 47.3%,
+keyword-only 43.6%.
+
+Two caveats I'd rather say than be caught on. The correctness check is a
+crude proxy, not an LLM judge, so it's fair for comparing three configs on
+identical questions but not as an absolute accuracy number. And the pipeline
+only ties dense-only, so this shows hybrid beating keyword-only, not hybrid
+beating dense.
+
+The part I'm least proud of is that I published the wrong conclusion first. I
+had the right instinct, publish the result that makes you look bad, and then
+treated being transparent about the number as a substitute for auditing it."
+
+Reproduce it live if they want: `PYTHONPATH=. python3 evals/analyze_baseline_gap.py`.
 
 ### "Your faithfulness is only 79%."
 True, and middling for production RAG where people target 85%+. It's the

@@ -120,23 +120,43 @@ Boring, hardcoded, not clever. It also works, and unlike asking an LLM to do the
 
 ---
 
-## The part where my pipeline lost
+## 6. The benchmark that ranked the worst system first
 
-After fixing all of that, I did what I should have done earlier: ran the same 150 benchmark questions through three configurations to find out whether my four-stage pipeline was actually earning its complexity.
+After fixing all of that, I ran the same 150 questions through three configurations to find out whether my four-stage pipeline was earning its complexity.
 
-| Configuration | Numerical accuracy | Faithfulness |
-|---|---|---|
-| Dense (vector) search only | 86.5% | 79.4% |
-| **BM25 (keyword) search only** | **94.4%** | **83.8%** |
-| Full pipeline (rewrite + hybrid + rerank + verify) | 91.0% | 79.4% |
+| Configuration | Numerical accuracy |
+|---|---|
+| Dense (vector) search only | 86.5% |
+| **BM25 (keyword) search only** | **94.4%** |
+| Full pipeline (rewrite + hybrid + rerank + verify) | 91.0% |
 
-Plain keyword search beat my full pipeline.
+Plain keyword search beat my full pipeline. I published that, wrote a paragraph about how FinanceBench questions are worded close to how filings word things so lexical matching does well, and treated it as an honest negative result I was being admirably transparent about.
 
-I sat with that for a while before publishing it. The honest reading: FinanceBench's questions are worded close to how the filings themselves say things, which is close to a best case for lexical matching. The full pipeline does clearly beat dense-only search, by about 4.5 points of numerical accuracy, which tells me the hybrid part is doing real work exactly where embeddings alone miss keyword-heavy financial terms. A harder or more paraphrased question set would likely shift this.
+It was wrong. Not the numbers, the conclusion. Here is the metric:
 
-But I can't claim that from this data, because I didn't measure it. What I measured says keyword search won.
+```python
+nums = _extract_numbers(answer)
+if not nums:
+    sample_scores.append(1.0)   # no numbers = perfect score
+```
 
-The reason I'm publishing the table instead of the one flattering row is that the alternative is how you end up believing your own pipeline diagram. Every bug above survived as long as it did because the output looked good enough that I didn't go check. A benchmark that only ever confirms your design does the same thing, more formally.
+It measures what fraction of the numbers an answer states are grounded in the sources. It never checks whether you answered the question, or answered it correctly. It has no recall term at all. **So it is maximised by saying nothing.** A system that refuses every question scores 100%.
+
+Which is exactly what the ranking was measuring:
+
+| Configuration | Refused | Answered | Score |
+|---|---|---|---|
+| BM25 only | **133/150** | 17 | **94.4%** |
+| Full pipeline | 121/150 | 29 | 91.0% |
+| Dense only | 121/150 | 29 | 86.5% |
+
+The configuration that refuses most scores highest. BM25-only retrieves the least useful context, so the model declines more often, so it states fewer numbers, so it wins. I had built a leaderboard where silence takes first place.
+
+Scored on whether the answer actually contains the number the ground truth says it should, the order reverses: full pipeline 47.3%, dense-only 47.3%, BM25-only 43.6%.
+
+I want to be precise about what that does and doesn't show. The correctness check is crude, a proxy rather than an LLM judge, so it is fair for comparing three configurations on identical questions and not an absolute accuracy figure. And the full pipeline only ties dense-only, so this says hybrid beats keyword-only, not that hybrid beats dense.
+
+The uncomfortable part is the shape of the mistake. Every bug above survived because fluent output hid it. This one survived because a *number* hid it, and a number feels like the thing you check output against. I'd gone one level up, started trusting the measurement instead of the answers, and the measurement had the same property: it looked right while being broken.
 
 ---
 
@@ -150,7 +170,9 @@ The reason I'm publishing the table instead of the one flattering row is that th
 
 **Pin your temperature first.** Before any debugging, any evaluation, any "did that help" comparison.
 
-**Publish the result that makes you look worse.** It's the only part of a writeup like this that's hard to fake, and it's the part that forced me to actually understand where my design helps and where it's just complexity I'm attached to.
+**Publish the result that makes you look worse, then go check that one too.** I did the first half right and skipped the second. Being transparent about a bad number felt like rigour, so I never audited the number itself, and it turned out to be measuring refusal rather than quality. Honesty about a result is not the same as understanding it.
+
+**Ask what your metric rewards, not what it's named.** Mine was called numerical accuracy and I read it as correctness. It was precision with no recall term, which means a system that answers nothing scores perfectly. Write down the degenerate strategy that maximises your metric. If that strategy is "do nothing," the metric cannot rank systems.
 
 ---
 

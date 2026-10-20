@@ -43,9 +43,22 @@ def numerical_accuracy(
     answers: list[str],
     contexts: list[list[str]],
 ) -> float:
-    """
-    Return the fraction of numbers in each answer that appear in source chunks.
-    Averaged across all samples.
+    """Fraction of numbers in each answer that appear in source chunks, averaged.
+
+    This is PRECISION ONLY. It has no recall term: it never checks whether the
+    question was answered, or answered correctly. An answer containing no
+    numbers scores a perfect 1.0 (see below), so the degenerate strategy that
+    maximises this metric is to refuse every question.
+
+    That is not hypothetical. It silently inverted this project's own baseline
+    comparison: BM25-only retrieval refused 133/150 questions, scored the
+    highest numerical_accuracy of the three configurations, and was written up
+    as "keyword search beat the full pipeline" until the refusal rates were
+    checked. See evals/analyze_baseline_gap.py.
+
+    Use it to ask "is this particular answer grounded". Do NOT use it alone to
+    rank retrieval strategies against each other -- pair it with a correctness
+    measure that penalises not answering.
     """
     if not answers:
         return 0.0
@@ -53,6 +66,10 @@ def numerical_accuracy(
     for answer, ctxs in zip(answers, contexts):
         nums = _extract_numbers(answer)
         if not nums:
+            # Vacuously grounded: an answer claiming no figures cannot state an
+            # ungrounded one. Correct for a precision metric, and precisely why
+            # this score rewards refusal -- see the docstring before ranking
+            # anything with it.
             sample_scores.append(1.0)
             continue
         hits = sum(1 for n in nums if _found_in_contexts(n, ctxs))

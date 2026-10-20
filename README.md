@@ -67,7 +67,7 @@ Scored against [FinanceBench](https://huggingface.co/datasets/PatronusAI/finance
 
 | Metric | FinanceBench (150Q) | Custom verified (48Q) | Combined (198Q) | What it measures |
 |---|---|---|---|---|
-| **Numerical accuracy** | **91.0%** | 86.2% | **89.9%** | Percent of numbers in generated answers that appear verbatim in the retrieved source chunks. My own deterministic verifier, not LLM-judged. |
+| **Numerical accuracy** | **91.0%** | 86.2% | **89.9%** | Percent of numbers in generated answers that appear verbatim in the retrieved source chunks. My own deterministic verifier, not LLM-judged. Read it as precision, not correctness: it has no recall term, and an answer stating no numbers at all scores a perfect 1.0. See the baseline section below for how badly that can mislead. |
 | **Faithfulness** | **79.4%** | **85.4%** | **80.2%** | Ragas: does the answer only make claims supported by the retrieved context. |
 | Answer relevancy | 15.6% | 16.3% | 16.2% | Ragas: does the answer address the question asked. |
 | Context precision | 20.3% | 3.1% | 15.3% | Ragas: are the retrieved chunks actually relevant to the question. |
@@ -96,7 +96,29 @@ Same 150 FinanceBench questions, three retrieval setups. The baselines skip quer
 | Context precision | 14.1% | 14.2% | 20.0% |
 | Context recall | 10.8% | 14.1% | **11.3%** |
 
-Plain keyword search beats the full four-stage pipeline on this particular benchmark. FinanceBench's questions are worded close to how the filings themselves say things, so lexical search does well on its own. What the full pipeline clearly buys over dense-only search is the jump in numerical accuracy and context recall versus Baseline A: hybrid retrieval and rewriting help most exactly where a plain embedding misses a jargon-heavy financial term. Whether the extra complexity is worth it over BM25 alone, for FinanceBench-style questions specifically, is an open question. A harder or more paraphrased set of questions would probably favor the full pipeline more.
+**Correction (2026-10-03): that table ranks a weaker system first, and I was wrong to publish it at face value.** For a while this section said plain keyword search beat the full pipeline, and explained it away as FinanceBench being keyword-friendly. That explanation was wrong. The real cause is the metric.
+
+`numerical_accuracy` measures what fraction of the numbers an answer states are grounded in the sources. It has no recall term, and [an answer containing no numbers scores a perfect 1.0](evals/metrics/numerical_accuracy.py). So the metric is maximised by refusing to answer, and the three configurations line up exactly with how often they refuse:
+
+| Config | Refused | Answered | Numerical accuracy |
+|---|---|---|---|
+| BM25 only | **133/150** | 17 | **94.4%** (highest) |
+| Full pipeline | 121/150 | 29 | 91.0% |
+| Dense only | 121/150 | 29 | 86.5% |
+
+The configuration that says least wins. BM25-only retrieves the least useful context, so the model declines more often, so it states fewer numbers, so it scores highest.
+
+Scored on correctness instead, meaning did the answer actually state the number the ground truth says it should, the ordering reverses:
+
+| Config | Correct |
+|---|---|
+| **Full pipeline** | **47.3%** |
+| Dense only | 47.3% |
+| BM25 only | 43.6% |
+
+Reproduce with `PYTHONPATH=. python3 evals/analyze_baseline_gap.py`. Two honest caveats: the correctness check is a crude proxy (does a number matching ground truth appear in the answer) rather than an LLM judge, so treat it as valid for comparing these three configurations against each other on identical questions, not as an absolute accuracy figure. And the full pipeline ties dense-only here, so this shows hybrid beating keyword-only, not hybrid beating dense.
+
+The lesson I actually take from this is better than the one I originally published: a precision metric with no recall term can be gamed by silence, and I had been reading mine as though it measured correctness.
 
 One real bug came up while running Baseline B: unlike the full pipeline, BM25-only has no reranking pass to screen out an oversized chunk, and the chunker doesn't cap table chunks the way it caps text chunks. A large schedule table blew past Sonnet's context window on question 91 of 150. Fixed once, in the shared `generate_answer()` call, since any retrieval path can hand it an oversized chunk.
 
