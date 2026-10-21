@@ -8,8 +8,26 @@ import { RECORDINGS } from "@/lib/recordings";
 const SOURCE_CHUNK = RECORDINGS[0].citations[0]?.text ?? "";
 const BASE_ANSWER = "3M's capital expenditure in fiscal year 2018 was $1,577 million.";
 
+/**
+ * Display only. `SOURCE_CHUNK` itself is untouched and is still what
+ * `verifyAnswer` runs against below, so the verification stays honest to
+ * the real chunk. This just makes that same raw chunk legible: SEC tables
+ * are parsed with pandas, and a table with no real header row falls back
+ * to pandas's integer column index ("0 | 1 | 2 | ..."), which is a parser
+ * artifact, not content, and every empty <td> becomes a blank " | " cell.
+ * Sent to Claude as-is during generation, but worth stripping for a human
+ * reading it on a page.
+ */
+function parseChunkForDisplay(chunk: string): string[][] {
+  const lines = chunk.split("\n").map((line) => line.split("|").map((cell) => cell.trim()));
+  const isIndexRow = (row: string[]) => row.every((cell, i) => cell === "" || cell === String(i));
+  const rows = lines.filter((row) => !isIndexRow(row));
+  return rows.map((row) => row.filter((cell) => cell !== ""));
+}
+
 export function VerifierDemo() {
   const [editableNumber, setEditableNumber] = useState("1,577");
+  const displayRows = useMemo(() => parseChunkForDisplay(SOURCE_CHUNK), []);
 
   const answer = useMemo(
     () => BASE_ANSWER.replace("1,577", editableNumber),
@@ -34,9 +52,30 @@ export function VerifierDemo() {
             <h3 className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-wide text-[var(--color-muted)]">
               Retrieved source chunk
             </h3>
-            <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap font-[family-name:var(--font-mono)] text-xs leading-relaxed text-[var(--color-muted)]">
-              {SOURCE_CHUNK}
-            </pre>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              From 3M&apos;s real 10-K, as extracted by the pipeline. Table cells only, cleaned up for reading here;
+              the verifier below runs against the unmodified chunk.
+            </p>
+            <div className="mt-3 max-h-64 overflow-auto">
+              <table className="w-full border-collapse text-xs">
+                <tbody>
+                  {displayRows.map((row, i) => (
+                    <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
+                      {row.map((cell, j) => (
+                        <td
+                          key={j}
+                          className={`py-1.5 pr-3 align-top font-[family-name:var(--font-mono)] tabular-nums ${
+                            j === 0 ? "text-[var(--color-text)]" : "text-[var(--color-muted)]"
+                          }`}
+                        >
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
