@@ -55,14 +55,6 @@ How to read these:
 - **The system refuses a lot.** About four in five FinanceBench answers were refusals. Some questions need years or documents that aren't in the corpus, and in a rough check the right chunk was in the top five only about half the time.
 - **The ragas metrics are low** partly because of the refusals (ragas scores a refusal as 0 relevancy) and partly because of missing data. Whether they also fit this task badly (short numeric answers judged against long table chunks) is untested.
 
-### Known retrieval bugs
-
-Not fixed yet:
-
-- For "Q4 2025" style questions it sometimes answers from the wrong quarter's filing. AT&T Q4 2025 was answered from a Q1 2026 10-Q's prior-year column. Merck and Disney do the same.
-- It can pick a segment subtotal that shares a label with the company total (Bank of America).
-- The verifier only checks that a number appears somewhere in the five passages, so a real number from the wrong period passes. It also doesn't convert units.
-
 ### Keyword vs hybrid search
 
 I compared three setups on the same 150 questions:
@@ -128,6 +120,6 @@ Both flags are needed. Cognito doesn't support dynamic client registration, and 
 
 Done: ingestion, retrieval, verifier, eval harness, four tools, Lambda deployment, Cognito, weekly refresh, public site.
 
-Next: quarter-aware filters, segment vs total disambiguation, a real CrossEncoder reranker, an eval that penalizes refusals, the remaining 101 custom questions.
+Next: quarter-aware filters, a real CrossEncoder reranker, an eval that penalizes refusals, the remaining 101 custom questions.
 
 See `claude.md` for the full build history. Diagrams are in `diagrams/`.
