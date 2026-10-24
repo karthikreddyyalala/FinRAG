@@ -120,7 +120,7 @@ Boring, hardcoded, not clever. It also works, and unlike asking an LLM to do the
 
 ---
 
-## 6. The benchmark that ranked the worst system first
+## 6. The metric that rewarded saying nothing
 
 After fixing all of that, I ran the same 150 questions through three configurations to find out whether my four-stage pipeline was earning its complexity.
 
@@ -142,7 +142,7 @@ if not nums:
 
 It measures what fraction of the numbers an answer states are grounded in the sources. It never checks whether you answered the question, or answered it correctly. It has no recall term at all. **So it is maximised by saying nothing.** A system that refuses every question scores 100%.
 
-Which is exactly what the ranking was measuring:
+That is part of what the ranking was measuring:
 
 | Configuration | Refused | Answered | Score |
 |---|---|---|---|
@@ -150,13 +150,13 @@ Which is exactly what the ranking was measuring:
 | Full pipeline | 121/150 | 29 | 91.0% |
 | Dense only | 121/150 | 29 | 86.5% |
 
-The configuration that refuses most scores highest. BM25-only retrieves the least useful context, so the model declines more often, so it states fewer numbers, so it wins. I had built a leaderboard where silence takes first place.
+The configuration that refuses most scores highest. I first wrote this up as "refusals are the whole story". When I went back and checked, that was too strong. Refusals explain only a small part of the 3.4-point gap. The rest comes from BM25's figure-stating answers being slightly more verbatim in the source.
 
-Scored on whether the answer actually contains the number the ground truth says it should, the order reverses: full pipeline 47.3%, dense-only 47.3%, BM25-only 43.6%.
+Scored on whether the answer actually contains the number the ground truth says it should, the three configurations land at 52, 48 and 52 of the 110 questions that have a numeric answer. That is within noise.
 
-I want to be precise about what that does and doesn't show. The correctness check is crude, a proxy rather than an LLM judge, so it is fair for comparing three configurations on identical questions and not an absolute accuracy figure. And the full pipeline only ties dense-only, so this says hybrid beats keyword-only, not that hybrid beats dense.
+So the honest conclusion is smaller than either of my earlier ones. The benchmark cannot show that keyword search beats my pipeline, and it cannot show the reverse. The correctness check is crude, a proxy rather than an LLM judge, and 150 questions with most of them refused is too little signal to rank anything.
 
-The uncomfortable part is the shape of the mistake. Every bug above survived because fluent output hid it. This one survived because a *number* hid it, and a number feels like the thing you check output against. I'd gone one level up, started trusting the measurement instead of the answers, and the measurement had the same property: it looked right while being broken.
+The uncomfortable part is the shape of the mistake, and that I made it twice. Every bug above survived because fluent output hid it. This one survived because a *number* hid it, and a number feels like the thing you check output against. I'd started trusting the measurement instead of the answers. Then, when I corrected it, I swapped one confident story for another.
 
 ---
 
@@ -170,9 +170,9 @@ The uncomfortable part is the shape of the mistake. Every bug above survived bec
 
 **Pin your temperature first.** Before any debugging, any evaluation, any "did that help" comparison.
 
-**Publish the result that makes you look worse, then go check that one too.** I did the first half right and skipped the second. Being transparent about a bad number felt like rigour, so I never audited the number itself, and it turned out to be measuring refusal rather than quality. Honesty about a result is not the same as understanding it.
+**Publish the result that makes you look worse, then go check that one too.** I did the first half right and skipped the second. Being transparent about a bad number felt like rigour, so I never audited the number itself. When I did, it turned out to reward refusal. And my first correction over-explained it too, so check your corrections as well. Honesty about a result is not the same as understanding it.
 
-**Ask what your metric rewards, not what it's named.** Mine was called numerical accuracy and I read it as correctness. It was precision with no recall term, which means a system that answers nothing scores perfectly. Write down the degenerate strategy that maximises your metric. If that strategy is "do nothing," the metric cannot rank systems.
+**Ask what your metric rewards, not what it's named.** Mine was called numerical accuracy and I read it as correctness. It was precision with no recall term, which means an answer with no numbers scores perfectly. Write down the degenerate strategy that maximises your metric. If that strategy is "do nothing," the metric cannot rank systems.
 
 ---
 

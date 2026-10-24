@@ -108,10 +108,10 @@
     "source_detail": "72 targets minus SPOT (20-F, out of scope, empty cache file) minus PYPL (Pinecone write-cap blocked)"
   },
   "avg_cost_per_query": {
-    "value": 0.0137,
-    "display": "$0.0137",
+    "value": 0.0126,
+    "display": "$0.0126",
     "source_file": "README.md",
-    "source_detail": "Cost & latency section, avg cost_usd on fixed 15Q set"
+    "source_detail": "Cost & latency section, avg cost_usd on fixed 15Q set (after C3-C5)"
   },
   "avg_latency_ms": {
     "value": 24074,

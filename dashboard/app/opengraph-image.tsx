@@ -27,7 +27,7 @@ export default function OpengraphImage() {
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 16, marginTop: 48 }}>
           <div style={{ fontSize: 72, fontWeight: 700, color: "#45C98F", display: "flex" }}>{accuracy.display}</div>
-          <div style={{ fontSize: 24, color: "#8A8F98", display: "flex" }}>numerical accuracy, FinanceBench</div>
+          <div style={{ fontSize: 24, color: "#8A8F98", display: "flex" }}>of stated figures grounded, FinanceBench</div>
         </div>
       </div>
     ),
