@@ -122,4 +122,4 @@ Done: ingestion, retrieval, verifier, eval harness, four tools, Lambda deploymen
 
 Next: quarter-aware filters, a real CrossEncoder reranker, an eval that penalizes refusals, the remaining 101 custom questions.
 
-See `claude.md` for the full build history. Diagrams are in `diagrams/`.
+Diagrams are in `diagrams/`.
