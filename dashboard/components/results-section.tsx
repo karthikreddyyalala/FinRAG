@@ -36,22 +36,23 @@ export function ResultsSection() {
             <h3 className="font-semibold text-[var(--color-flagged)]">Where the metric lied</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
               BM25-only scores <em>higher</em> here than the full pipeline, and for a while I published that as an
-              honest loss. It was a measurement artifact. Numerical accuracy asks what fraction of the numbers an
-              answer states are grounded, and an answer with no numbers in it scores a perfect 1.0, so the metric
-              is maximised by refusing. BM25-only refuses the most (133 of 150, against 121 for the other two),
-              which is exactly why it came first. Scored on whether the answer actually states the number the
-              ground truth says it should, the ordering reverses: full pipeline 47.3%, dense-only 47.3%,
-              BM25-only 43.6%. A precision metric with no recall term can be gamed by silence.
+              honest loss. The metric is the problem. Numerical accuracy asks what fraction of the numbers an
+              answer states are grounded, and an answer with no numbers in it scores a perfect 1.0, so refusing
+              raises the score. BM25-only refused the most (133 of 150, against 121 for the other two). But that
+              explains only part of its lead. On a rough check of whether the answer states the correct number,
+              the three setups land within noise of each other (52, 48 and 52 of 110). So this benchmark cannot
+              rank them either way. The lesson is to ask what a do-nothing system would score before trusting a
+              metric.
             </p>
           </div>
           <div className="border-l-2 border-[var(--color-flagged)] pl-5">
             <h3 className="font-semibold text-[var(--color-flagged)]">What we can&apos;t explain yet</h3>
             <p className="mt-2 text-sm text-[var(--color-muted)]">
-              Three ragas metrics (answer relevancy, context precision, context recall) score consistently low
-              (2–20%) across every complete eval run, including after independently verifying that retrieval finds
-              the exact correct source chunk and number for spot-checked questions. The working theory is that
-              ragas&apos;s LLM-judged metrics are a poor fit for this task shape: terse numeric ground truths scored
-              against long, pipe-delimited financial table chunks. Stated as an open question, not resolved.
+              Answer relevancy, context precision and context recall score low (about 10 to 20%). Part of that is
+              explained: about four in five answers were refusals, and ragas scores a refusal as zero relevancy;
+              about 28 of 150 questions need years the corpus doesn&apos;t hold; and in a rough check the right
+              chunk was in the top five only about half the time. Whether the metrics also fit this task badly
+              (terse numeric answers judged against long table chunks) is untested.
             </p>
           </div>
         </div>
