@@ -63,6 +63,12 @@ def _evidence_numbers(texts: list[str]) -> set[float]:
 def covers_evidence(chunk_text: str, evidence: list[str]) -> bool:
     """True when the chunk holds the statement's numbers, not merely its topic.
 
+    CAUTION: this measures "did retrieval return the benchmark's exact evidence
+    page", not "can the question be answered". Checked against saved answers,
+    only 8 of 33 correct answers had their evidence page in the retrieved
+    chunks, because the same figures appear in other tables and filings. Use
+    it as a diagnostic, never as the success measure; end-to-end correctness is.
+
     Needs 3 of the evidence's figures (all of them if it has fewer), which a
     prose paragraph about "cost of goods sold" will not contain.
     """

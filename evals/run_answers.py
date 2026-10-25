@@ -14,6 +14,7 @@ from pathlib import Path
 
 from evals.failure_breakdown import NAME_TO_TICKER
 from evals.run_eval import FINANCEBENCH, RESULTS_DIR, _init_clients, _load, _run_dataset
+from server.retrieval.ratio_plan import line_items_for
 
 
 def answers_path(label: str) -> Path:
@@ -25,6 +26,11 @@ def filter_items(items: list[dict], tickers: set[str]) -> list[dict]:
     return [i for i in items if NAME_TO_TICKER.get(i["ticker"], i["ticker"]) in tickers]
 
 
+def ratio_items(items: list[dict]) -> list[dict]:
+    """Questions about a derived metric (the ones the ratio planner targets)."""
+    return [i for i in items if line_items_for(i["question"])]
+
+
 def main() -> None:
     args = sys.argv[1:]
     tickers: set[str] = set()
@@ -32,14 +38,25 @@ def main() -> None:
         i = args.index("--tickers")
         tickers = set(args[i + 1].split(","))
         del args[i : i + 2]
+    only_ratio = "--ratio-only" in args
+    if only_ratio:
+        args.remove("--ratio-only")
+    if "--no-ratio-plan" in args:
+        # Baseline for comparison: behave as before the ratio planner existed.
+        args.remove("--no-ratio-plan")
+        import server.mcp_tools.search_filings as search_filings
+
+        search_filings.line_items_for = lambda query: []
     if len(args) != 1:
-        print("Usage: run_answers.py LABEL [--tickers MMM,AMD,KO]")
+        print("Usage: run_answers.py LABEL [--tickers MMM,AMD] [--ratio-only] [--no-ratio-plan]")
         sys.exit(1)
     path = answers_path(args[0])
     clients = _init_clients()
     items = _load(FINANCEBENCH)
     if tickers:
         items = filter_items(items, tickers)
+    if only_ratio:
+        items = ratio_items(items)
     print(f"Answering {len(items)} questions -> {path}", flush=True)
     _run_dataset(items, "FB", clients, path)
 

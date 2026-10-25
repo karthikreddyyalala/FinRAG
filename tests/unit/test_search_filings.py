@@ -339,3 +339,50 @@ def test_retrieval_uses_the_cleaned_question_but_generation_the_full_one(
     with patch("server.mcp_tools.search_filings.generate_answer", return_value="ans") as gen:
         build_search_filings_answer(full, bedrock_client, pinecone_index, keyword_index, embed_fn)
     assert gen.call_args.args[1] == full
+
+
+@patch("server.mcp_tools.search_filings.rewrite_query", return_value="rewritten")
+@patch("server.mcp_tools.search_filings.rerank")
+@patch("server.mcp_tools.search_filings.hybrid_search")
+def test_ratio_question_searches_each_needed_line_and_keeps_a_chunk_for_each(
+    mock_hybrid, mock_rerank, _rewrite
+):
+    from server.mcp_tools.search_filings import retrieve_chunks
+
+    base = [{"chunk_id": f"b{i}", "text": "base"} for i in range(5)]
+    inv = [{"chunk_id": "inv", "text": "Inventories 100"}]
+    cogs = [{"chunk_id": "cogs", "text": "Cost of sales 900"}]
+
+    def fake_hybrid(query, *a, **kw):
+        if query.startswith("inventories"):
+            return inv
+        if query.startswith("cost of sales"):
+            return cogs
+        return base
+
+    mock_hybrid.side_effect = fake_hybrid
+    mock_rerank.side_effect = lambda q, chunks, top_k=5, lexical_query=None: chunks[:top_k]
+
+    top = retrieve_chunks(
+        "What is Kraft Heinz's FY2019 inventory turnover ratio?", None, None, None, None,
+    )
+    ids = [c["chunk_id"] for c in top]
+    assert "inv" in ids and "cogs" in ids and len(ids) <= 8
+    queries = [c.args[0] for c in mock_hybrid.call_args_list]
+    assert any(q.startswith("cost of sales") and "2019" in q for q in queries)
+
+
+@patch("server.mcp_tools.search_filings.rewrite_query", return_value="rewritten")
+@patch(
+    "server.mcp_tools.search_filings.rerank",
+    side_effect=lambda q, c, top_k=5, lexical_query=None: c[:top_k],
+)
+@patch(
+    "server.mcp_tools.search_filings.hybrid_search",
+    return_value=[{"chunk_id": "x", "text": "t"}],
+)
+def test_plain_lookup_runs_a_single_search(mock_hybrid, _rerank, _rewrite):
+    from server.mcp_tools.search_filings import retrieve_chunks
+
+    retrieve_chunks("What was 3M capital expenditure in FY2018?", None, None, None, None)
+    assert mock_hybrid.call_count == 1
