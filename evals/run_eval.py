@@ -38,7 +38,15 @@ def _init_clients():
     from pinecone import Pinecone
 
     from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
-    bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+    # Fail fast on throttling: botocore's default retries can wait 30 minutes per
+    # call when the daily token quota is spent, and every call site already falls
+    # back to OpenAI on a throttle, so waiting gains nothing.
+    from botocore.config import Config
+
+    bedrock = boto3.client(
+        "bedrock-runtime", region_name="us-east-1",
+        config=Config(read_timeout=120, connect_timeout=10, retries={"max_attempts": 2}),
+    )
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
     pinecone_index = pc.Index("finrag-filings")
     s3 = boto3.client("s3", region_name="us-east-1")
