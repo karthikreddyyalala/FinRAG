@@ -19,13 +19,14 @@ in year Y, Y+1 or Y+2 is in the chunk cache (a 10-K reports three years of
 income and cash flow figures); other forms need a filing in year Y or Y+1.
 Treat the split as approximate.
 
-Run: PYTHONPATH=. python3 evals/failure_breakdown.py
+Run: PYTHONPATH=. python3 evals/failure_breakdown.py [--answers PATH]
 """
 
 from __future__ import annotations
 
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -138,8 +139,10 @@ def classify(row: dict, question: dict, cache: dict) -> str:
     return "wrong_in_ctx" if retrieved else "wrong_retrieval"
 
 
-def main() -> None:
-    rows = json.loads(ANSWERS.read_text())
+def main(argv: list[str] | None = None) -> None:
+    args = sys.argv[1:] if argv is None else argv
+    answers = Path(args[args.index("--answers") + 1]) if "--answers" in args else ANSWERS
+    rows = json.loads(answers.read_text())
     questions = json.loads(QUESTIONS.read_text())
     assert len(rows) == len(questions), "answers and questions are out of step"
     cache: dict[str, dict[str, set[int]]] = {}

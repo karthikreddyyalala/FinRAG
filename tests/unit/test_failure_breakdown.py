@@ -39,3 +39,21 @@ def test_missing_docs_lists_uncovered_filings():
     ]
     cache = {"MSFT": {"10-K": {2023, 2024}}, "JPM": {"10-Q": {2021}}}
     assert missing_docs(rows, cache) == ["MICROSOFT_2016_10K"]
+
+
+def test_main_scores_a_given_answers_file(tmp_path, capsys):
+    import json
+
+    from evals import failure_breakdown as fb
+
+    questions = json.loads(fb.QUESTIONS.read_text())
+    rows = [
+        {"question": q["question"], "answer": "The context does not provide it.",
+         "contexts": [], "ground_truth": q["ground_truth"]}
+        for q in questions
+    ]
+    path = tmp_path / "answers.json"
+    path.write_text(json.dumps(rows))
+    fb.main(["--answers", str(path)])
+    out = capsys.readouterr().out
+    assert "out_of_scope" in out and "total" in out
