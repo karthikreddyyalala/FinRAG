@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from evals.failure_breakdown import NAME_TO_TICKER
 from evals.run_eval import FINANCEBENCH, RESULTS_DIR, _init_clients, _load, _run_dataset
 
 
@@ -19,13 +20,26 @@ def answers_path(label: str) -> Path:
     return RESULTS_DIR / f"financebench_answers_{label}.json"
 
 
+def filter_items(items: list[dict], tickers: set[str]) -> list[dict]:
+    """Keep only the questions about these tickers (dataset uses company names)."""
+    return [i for i in items if NAME_TO_TICKER.get(i["ticker"], i["ticker"]) in tickers]
+
+
 def main() -> None:
-    if len(sys.argv) != 2:
-        print("Usage: run_answers.py LABEL")
+    args = sys.argv[1:]
+    tickers: set[str] = set()
+    if "--tickers" in args:
+        i = args.index("--tickers")
+        tickers = set(args[i + 1].split(","))
+        del args[i : i + 2]
+    if len(args) != 1:
+        print("Usage: run_answers.py LABEL [--tickers MMM,AMD,KO]")
         sys.exit(1)
-    path = answers_path(sys.argv[1])
+    path = answers_path(args[0])
     clients = _init_clients()
     items = _load(FINANCEBENCH)
+    if tickers:
+        items = filter_items(items, tickers)
     print(f"Answering {len(items)} questions -> {path}", flush=True)
     _run_dataset(items, "FB", clients, path)
 
