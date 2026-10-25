@@ -19,7 +19,6 @@ from server.retrieval.numerical_verifier import verify_answer
 from server.retrieval.query_cleaner import clean_question
 from server.retrieval.query_filters import extract_filters, period_window
 from server.retrieval.query_rewriter import rewrite_query
-from server.retrieval.ratio_plan import add_per_item_winners, line_items_for
 from server.retrieval.reranker import rerank
 
 BASELINE_MODES = ("dense_only", "bm25_only")
@@ -60,50 +59,15 @@ def _retrieve_full(
     )
     ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
 
-    base_candidates = candidates
-    # A derived metric (inventory turnover, COGS margin) needs several statement
-    # lines, but one search for the whole question tends to find only one of them.
-    # Search each needed line on its own; each gets a guaranteed slot below.
-    line_searches: list[tuple[str, list[dict[str, Any]]]] = []
-    items = line_items_for(query)
-    if items:
-        years = filters["years"]
-        year_text = " ".join(str(y) for y in range(years[0], years[1] + 1)) if years else ""
-        for item in items:
-            text = f"{item} {year_text}".strip()
-            found = hybrid_search(
-                text, keyword_index, pinecone_index, embed_fn, top_k=6,
-                ticker=filters["ticker"],
-                period_range=period_window(years) if years else None,
-            )
-            line_searches.append((text, found))
-        candidates = _merge_unique(candidates, [c for _, found in line_searches for c in found])
-
     if not do_rerank:
         return rewritten, candidates, candidates, ms
 
     # The rewritten form carries the GAAP phrasing the lexical fallback
     # needs; CrossEncoder still sees the natural query it was trained on.
     stage_start = time.monotonic()
-    top_chunks = rerank(search_query, base_candidates, top_k=top_k, lexical_query=rewritten)
-    if line_searches:
-        winners = [
-            rerank(text, found, top_k=3, lexical_query=text) for text, found in line_searches
-        ]
-        top_chunks = add_per_item_winners(top_chunks, winners, cap=min(8, top_k + len(items)))
+    top_chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=rewritten)
     ms["rerank"] = int((time.monotonic() - stage_start) * 1000)
     return rewritten, candidates, top_chunks, ms
-
-
-def _merge_unique(first: list[dict[str, Any]], more: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """first followed by the chunks of `more` not already present (by chunk_id)."""
-    seen = {c["chunk_id"] for c in first}
-    out = list(first)
-    for chunk in more:
-        if chunk["chunk_id"] not in seen:
-            seen.add(chunk["chunk_id"])
-            out.append(chunk)
-    return out
 
 
 def retrieve_chunks(
