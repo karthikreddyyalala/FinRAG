@@ -25,3 +25,17 @@ def test_correct_refused_and_wrong_are_told_apart():
     missed = row("The context does not provide it.", ["nothing"])
     assert classify(missed, Q, CACHE) == "refused_retrieval"
     assert classify(row("It was $999 million.", ["nothing"]), Q, CACHE) == "wrong_retrieval"
+
+
+def test_missing_docs_lists_uncovered_filings():
+    from evals.failure_breakdown import missing_docs
+
+    rows = [
+        {"doc_name": "MICROSOFT_2016_10K", "company": "Microsoft"},
+        {"doc_name": "MICROSOFT_2016_10K", "company": "Microsoft"},
+        {"doc_name": "MICROSOFT_2023_10K", "company": "Microsoft"},
+        {"doc_name": "JPMORGAN_2021Q1_10Q", "company": "JPMorgan"},
+        {"doc_name": "NETFLIX_2022Q4_EARNINGS", "company": "Netflix"},
+    ]
+    cache = {"MSFT": {"10-K": {2023, 2024}}, "JPM": {"10-Q": {2021}}}
+    assert missing_docs(rows, cache) == ["MICROSOFT_2016_10K"]

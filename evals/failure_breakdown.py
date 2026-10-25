@@ -25,6 +25,7 @@ Run: PYTHONPATH=. python3 evals/failure_breakdown.py
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -67,19 +68,51 @@ def filing_years(ticker: str) -> dict[str, set[int]]:
     return years
 
 
+def _covered(ticker: str, form: str, year: int, cache: dict[str, dict[str, set[int]]]) -> bool:
+    if ticker not in cache:
+        cache[ticker] = filing_years(ticker)
+    present = cache[ticker].get(form, set())
+    # A 10-K shows three years of income and cash flow figures, so a 10-K filed
+    # up to two years later can still hold the number. Other forms: one year.
+    window = {year, year + 1, year + 2} if form == "10-K" else {year, year + 1}
+    return bool(window & present)
+
+
 def has_filing(question: dict, cache: dict[str, dict[str, set[int]]]) -> bool:
     ticker = NAME_TO_TICKER.get(question["ticker"], question["ticker"])
     form = FORM.get(question["filing_type"])
     if form is None:
         return False
-    if ticker not in cache:
-        cache[ticker] = filing_years(ticker)
-    present = cache[ticker].get(form, set())
-    year = int(question["period"])
-    # A 10-K shows three years of income and cash flow figures, so a 10-K filed
-    # up to two years later can still hold the number. Other forms: one year.
-    window = {year, year + 1, year + 2} if form == "10-K" else {year, year + 1}
-    return bool(window & present)
+    return _covered(ticker, form, int(question["period"]), cache)
+
+
+DOC_NAME = re.compile(r"^.+_(\d{4})(?:Q([1-4]))?_(10K|10Q)$")
+
+
+def parse_doc_name(doc_name: str) -> tuple[int, int | None, str] | None:
+    """FinanceBench doc name -> (fiscal year, quarter or None, "10-K"/"10-Q").
+
+    Returns None for earnings calls and dated 8-Ks, which are not ingested.
+    """
+    m = DOC_NAME.match(doc_name)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)) if m.group(2) else None, FORM[m.group(3).lower()]
+
+
+def missing_docs(rows: list[dict], cache: dict[str, dict[str, set[int]]]) -> list[str]:
+    """Benchmark 10-K/10-Q documents with no matching filing in the corpus."""
+    missing: list[str] = []
+    for row in rows:
+        name = row["doc_name"]
+        parsed = parse_doc_name(name)
+        if not parsed or name in missing:
+            continue
+        year, _, form = parsed
+        ticker = NAME_TO_TICKER.get(row["company"], row["company"])
+        if not _covered(ticker, form, year, cache):
+            missing.append(name)
+    return missing
 
 
 def truth_in_contexts(ground_truth: str, contexts: list[str], tol: float = 0.02) -> bool:
