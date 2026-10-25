@@ -35,13 +35,14 @@ def verified_custom_items(items: list[dict]) -> list[dict]:
 
 def _init_clients():
     import boto3
-    from pinecone import Pinecone
 
-    from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
     # Fail fast on throttling: botocore's default retries can wait 30 minutes per
     # call when the daily token quota is spent, and every call site already falls
     # back to OpenAI on a throttle, so waiting gains nothing.
     from botocore.config import Config
+    from pinecone import Pinecone
+
+    from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
 
     bedrock = boto3.client(
         "bedrock-runtime", region_name="us-east-1",
