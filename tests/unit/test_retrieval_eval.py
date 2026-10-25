@@ -17,4 +17,5 @@ def test_hit_at_k_and_mrr():
     assert r["n"] == 2
     assert r["hit@1"] == 0.0
     assert r["hit@5"] == 0.5
+    assert r["hit@20"] == 0.5
     assert round(r["mrr"], 3) == round((1 / 3 + 0) / 2, 3)

@@ -20,8 +20,8 @@ RESULTS = ROOT / "results"
 
 
 def score_retrieval(items: list[dict], search: Callable[[str], list[dict]]) -> dict:
-    """hit@1/5/10 and MRR over items whose ground truth has a number."""
-    n = h1 = h5 = h10 = 0
+    """hit@1/5/10/20 and MRR over items whose ground truth has a number."""
+    n = h1 = h5 = h10 = h20 = 0
     reciprocal = 0.0
     for item in items:
         chunks = search(item["question"])
@@ -39,12 +39,14 @@ def score_retrieval(items: list[dict], search: Callable[[str], list[dict]]) -> d
             h1 += rank <= 1
             h5 += rank <= 5
             h10 += rank <= 10
+            h20 += rank <= 20
     total = max(n, 1)
     return {
         "n": n,
         "hit@1": h1 / total,
         "hit@5": h5 / total,
         "hit@10": h10 / total,
+        "hit@20": h20 / total,
         "mrr": reciprocal / total,
     }
 
