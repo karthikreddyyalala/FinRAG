@@ -321,3 +321,21 @@ def test_retrieve_chunks_stops_at_candidates_or_reranks(mock_hybrid, mock_rerank
     assert retrieve_chunks("3M capex FY2018", *deps, stage="reranked") == [{"text": "b"}]
     with pytest.raises(ValueError):
         retrieve_chunks("q", *deps, stage="nonsense")
+
+
+@patch("server.mcp_tools.search_filings.rerank", return_value=[])
+@patch("server.mcp_tools.search_filings.hybrid_search", return_value=[])
+@patch("server.mcp_tools.search_filings.rewrite_query", return_value="rewritten")
+def test_retrieval_uses_the_cleaned_question_but_generation_the_full_one(
+    mock_rewrite, _hybrid, _rerank
+):
+    from server.mcp_tools.search_filings import retrieve_chunks
+
+    full = "Assume that you are an analyst. What was 3M capex in FY2018? Answer in USD millions."
+    retrieve_chunks(full, None, None, None, None, stage="candidates")
+    assert mock_rewrite.call_args.args[1] == "What was 3M capex in FY2018?"
+
+    bedrock_client, pinecone_index, keyword_index, embed_fn = _deps()
+    with patch("server.mcp_tools.search_filings.generate_answer", return_value="ans") as gen:
+        build_search_filings_answer(full, bedrock_client, pinecone_index, keyword_index, embed_fn)
+    assert gen.call_args.args[1] == full

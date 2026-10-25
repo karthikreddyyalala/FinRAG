@@ -16,6 +16,7 @@ from server.observability.logger import estimate_cost_usd, log_query
 from server.observability.query_cache import get_cached_answer, put_cached_answer
 from server.retrieval.hybrid_retriever import bm25_only_search, dense_only_search, hybrid_search
 from server.retrieval.numerical_verifier import verify_answer
+from server.retrieval.query_cleaner import clean_question
 from server.retrieval.query_filters import extract_filters, period_window
 from server.retrieval.query_rewriter import rewrite_query
 from server.retrieval.reranker import rerank
@@ -39,9 +40,12 @@ def _retrieve_full(
     With do_rerank=False the third item is the unreranked candidates.
     """
     ms: dict[str, int] = {}
+    # Instructions like "Round your answer..." only matter to generation; they
+    # add words no filing contains, so retrieval searches on the cleaned text.
+    search_query = clean_question(query)
 
     stage_start = time.monotonic()
-    rewritten = rewrite_query(bedrock_client, query)
+    rewritten = rewrite_query(bedrock_client, search_query)
     ms["rewrite"] = int((time.monotonic() - stage_start) * 1000)
 
     # From the user's own words, not the LLM rewrite, which can add
@@ -61,7 +65,7 @@ def _retrieve_full(
     # The rewritten form carries the GAAP phrasing the lexical fallback
     # needs; CrossEncoder still sees the natural query it was trained on.
     stage_start = time.monotonic()
-    top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=rewritten)
+    top_chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=rewritten)
     ms["rerank"] = int((time.monotonic() - stage_start) * 1000)
     return rewritten, candidates, top_chunks, ms
 
