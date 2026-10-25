@@ -20,7 +20,9 @@ def _rows(block: dict[str, list[str]]) -> list[dict[str, str]]:
     return [dict(zip(FIELDS, values)) for values in zip(*(block[f] for f in FIELDS))]
 
 
-def all_submission_rows(cik: int, get_json: Callable[[str], dict[str, Any]]) -> list[dict[str, str]]:
+def all_submission_rows(
+    cik: int, get_json: Callable[[str], dict[str, Any]]
+) -> list[dict[str, str]]:
     """Every filing row for a company: the recent block plus each older page."""
     first = get_json(SUBMISSIONS_URL.format(cik=cik))
     rows = _rows(first["filings"]["recent"])
