@@ -25,6 +25,71 @@ QUERY_LOG_TABLE = "finrag-query-logs"
 QUERY_CACHE_TABLE = "finrag-query-cache"
 
 
+def _retrieve_full(
+    query: str,
+    bedrock_client: Any,
+    pinecone_index: Any,
+    keyword_index: Any,
+    embed_fn: Callable[[str], list[float]],
+    top_k: int,
+    do_rerank: bool = True,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    """Rewrite, hybrid-search and rerank. Returns (rewritten, candidates, top, ms).
+
+    With do_rerank=False the third item is the unreranked candidates.
+    """
+    ms: dict[str, int] = {}
+
+    stage_start = time.monotonic()
+    rewritten = rewrite_query(bedrock_client, query)
+    ms["rewrite"] = int((time.monotonic() - stage_start) * 1000)
+
+    # From the user's own words, not the LLM rewrite, which can add
+    # names or years the user never asked about.
+    stage_start = time.monotonic()
+    filters = extract_filters(query)
+    candidates = hybrid_search(
+        rewritten, keyword_index, pinecone_index, embed_fn,
+        ticker=filters["ticker"],
+        period_range=period_window(filters["years"]) if filters["years"] else None,
+    )
+    ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
+
+    if not do_rerank:
+        return rewritten, candidates, candidates, ms
+
+    # The rewritten form carries the GAAP phrasing the lexical fallback
+    # needs; CrossEncoder still sees the natural query it was trained on.
+    stage_start = time.monotonic()
+    top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=rewritten)
+    ms["rerank"] = int((time.monotonic() - stage_start) * 1000)
+    return rewritten, candidates, top_chunks, ms
+
+
+def retrieve_chunks(
+    query: str,
+    bedrock_client: Any,
+    pinecone_index: Any,
+    keyword_index: Any,
+    embed_fn: Callable[[str], list[float]],
+    stage: str = "reranked",
+    top_k: int = 5,
+) -> list[dict[str, Any]]:
+    """Run only the retrieval half, for evals that measure retrieval on its own.
+
+    Args:
+        stage: "candidates" returns the merged hybrid results before reranking;
+            "reranked" returns the final top_k that generation would see.
+    """
+    if stage not in ("candidates", "reranked"):
+        raise ValueError(f"unknown stage {stage!r}; expected 'candidates' or 'reranked'")
+    _, _, chunks, _ = _retrieve_full(
+        query, bedrock_client, pinecone_index, keyword_index, embed_fn, top_k,
+        do_rerank=stage == "reranked",
+    )
+    return chunks
+
+
 def build_search_filings_answer(
     query: str,
     bedrock_client: Any,
@@ -100,27 +165,11 @@ def build_search_filings_answer(
         top_chunks = bm25_only_search(query, keyword_index, top_k=top_k)
         stage_latency_ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
     else:
-        stage_start = time.monotonic()
-        rewritten = rewrite_query(bedrock_client, query)
-        stage_latency_ms["rewrite"] = int((time.monotonic() - stage_start) * 1000)
-        cost_usd += estimate_cost_usd("haiku", query, rewritten)
-
-        # From the user's own words, not the LLM rewrite, which can add
-        # names or years the user never asked about.
-        stage_start = time.monotonic()
-        filters = extract_filters(query)
-        candidates = hybrid_search(
-            rewritten, keyword_index, pinecone_index, embed_fn,
-            ticker=filters["ticker"],
-            period_range=period_window(filters["years"]) if filters["years"] else None,
+        rewritten, _candidates, top_chunks, retrieval_ms = _retrieve_full(
+            query, bedrock_client, pinecone_index, keyword_index, embed_fn, top_k
         )
-        stage_latency_ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
-
-        # The rewritten form carries the GAAP phrasing the lexical fallback
-        # needs; CrossEncoder still sees the natural query it was trained on.
-        stage_start = time.monotonic()
-        top_chunks = rerank(query, candidates, top_k=top_k, lexical_query=rewritten)
-        stage_latency_ms["rerank"] = int((time.monotonic() - stage_start) * 1000)
+        stage_latency_ms.update(retrieval_ms)
+        cost_usd += estimate_cost_usd("haiku", query, rewritten)
 
     stage_start = time.monotonic()
     raw_answer = generate_answer(bedrock_client, query, top_chunks)

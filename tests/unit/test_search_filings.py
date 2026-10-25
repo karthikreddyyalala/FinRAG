@@ -302,3 +302,22 @@ def test_unknown_mode_raises():
         build_search_filings_answer(
             "q", bedrock_client, pinecone_index, keyword_index, embed_fn, mode="bogus"
         )
+
+
+@patch("server.mcp_tools.search_filings.rewrite_query", return_value="3M capex")
+@patch("server.mcp_tools.search_filings.rerank")
+@patch("server.mcp_tools.search_filings.hybrid_search")
+def test_retrieve_chunks_stops_at_candidates_or_reranks(mock_hybrid, mock_rerank, _rewrite):
+    from server.mcp_tools.search_filings import retrieve_chunks
+
+    mock_hybrid.return_value = [{"text": "a"}, {"text": "b"}]
+    mock_rerank.return_value = [{"text": "b"}]
+    deps = (None, None, None, None)
+
+    assert retrieve_chunks("3M capex FY2018", *deps, stage="candidates") == [
+        {"text": "a"}, {"text": "b"}
+    ]
+    mock_rerank.assert_not_called()
+    assert retrieve_chunks("3M capex FY2018", *deps, stage="reranked") == [{"text": "b"}]
+    with pytest.raises(ValueError):
+        retrieve_chunks("q", *deps, stage="nonsense")
