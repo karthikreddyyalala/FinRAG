@@ -26,6 +26,19 @@ def filter_items(items: list[dict], tickers: set[str]) -> list[dict]:
     return [i for i in items if NAME_TO_TICKER.get(i["ticker"], i["ticker"]) in tickers]
 
 
+def scorable_only(items: list[dict]) -> list[dict]:
+    """Questions with an ingested filing and a numeric ground truth (the 92)."""
+    from evals.analyze_baseline_gap import _significant_numbers
+    from evals.failure_breakdown import FORM, has_filing
+
+    cache: dict = {}
+    return [
+        i for i in items
+        if i["filing_type"] in FORM and has_filing(i, cache)
+        and _significant_numbers(i["ground_truth"], 1.5)
+    ]
+
+
 def ratio_items(items: list[dict]) -> list[dict]:
     """Questions about a derived metric (the ones the ratio planner targets)."""
     return [i for i in items if line_items_for(i["question"])]
@@ -38,17 +51,23 @@ def main() -> None:
         i = args.index("--tickers")
         tickers = set(args[i + 1].split(","))
         del args[i : i + 2]
+    only_scorable = "--scorable" in args
+    if only_scorable:
+        args.remove("--scorable")
+    if "--no-rerank" in args:
+        # A/B: take the first top_k candidates instead of reranking them.
+        args.remove("--no-rerank")
+        import server.mcp_tools.search_filings as search_filings
+
+        search_filings.rerank = lambda q, c, top_k=5, lexical_query=None: c[:top_k]
     only_ratio = "--ratio-only" in args
     if only_ratio:
         args.remove("--ratio-only")
-    if "--no-ratio-plan" in args:
-        # Baseline for comparison: behave as before the ratio planner existed.
-        args.remove("--no-ratio-plan")
-        import server.mcp_tools.search_filings as search_filings
-
-        search_filings.line_items_for = lambda query: []
     if len(args) != 1:
-        print("Usage: run_answers.py LABEL [--tickers MMM,AMD] [--ratio-only] [--no-ratio-plan]")
+        print(
+            "Usage: run_answers.py LABEL [--tickers MMM,AMD] [--ratio-only] "
+            "[--scorable] [--no-rerank]"
+        )
         sys.exit(1)
     path = answers_path(args[0])
     clients = _init_clients()
@@ -57,6 +76,8 @@ def main() -> None:
         items = filter_items(items, tickers)
     if only_ratio:
         items = ratio_items(items)
+    if only_scorable:
+        items = scorable_only(items)
     print(f"Answering {len(items)} questions -> {path}", flush=True)
     _run_dataset(items, "FB", clients, path)
 

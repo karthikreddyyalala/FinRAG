@@ -175,7 +175,10 @@ def generate_answer(
         for attempt in range(8):
             try:
                 r = openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    # Configurable: when Bedrock's daily quota is spent, this
+                    # model writes every answer, and the smallest one misses
+                    # figures that are in the retrieved text.
+                    model=os.environ.get("FINRAG_OPENAI_MODEL", "gpt-4o-mini"),
                     temperature=0,
                     messages=[
                         {"role": "system", "content": system_prompt},

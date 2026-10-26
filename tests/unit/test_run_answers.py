@@ -25,3 +25,17 @@ def test_ratio_items_keeps_only_derived_metric_questions():
         {"question": "FY2021 COGS % margin for Coca Cola?"},
     ]
     assert [i["question"][:12] for i in ratio_items(items)] == ["What is Kraf", "FY2021 COGS "]
+
+
+def test_scorable_items_keep_in_scope_questions_with_a_numeric_truth(monkeypatch):
+    from evals import failure_breakdown as fb
+    from evals.run_answers import scorable_only
+
+    monkeypatch.setattr(fb, "has_filing", lambda q, cache: q["ticker"] != "AMD")
+    items = [
+        {"question": "a", "ticker": "3M", "filing_type": "10k", "ground_truth": "$1577.00"},
+        {"question": "b", "ticker": "AMD", "filing_type": "10k", "ground_truth": "$1577.00"},
+        {"question": "c", "ticker": "3M", "filing_type": "Earnings", "ground_truth": "$5.00"},
+        {"question": "d", "ticker": "3M", "filing_type": "10k", "ground_truth": "Yes, it did."},
+    ]
+    assert [i["question"] for i in scorable_only(items)] == ["a"]

@@ -148,3 +148,62 @@ def test_generate_answer_rejects_unknown_model():
 
     with pytest.raises(ValueError):
         generate_answer(client, "q", [], model="gpt-5")
+
+
+def test_openai_fallback_uses_the_model_named_in_the_environment(monkeypatch):
+    import sys
+    import types
+    from unittest.mock import MagicMock
+
+    seen = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            seen.update(kwargs)
+            message = types.SimpleNamespace(content="fallback answer")
+            return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    class FakeOpenAI:
+        def __init__(self, api_key):
+            self.chat = types.SimpleNamespace(completions=FakeCompletions())
+
+    fake_module = types.SimpleNamespace(
+        OpenAI=FakeOpenAI, APIConnectionError=Exception, APITimeoutError=Exception
+    )
+    monkeypatch.setitem(sys.modules, "openai", fake_module)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("FINRAG_OPENAI_MODEL", "gpt-4.1")
+
+    bedrock = MagicMock()
+    bedrock.converse.side_effect = Exception("ThrottlingException: Too many tokens per day")
+    chunk = {"text": "x", "ticker": "MMM", "filing_type": "10-K", "period": "2019-02-07"}
+    assert generate_answer(bedrock, "q", [chunk]) == "fallback answer"
+    assert seen["model"] == "gpt-4.1"
+
+
+def test_openai_fallback_defaults_to_the_small_model(monkeypatch):
+    import sys
+    import types
+    from unittest.mock import MagicMock
+
+    seen = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            seen.update(kwargs)
+            message = types.SimpleNamespace(content="ok")
+            return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    class FakeOpenAI:
+        def __init__(self, api_key):
+            self.chat = types.SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(
+        OpenAI=FakeOpenAI, APIConnectionError=Exception, APITimeoutError=Exception))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("FINRAG_OPENAI_MODEL", raising=False)
+    bedrock = MagicMock()
+    bedrock.converse.side_effect = Exception("ThrottlingException")
+    chunk = {"text": "x", "ticker": "MMM", "filing_type": "10-K", "period": "2019-02-07"}
+    generate_answer(bedrock, "q", [chunk])
+    assert seen["model"] == "gpt-4o-mini"
