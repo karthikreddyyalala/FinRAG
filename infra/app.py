@@ -8,7 +8,7 @@ from infra.stacks.storage_stack import StorageStack
 
 env = cdk.Environment(region="us-east-1")
 app = cdk.App()
-StorageStack(app, "FinragStorageStack")
+StorageStack(app, "FinragStorageStack", env=env)
 mcp_server_stack = McpServerStack(app, "FinragMcpServerStack", env=env)
 ingestion_stack = IngestionStack(app, "FinragIngestionStack", env=env)
 ObservabilityStack(
