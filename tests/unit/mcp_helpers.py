@@ -85,7 +85,9 @@ def tool_client(*registers, deps):
                 "jsonrpc": "2.0", "id": 1, "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             })
-            result = resp.json()["result"]
+            body = resp.json()
+            assert "result" in body, body
+            result = body["result"]
             text = result["content"][0]["text"]
             return result["isError"], (text if result["isError"] else json.loads(text))
 

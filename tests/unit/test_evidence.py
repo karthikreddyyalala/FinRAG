@@ -87,3 +87,31 @@ def test_to_passage_formats_citation_and_caps_text():
 
 def test_citation_omits_page_when_unknown():
     assert format_citation(chunk("a1", "t", page=None)) == "[MMM 10-K 2019-02-07]"
+
+
+def test_lowercase_ticker_is_normalised():
+    index = FakeKeywordIndex([chunk("a1", CAPEX_ROW)])
+    chunks, _ = find_passages("capex", pinecone_returning([]), index, _embed, ticker="mmm")
+    assert [c["chunk_id"] for c in chunks] == ["a1"]
+
+
+@pytest.mark.parametrize("q", ["", "   "])
+def test_empty_question_is_rejected(q):
+    with pytest.raises(ValueError):
+        find_passages(q, pinecone_returning([]), FakeKeywordIndex([]), _embed)
+
+
+def test_years_with_no_matching_filing_are_flagged():
+    index = FakeKeywordIndex([chunk("a1", CAPEX_ROW, period="2023-02-08")])
+    chunks, note = find_passages("capex", pinecone_returning([]), index, _embed,
+                                 ticker="MMM", years=(2018, 2018))
+    assert [c["chunk_id"] for c in chunks] == ["a1"]
+    assert "2018" in note and "other years" in note
+
+
+def test_keyword_note_is_kept_when_nothing_matches():
+    index = FakeKeywordIndex([])
+    broken = MagicMock(side_effect=RuntimeError("down"))
+    chunks, note = find_passages("revenue", pinecone_returning([]), index, broken)
+    assert chunks == []
+    assert note == f"{KEYWORD_ONLY_NOTE} {NO_MATCH_NOTE}"

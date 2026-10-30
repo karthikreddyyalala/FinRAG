@@ -62,7 +62,10 @@ def find_passages(
         raise ValueError(f"unknown stage {stage!r}; expected 'candidates' or 'reranked'")
 
     # Instructions like "Round your answer..." add words no filing contains.
+    ticker = ticker.upper() if ticker else None
     search_query = clean_question(question)
+    if not search_query.strip():
+        raise ValueError("question is empty")
     # "capital expenditure" never appears in a cash flow statement; "purchases
     # of property, plant and equipment" does.
     lexical_query = expand_financial_terms(search_query)
@@ -95,7 +98,12 @@ def find_passages(
     else:
         chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=lexical_query)
     if not chunks:
-        note = NO_MATCH_NOTE
+        note = f"{note} {NO_MATCH_NOTE}" if note == KEYWORD_ONLY_NOTE else NO_MATCH_NOTE
+    elif stage == "reranked" and years and period_range and not any(
+        period_range[0] <= (c.get("period") or "") <= period_range[1] for c in chunks
+    ):
+        span = str(years[0]) if years[0] == years[1] else f"{years[0]}-{years[1]}"
+        note = f"No filings matched {span}; these passages are from other years."
     return chunks, note
 
 
