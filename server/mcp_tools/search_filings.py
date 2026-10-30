@@ -35,7 +35,10 @@ def register_search_filings_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
         Args:
             question: The question in plain words, e.g. "3M capital expenditure in FY2018".
             ticker: Optional ticker to search one company only, e.g. "MMM".
-            fiscal_year: Optional fiscal year, e.g. 2018.
+            fiscal_year: Optional fiscal year, 1993 to 2100, e.g. 2018. Matches filings
+                filed in that year or the next, since an annual report is filed after
+                its year ends. If none match, passages from other years come back with
+                a note saying so.
         """
         if not question.strip():
             raise ToolError("question is empty.")

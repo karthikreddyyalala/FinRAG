@@ -1,5 +1,5 @@
 // Real production bugs, verbatim from claude.md's "Why the corpus is being
-// rebuilt" and D2 sections — not paraphrased away.
+// rebuilt" and D2 sections, not paraphrased away.
 export const INCIDENTS = [
   {
     title: "Dense results silently discarded",
@@ -54,7 +54,7 @@ export const INCIDENTS = [
     title: "Vector hits arrived cut to 1,000 characters",
     symptom: "Figures that sat late in a chunk never reached the answer when a hit came from Pinecone alone.",
     root_cause:
-      "Pinecone metadata stored only the first 1,000 characters of each chunk, but 75% of chunks are longer (3,728 characters on average).",
+      "Pinecone metadata stored only the first 1,000 characters of each chunk, but 75% of chunks are longer than that (the average chunk is 3,728 characters).",
     fix: "Each candidate is swapped for its full stored text before reranking. On the same index, evidence in the top 5 rose from 10.2% to 13.4% and the number in the top 5 from 47.8% to 52.2%.",
   },
 ] as const;

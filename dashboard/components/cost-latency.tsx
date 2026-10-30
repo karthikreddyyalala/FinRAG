@@ -50,7 +50,7 @@ export function CostLatency() {
           </div>
           <p className="mt-6 max-w-[65ch] border-t border-[var(--color-border)] pt-4 text-sm text-[var(--color-muted)]">
             The first call after a deploy is slow: <Cited metric="cold_first_call_ms" /> server-side, because the
-            Lambda loads the 964 MB keyword index. After that the function stays warm.
+            Lambda loads the 964 MB keyword index. A health check every 5 minutes keeps one instance warm; a second instance, started when calls overlap, pays the same cost once.
           </p>
         </div>
       </div>

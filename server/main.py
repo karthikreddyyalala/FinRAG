@@ -49,16 +49,18 @@ HEALTH_CHECK = {"question": "3M capital expenditure FY2018", "ticker": "MMM",
                 "years": (2018, 2018)}
 
 INSTRUCTIONS = """\
-FinRAG searches the SEC filings (10-K, 10-Q, 8-K) of about 70 large US companies. \
+FinRAG searches the SEC filings (10-K, 10-Q, 8-K) of 71 large US-listed companies. \
 Call list_covered_companies to see exactly which companies and years are covered.
 
 The tools return source passages, not answers. Write the answer yourself from the passages:
-- Cite every figure with its passage's citation, e.g. [MMM 10-K 2019-02-07 p.40].
+- Cite every figure with its passage's citation, e.g. [MMM 10-K 2019-02-07].
 - Never state a number that is not in a passage. If the passages lack it, say so.
 - Filings use GAAP line items: capital expenditure is "Purchases of property, plant and \
 equipment"; revenue is often "Net sales"; operating cash flow is "Net cash provided by \
 operating activities".
 - A number in parentheses is negative or a cash outflow: (1,577) spent means 1,577 spent.
+- Write figures in the passage's own units, e.g. $1,577 million rather than $1.6 billion: \
+verify_figures compares values as written and does not convert units.
 
 Before a final answer that contains figures, call verify_figures with your draft and the \
 ids of the passages you used, then fix or flag anything listed in not_found.

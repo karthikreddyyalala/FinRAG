@@ -67,21 +67,47 @@ jobs:
     if: github.event_name == 'pull_request'
     environment: eval
     steps:
+      # Forks and fresh clones have no secrets. Skip with a notice instead of
+      # failing every PR; the eval runs whenever all four secrets are set.
+      - name: Check eval secrets
+        id: secrets
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          missing=""
+          for name in PINECONE_API_KEY OPENAI_API_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::notice title=CI eval skipped::Missing secrets:$missing. Add them to the 'eval' environment to run the 30-question eval."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
 
       - name: Set up Python
+        if: steps.secrets.outputs.ready == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
+        if: steps.secrets.outputs.ready == 'true'
         run: pip install -r requirements.txt
 
       - name: Download FinanceBench dataset
+        if: steps.secrets.outputs.ready == 'true'
         run: python scripts/download_financebench.py
 
       - name: Run 30-question CI eval
+        if: steps.secrets.outputs.ready == 'true'
         env:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           # Embeddings and the eval's answer model (evals/client_answer.py)
@@ -93,7 +119,7 @@ jobs:
         run: python evals/run_ci_eval.py
 
       - name: Post eval scores as PR comment
-        if: always()
+        if: always() && steps.secrets.outputs.ready == 'true'
         uses: actions/github-script@v7
         with:
           script: |

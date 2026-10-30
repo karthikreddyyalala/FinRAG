@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-30",
+  "model": "gpt-4o-mini",
+  "retrieval": "find_passages, same code and index as the live server",
+  "financebench": {
+    "new": {
+      "n": 150,
+      "refused": 99,
+      "numerical_accuracy": 0.9020116495398186,
+      "states_true_number_in_non_refusals": 25,
+      "states_true_number": {
+        "hits": 53,
+        "denominator": 110,
+        "rate": 0.4818181818181818
+      },
+      "verify_figures": {
+        "answers_with_zero_not_found": 145,
+        "share_zero_not_found": 0.9666666666666667,
+        "total_not_found": 14
+      }
+    },
+    "old": {
+      "n": 150,
+      "refused": 121,
+      "numerical_accuracy": 0.9104858246328835,
+      "states_true_number_in_non_refusals": 15,
+      "states_true_number": {
+        "hits": 52,
+        "denominator": 110,
+        "rate": 0.4727272727272727
+      }
+    }
+  },
+  "custom": {
+    "new": {
+      "n": 48,
+      "refused": 42,
+      "numerical_accuracy": 0.8556547619047619,
+      "states_true_number_in_non_refusals": 0,
+      "states_true_number": {
+        "hits": 0,
+        "denominator": 48,
+        "rate": 0.0
+      },
+      "verify_figures": {
+        "answers_with_zero_not_found": 48,
+        "share_zero_not_found": 1.0,
+        "total_not_found": 0
+      }
+    },
+    "old": {
+      "n": 48,
+      "refused": 40,
+      "numerical_accuracy": 0.8616071428571428,
+      "states_true_number_in_non_refusals": 0,
+      "states_true_number": {
+        "hits": 0,
+        "denominator": 48,
+        "rate": 0.0
+      }
+    }
+  },
+  "combined": {
+    "new": {
+      "n": 198,
+      "refused": 141,
+      "numerical_accuracy": 0.8907736161737442,
+      "states_true_number_in_non_refusals": 25,
+      "states_true_number": {
+        "hits": 53,
+        "denominator": 158,
+        "rate": 0.33544303797468356
+      },
+      "verify_figures": {
+        "answers_with_zero_not_found": 193,
+        "share_zero_not_found": 0.9747474747474747,
+        "total_not_found": 14
+      }
+    },
+    "old": {
+      "n": 198,
+      "refused": 161,
+      "numerical_accuracy": 0.898636447232704,
+      "states_true_number_in_non_refusals": 15,
+      "states_true_number": {
+        "hits": 52,
+        "denominator": 158,
+        "rate": 0.3291139240506329
+      }
+    }
+  },
+  "cost_usd_estimate": 0.145
+}

@@ -27,8 +27,8 @@ curl -s "${H[@]}" -X POST "$U" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call"
 
 **Expect:**
 - `tools/list` returns `search_sec_filings`, `get_company_financials`, `compare_companies`, `get_latest_filing`, `list_covered_companies` and `verify_figures`.
-- The search returns 5 passages from `[MMM 10-K 2019-02-07]`. One of them contains the cash flow line `Purchases of property, plant and equipment (PP&E) | $ | (1,577)`.
-- Warm calls take about 1 second. The first call after a quiet period can take about 15 seconds while the server loads its index.
+- The search returns 5 passages from `[MMM 10-K 2019-02-07]`. Two of them contain the cash flow row `Purchases of property, plant and equipment (PP&E)` with `(1,577)` in the 2018 column.
+- Warm calls take about 1 second. A call that lands on a fresh server instance (after a deploy, or when several calls arrive at once) can take about 15 seconds while it loads its index.
 
 ## 2. Connect a client
 
@@ -38,11 +38,11 @@ curl -s "${H[@]}" -X POST "$U" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call"
 claude mcp add --transport http finrag https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp
 ```
 
-Then run `/mcp` inside Claude Code. `finrag` should show as connected with 6 tools.
+Then run `claude mcp list` (or `/mcp` inside Claude Code). `finrag` should show as connected, and `/mcp` lists its 6 tools.
 
-**Claude (web or desktop):** add a custom connector and paste the URL. There's no sign-in step.
+**Claude (web or desktop):** Customize > Connectors > + Add > Add custom connector. Paste the URL and choose No sign in if asked. On Team and Enterprise plans an Owner adds it first under Organization settings > Connectors.
 
-**Cursor:** add this to `.cursor/mcp.json`:
+**Cursor:** add this to `.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` for every project:
 
 ```json
 { "mcpServers": { "finrag": { "url": "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp" } } }
@@ -71,13 +71,13 @@ Ask these one at a time:
 | `compare_companies` | `{"tickers": ["TSLA", "F"], "metric": "revenue", "period": "2024"}` | Passages for each ticker, including `[TSLA 10-K 2025-01-30]` |
 | `get_latest_filing` | `{"ticker": "AAPL", "filing_type": "10-Q"}` | The newest Apple 10-Q from EDGAR (on 2026-10-30: filed 2026-07-31), an `sec_url`, and `in_corpus: true` |
 | `list_covered_companies` | `{}` | 71 companies, each with forms and first and last filing dates |
-| `verify_figures` | `{"answer": "3M spent $1,577 million on capex in 2018.", "passage_ids": [<ids from the first search>]}` | `grounded: ["$1,577 million"]`, `not_found: []` |
+| `verify_figures` | `{"answer": "3M spent $1,577 million on capex in 2018.", "passage_ids": [<ids from the first search>]}` | `grounded: ["$1,577 million"]`, `not_found: []`, `unknown_ids: []`, `checked_against: 5` |
 
 To call a tool from curl, use the `tools/call` body from step 1 and change `name` and `arguments`.
 
 ## 5. The guard rails
 
-Each of these should fail cleanly, with a message that tells the client what to do:
+Each of these should fail cleanly, with a message that tells the client what to do. Errors arrive as `isError: true` with the text prefixed `Error executing tool <name>: `.
 
 | Try | Expect |
 |---|---|
@@ -85,7 +85,8 @@ Each of these should fail cleanly, with a message that tells the client what to 
 | `search_sec_filings` with `"question": "   "` | Error: `question is empty.` |
 | `compare_companies` with 6 tickers | Error: `Compare 2 to 5 companies.` |
 | `search_sec_filings` for Apple with `"fiscal_year": 2012` | Passages from other years, plus the note `No filings matched 2012; these passages are from other years.` |
-| `verify_figures` with "$9,999 million" against the 3M passage | `not_found: ["$9,999 million"]` |
+| `verify_figures` with "$9,999 million" against the 3M passages | `not_found: ["$9,999 million"]` |
+| `verify_figures` with "$1.58 billion" against the 3M passages | `not_found: ["$1.58 billion"]`: units are not converted, so write `$1,577 million` |
 
 ## 6. Known weakness to look at
 
@@ -96,7 +97,7 @@ Each of these should fail cleanly, with a message that tells the client what to 
 From the repo root:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -m pytest -q        # server, retrieval, tools, infra: 278+ tests
+PYTHONPATH=. .venv/bin/python -m pytest -q        # server, retrieval, tools, infra: 280+ tests
 .venv/bin/ruff check .
 cd dashboard && npm run lint && npm test && npm run build
 ```
@@ -126,11 +127,11 @@ It writes `dashboard/data/live/live-check.json`.
 - **CloudWatch > Alarms:** `finrag-mcp-server-errors` and `finrag-weekly-refresh-errors` should be `OK`. They read `INSUFFICIENT_DATA` for the first few minutes after a deploy.
 - **CloudWatch > Log groups > FinragMcpServerStack-McpServerLogs...:** search for `finrag_call` to see one line per tool call (tool, arguments, latency, error). Search for `semantic search failed` to find keyword-only fallbacks. Normally there are none.
 - **DynamoDB > finrag-rate-limits:** a `min#...` item and a `day#...` item, each with a running `hits` count.
-- **SNS > finrag-alerts:** subscribe your email here to get alarm emails.
+- **SNS > finrag-alerts:** has no subscribers unless you deployed with `-c alert_email=...`. Subscribe your email here to get alarm emails.
 
 ## 10. The website
 
-Open [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app) after the branch is merged and Vercel redeploys. Check that:
+Open [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app). Check that:
 - the hero says no sign-in and links to `#connect`
 - the counts read 71 companies, 1,082 filings and 171,790 chunks
 - the tools section shows 6 tools

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { GithubLogoIcon, CloudArrowUpIcon } from "@phosphor-icons/react";
 import { GITHUB_URL } from "@/lib/constants";
 
@@ -24,13 +25,13 @@ export function Footer() {
             <GithubLogoIcon size={16} weight="regular" />
             Read the code
           </a>
-          <a
-            href="#deploy"
+          <Link
+            href="/#deploy"
             className="flex cursor-pointer items-center justify-center gap-2 rounded-full border border-[var(--color-border)] px-5 py-2.5 text-sm font-semibold text-[var(--color-text)] transition-transform duration-200 active:translate-y-[1px] active:scale-[0.98]"
           >
             <CloudArrowUpIcon size={16} weight="regular" />
             Deploy your own
-          </a>
+          </Link>
         </div>
       </div>
       <p className="mx-auto mt-10 max-w-[1400px] font-[family-name:var(--font-mono)] text-xs text-[var(--color-muted)]">

@@ -1,6 +1,6 @@
 "use client";
 import { CopyButton } from "@/components/copy-button";
-import { CONNECT_CLIENTS, DEPLOY_STEPS, LIMITS } from "@/lib/connect-steps";
+import { CONNECT_CLIENTS, DEPLOY_PREREQUISITES, DEPLOY_STEPS, LIMITS } from "@/lib/connect-steps";
 
 function CodeBlock({ text }: { text: string }) {
   return (
@@ -51,7 +51,7 @@ export function ConnectSection() {
           Deploy your own.
         </h2>
         <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
-          Want your own limits and your own corpus? These are the exact steps.
+          Want your own limits and your own corpus? These are the exact steps. {DEPLOY_PREREQUISITES}
         </p>
         <ol className="mt-8 space-y-4">
           {DEPLOY_STEPS.map((step, i) => (
