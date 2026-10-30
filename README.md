@@ -108,11 +108,28 @@ Same index, same day, top 5 after reranking:
 
 The new path drops the LLM rewrite and retrieves about as well: the number lands in the top 5 for one more of 92 questions, and the evidence for four more of 127. Swapping in full text is what makes the difference.
 
+### Answer quality on the new server (2026-10-30)
+
+Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py`. Results: `evals/results/remeasure_2026-10-30.json`.
+
+| FinanceBench (150) | September | Now |
+|---|---|---|
+| Refused to answer | 121 | 99 |
+| Stated the right number, among answered questions (of 110 with a numeric answer) | 15 | 25 |
+| Answers whose every figure is in the retrieved passages | not measured | 145 (96.7%) |
+
+How to read these:
+
+- **It answers more often and gets more right**, but it still refuses about two in three questions. Most refusals are real: retrieval returned the wrong passages, often for ratio questions (working capital, days payable) that need several statement lines.
+- **"Stated the right number" is an automated check** (within 2% of the ground truth) and is not hand-graded. An earlier version counted stray numbers inside refusals as hits; that inflated the September figure to 52, which is why I now count answered questions only.
+- **The 48 hand-verified custom questions are mostly unanswerable on this path** (42 refusals). Of the 6 answers, 2 are right and 4 quote the wrong period or company.
+- **ragas was not re-run.** Its September scores are below.
+
 ### Answer quality (September 2026, before this server)
 
 Tested on [FinanceBench](https://huggingface.co/datasets/PatronusAI/financebench) (150 public questions) plus 48 questions I verified by hand against the filings (`evals/eval_data/custom_150.json`).
 
-**Which model wrote these answers:** mostly gpt-4o-mini, not Claude Sonnet as I first reported. This account's Bedrock quota was 0, so generation silently fell back to OpenAI. CloudWatch shows 241 successful Bedrock calls against about 20,000 throttles over 100 days, and the answer files never recorded the model. Eval answers now come from one named model (`FINRAG_EVAL_MODEL`, default gpt-4o-mini), which is recorded on every row. These numbers will be re-measured on the new server.
+**Which model wrote these answers:** mostly gpt-4o-mini, not Claude Sonnet as I first reported. This account's Bedrock quota was 0, so generation silently fell back to OpenAI. CloudWatch shows 241 successful Bedrock calls against about 20,000 throttles over 100 days, and the answer files never recorded the model. Eval answers now come from one named model (`FINRAG_EVAL_MODEL`, default gpt-4o-mini), which is recorded on every row. The re-measure above replaces them as the current numbers.
 
 | Metric | FinanceBench (150) | Custom (48) | Combined (198) |
 |---|---|---|---|
