@@ -1,9 +1,10 @@
 """24-hour cache of MCP tool results in DynamoDB (table finrag-query-cache).
 
-Keyed by tool name + arguments. TTL is 24 hours, not a week: the weekly
-corpus refresh may add a filing for exactly the company a cached result is
-about, and 24 hours means a cached result never survives into a week where
-the corpus changed. Best effort throughout: a cache fault is a miss, never
+Keyed by tool name + arguments + a hash of the server's source, so a deploy
+that changes ranking never serves results from the previous build. TTL is
+24 hours, not a week: the weekly corpus refresh may add a filing for exactly
+the company a cached result is about, and 24 hours means a cached result
+never survives into a week where the corpus changed. Best effort throughout: a cache fault is a miss, never
 an error.
 """
 from __future__ import annotations
@@ -13,16 +14,21 @@ import json
 import re
 import time
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 CACHE_TTL_SECONDS = 24 * 60 * 60
 # v1 entries held generated answers (the pre-M1 pipeline); never read them back.
 KEY_VERSION = "v2"
+# Changes with any edit under server/; computed once per cold start (~60 small files).
+CODE_VERSION = hashlib.sha256(b"".join(
+    p.read_bytes() for p in sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
+)).hexdigest()[:12]
 
 
 def cache_key(tool: str, arguments: dict[str, Any]) -> str:
-    """sha256 of the normalized (version, tool, arguments): case and spacing fold."""
-    text = json.dumps([KEY_VERSION, tool, arguments], sort_keys=True, default=str)
+    """sha256 of the normalized (versions, tool, arguments): case and spacing fold."""
+    text = json.dumps([KEY_VERSION, CODE_VERSION, tool, arguments], sort_keys=True, default=str)
     return hashlib.sha256(re.sub(r"\s+", " ", text.lower()).encode("utf-8")).hexdigest()
 
 
