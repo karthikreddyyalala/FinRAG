@@ -23,7 +23,10 @@ export function MetricsBand() {
     <section className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          <Stat metricKey="numerical_accuracy_financebench" label="Stated figures grounded, FinanceBench 150Q" />
+          <Stat
+            metricKey="numerical_accuracy_financebench"
+            label="Stated figures grounded, FinanceBench 150Q. Answers written mainly by the gpt-4o-mini fallback; to be re-measured."
+          />
           <div className="border-t border-[var(--color-border)] pt-4">
             <div className="font-[family-name:var(--font-mono)] text-3xl font-semibold tabular-nums text-[var(--color-text)] md:text-4xl">
               <CountUp target={filings.value} />

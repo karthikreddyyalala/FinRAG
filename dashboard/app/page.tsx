@@ -9,7 +9,7 @@ import { VerifierDemo } from "@/components/verifier-demo";
 import { ToolsBento } from "@/components/tools-bento";
 import { IncidentLog } from "@/components/incident-log";
 import { StackGrid } from "@/components/stack-grid";
-import { DeploySteps } from "@/components/deploy-steps";
+import { ConnectSection } from "@/components/connect-section";
 import { ResultsSection } from "@/components/results-section";
 import { CostLatency } from "@/components/cost-latency";
 
@@ -31,7 +31,7 @@ export default function Home() {
         <CostLatency />
         <IncidentLog />
         <StackGrid />
-        <DeploySteps />
+        <ConnectSection />
       </main>
       <Footer />
     </>

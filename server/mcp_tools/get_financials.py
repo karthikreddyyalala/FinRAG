@@ -1,129 +1,54 @@
-"""get_company_financials MCP tool: targeted single-metric lookup (Week 5).
-
-Unlike search_sec_filings, the input is already structured (ticker, metric,
-period) -- there is no natural-language phrasing for Haiku to expand, so
-this skips straight to the deterministic GAAP expansion + hybrid search +
-rerank + verify stages.
-"""
+"""get_company_financials: passages for one metric, one company, one period."""
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
 from typing import Any
 
 from mcp.server import MCPServer
 
-from server.generation.answer_generator import generate_answer
-from server.observability.logger import estimate_cost_usd
-from server.retrieval.hybrid_retriever import hybrid_search
-from server.retrieval.numerical_verifier import verify_answer
-from server.retrieval.query_filters import extract_filters, period_window
-from server.retrieval.query_rewriter import expand_financial_terms
-from server.retrieval.reranker import rerank
+from server.mcp_tools.common import (
+    READ_ONLY,
+    Deps,
+    GetDeps,
+    check_length,
+    clean_ticker,
+    passages_result,
+    require_covered,
+    run_tool,
+)
+from server.retrieval.evidence import find_passages
+from server.retrieval.query_filters import extract_filters
 
 
-def build_financials_answer(
-    ticker: str,
-    metric: str,
-    period: str,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-    top_k: int = 5,
-    model: str = "haiku",
-) -> dict[str, Any]:
-    """Look up a single metric for a company/period and return a cited value.
-
-    Args:
-        ticker: Company ticker, e.g. "NVDA".
-        metric: Metric name, e.g. "revenue" or "capital expenditure".
-        period: Reporting period, e.g. "Q1-2026".
-        bedrock_client: A boto3 bedrock-runtime client.
-        pinecone_index: A Pinecone Index handle.
-        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
-        embed_fn: Callable(text) -> embedding vector.
-        top_k: Number of chunks to keep after reranking.
-        model: Generation model tier, "haiku" (default) or "sonnet" (C5,
-            CLAUDE.md Phase C). A single ticker/metric/period lookup is
-            CLAUDE.md's "simple single-metric" case -- extracting one
-            already-located number from a short, targeted context is well
-            within Haiku's ability, and it is the cheaper/faster tier.
-            compare_companies overrides this to "sonnet" per call, since a
-            multi-hop comparison is the "complex comparison" case the
-            checklist routes to Sonnet instead.
-
-    Returns:
-        {"ticker", "metric", "period", "answer", "citations", "cost_usd", "latency_ms"}
-    """
-    start = time.monotonic()
-
-    query = f"What was {ticker}'s {metric} for {period}?"
-    lexical_query = expand_financial_terms(f"{ticker} {metric} {period}")
-
-    years = extract_filters(period)["years"]
-    candidates = hybrid_search(
-        lexical_query, keyword_index, pinecone_index, embed_fn,
-        ticker=ticker.upper(),
-        period_range=period_window(years) if years else None,
-    )
-    # The ticker is a known input here, unlike search_sec_filings' free-text
-    # queries -- a short ticker like "F" is too weak a lexical signal for
-    # BM25/dense retrieval to reliably constrain to the right company, so an
-    # unrelated chunk from another ticker can ride along in the candidate
-    # set. Filtering by the metadata we already have is cheap and exact.
-    own_ticker_candidates = [c for c in candidates if c.get("ticker", "").upper() == ticker.upper()]
-    top_chunks = rerank(query, own_ticker_candidates, top_k=top_k, lexical_query=lexical_query)
-
-    raw_answer = generate_answer(bedrock_client, query, top_chunks, model=model)
-    source_texts = [chunk["text"] for chunk in top_chunks]
-    verified_answer = verify_answer(raw_answer, source_texts)
-    generate_input = "\n\n".join(source_texts) + query
-    cost_usd = estimate_cost_usd(model, generate_input, raw_answer)
-
-    citations = [
-        {
-            "ticker": chunk.get("ticker"),
-            "filing_type": chunk.get("filing_type"),
-            "period": chunk.get("period"),
-            "page": chunk.get("page_number"),
-            "text": chunk.get("text", ""),
-        }
-        for chunk in top_chunks
-    ]
-
-    return {
-        "ticker": ticker,
-        "metric": metric,
-        "period": period,
-        "answer": verified_answer,
-        "citations": citations,
-        "cost_usd": round(cost_usd, 6),
-        "latency_ms": int((time.monotonic() - start) * 1000),
-    }
+def financials_passages(deps: Deps, ticker: str, metric: str, period: str) -> dict[str, Any]:
+    """Passages for one company's metric; shared with compare_companies."""
+    require_covered(ticker, deps.keyword_index)
+    return passages_result(*find_passages(
+        f"{ticker} {metric} {period}", deps.pinecone_index, deps.keyword_index, deps.embed_fn,
+        ticker=ticker, years=extract_filters(period)["years"],
+    ))
 
 
-def register_get_financials_tool(
-    mcp: MCPServer,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-) -> None:
-    """Register the get_company_financials tool on an MCPServer instance."""
+def register_get_financials_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
+    """Register get_company_financials on an MCPServer."""
 
-    @mcp.tool()
+    @mcp.tool(title="Get company financials", annotations=READ_ONLY)
     def get_company_financials(ticker: str, metric: str, period: str) -> dict[str, Any]:
-        """Look up a specific financial metric for a company and period.
+        """Find the passages that report one financial metric for a company and period.
+
+        Returns source passages, not a number. Read the figure from them and cite it.
 
         Args:
-            ticker: Company ticker, e.g. "NVDA".
-            metric: Metric name, e.g. "revenue", "capital expenditure", "gross margin".
-            period: Reporting period, e.g. "Q1-2026" or "FY2018".
-
-        Returns:
-            Dict with ticker, metric, period, answer, citations, cost_usd, latency_ms.
+            ticker: Company ticker, e.g. "MMM".
+            metric: Metric name, e.g. "capital expenditure", "revenue", "gross margin".
+            period: Reporting period, e.g. "FY2018", "2024", "Q1 FY2026".
         """
-        return build_financials_answer(
-            ticker, metric, period, bedrock_client, pinecone_index, keyword_index, embed_fn
-        )
+        symbol = clean_ticker(ticker)
+        check_length("metric", metric, 100)
+        check_length("period", period, 40)
+
+        def work(deps):
+            return {"ticker": symbol, "metric": metric, "period": period,
+                    **financials_passages(deps, symbol, metric, period)}
+
+        arguments = {"ticker": symbol, "metric": metric, "period": period}
+        return run_tool(get_deps, "get_company_financials", arguments, work, cache=True)

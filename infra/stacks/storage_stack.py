@@ -50,15 +50,14 @@ class StorageStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.RETAIN,
+            time_to_live_attribute="expires_at",  # query logs expire after 90 days
         )
 
-        # Query result cache (Phase C4, CLAUDE.md): search_sec_filings'
-        # final answer, keyed by a sha256 hash of the normalized question
-        # (server/observability/query_cache.py). DESTROY, not RETAIN like
-        # the log table above: cache content is disposable and regenerates
-        # itself on the next query, unlike query_log_table's historical
-        # record. `ttl` drives DynamoDB's own item-expiry sweep; the 24h
-        # value itself lives in query_cache.py, not here.
+        # Tool-result cache: caches tool results for 24 h, keyed by a hash of the
+        # tool and its arguments (server/observability/tool_cache.py). DESTROY,
+        # not RETAIN like the log table above: cache content is disposable and
+        # regenerates on the next call. `ttl` drives DynamoDB's own item-expiry
+        # sweep; the 24h value itself lives in tool_cache.py, not here.
         self.query_cache_table = dynamodb.Table(
             self,
             "QueryCacheTable",
@@ -68,5 +67,18 @@ class StorageStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             time_to_live_attribute="ttl",
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        # Shared per-minute and per-day call counters for the public MCP
+        # endpoint (server/rate_limit.py). Rows expire an hour after their
+        # window closes.
+        self.rate_limit_table = dynamodb.Table(
+            self,
+            "RateLimitTable",
+            table_name="finrag-rate-limits",
+            partition_key=dynamodb.Attribute(name="bucket", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            time_to_live_attribute="expires_at",
             removal_policy=RemovalPolicy.DESTROY,
         )

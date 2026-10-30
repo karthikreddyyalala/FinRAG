@@ -1,16 +1,8 @@
 "use client";
 import { motion } from "motion/react";
+import { PIPELINE_COPY } from "@/lib/pipeline-copy";
 
-export const PIPELINE_STAGES = [
-  "Cognito auth",
-  "Cache check",
-  "Ticker + fiscal-year filters",
-  "Haiku rewrite + GAAP expansion",
-  "BM25 + Pinecone",
-  "Rerank",
-  "Sonnet generation",
-  "Numerical verifier",
-] as const;
+export const PIPELINE_STAGES = PIPELINE_COPY.map((c) => c.rail);
 
 export function PipelineRail({ activeIndex }: { activeIndex: number }) {
   return (

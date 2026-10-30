@@ -32,10 +32,10 @@ RUNTIME_REQUIREMENTS = (
     "beautifulsoup4>=4.12,<5.0",
     "lxml>=5.0,<6.0",
     "pandas>=2.2,<3.0",
-    "pinecone>=8.0,<9.0",
-    "openai>=1.50,<3.0",
+    "pinecone==8.1.2",
+    "openai==2.54.0",
     "tiktoken>=0.7,<1.0",
-    "requests>=2.31,<3.0",
+    "requests==2.34.2",
 )
 PYTHON_VERSION = "3.13"
 
@@ -85,10 +85,10 @@ class IngestionStack(Stack):
         )
 
         log_group = logs.LogGroup(
-            self, "IngestionLogs", retention=logs.RetentionDays.ONE_WEEK
+            self, "IngestionLogs", retention=logs.RetentionDays.ONE_MONTH
         )
 
-        fn = lambda_.Function(
+        self.fn = fn = lambda_.Function(
             self,
             "IngestionFunction",
             function_name="finrag-weekly-refresh",

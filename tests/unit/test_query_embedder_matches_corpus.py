@@ -22,7 +22,7 @@ def test_production_query_embedder_is_the_ingestion_model():
     ):
         deps = main._build_production_dependencies()
 
-    embed_fn = deps[3]  # (bedrock, pinecone, keyword_index, embed_fn, dynamodb_resource)
+    embed_fn = deps.embed_fn
     assert embed_fn is embed_text_openai, (
         f"server embeds queries with {embed_fn!r}; corpus was embedded with "
         "OpenAI text-embedding-3-small"

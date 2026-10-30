@@ -1,4 +1,4 @@
-"""Embeds chunks with Bedrock Titan V2 and upserts them into Pinecone.
+"""Embeds chunks (OpenAI text-embedding-3-small via get_embed_fn) and upserts them into Pinecone.
 
 Uses the `pinecone` package (not the deprecated `pinecone-client`).
 """
@@ -30,7 +30,7 @@ MAX_TOKENS_PER_REQUEST = 150_000
 MAX_ITEMS_PER_REQUEST = 2048
 MAX_CHARS_PER_TEXT = 6000
 
-# The only chunk fields read downstream (rerank, generation, citations, and
+# The only chunk fields read downstream (rerank, evidence passages, citations, and
 # chunk_id for dedup against Pinecone). Everything else -- table_rows in
 # particular -- is dead weight in the BM25 payload.
 BM25_CHUNK_FIELDS = ("chunk_id", "text", "ticker", "filing_type", "period", "page_number")
@@ -313,6 +313,32 @@ class KeywordIndex:
         ).fetchall()
         return [dict(zip(BM25_CHUNK_FIELDS, row)) for row in rows]
 
+    def get_by_ids(self, chunk_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Full chunks for these ids, keyed by id. Unknown ids are absent.
+
+        Goes through chunk_lookup to the FTS5 rowid; filtering the FTS5
+        table on chunk_id directly scans every row.
+        """
+        if not chunk_ids:
+            return {}
+        columns = ", ".join(f"chunks.{f}" for f in BM25_CHUNK_FIELDS)
+        marks = ", ".join("?" * len(chunk_ids))
+        rows = self._conn.execute(
+            f"SELECT {columns} FROM chunk_lookup "
+            f"JOIN chunks ON chunks.rowid = chunk_lookup.rid "
+            f"WHERE chunk_lookup.chunk_id IN ({marks})",
+            list(chunk_ids),
+        ).fetchall()
+        return {row[0]: dict(zip(BM25_CHUNK_FIELDS, row)) for row in rows}
+
+    def coverage(self) -> list[dict[str, Any]]:
+        """One row per ingested filing: ticker, filing_type, filed, chunks."""
+        rows = self._conn.execute(
+            "SELECT ticker, filing_type, filed, chunks FROM coverage "
+            "ORDER BY ticker, filing_type, filed"
+        ).fetchall()
+        return [dict(zip(("ticker", "filing_type", "filed", "chunks"), r)) for r in rows]
+
 
 def build_keyword_index(db_path: str | Path, chunks: Iterable[dict[str, Any]]) -> int:
     """Write chunks to a new SQLite FTS5 index, streaming, in bounded memory.
@@ -351,8 +377,32 @@ def build_keyword_index(db_path: str | Path, chunks: Iterable[dict[str, Any]]) -
     conn.commit()
     conn.execute("INSERT INTO chunks(chunks) VALUES ('optimize')")  # merge b-trees
     conn.commit()
+    add_lookup_tables(conn)
     conn.close()
     return count
+
+
+def add_lookup_tables(conn: sqlite3.Connection) -> None:
+    """Add id-lookup and coverage tables beside the FTS5 table.
+
+    The MCP server looks passages up by id to restore the full text of dense
+    hits (Pinecone metadata keeps only the first 1,000 characters) and for
+    verify_figures. coverage is the per-filing summary list_covered_companies
+    serves without scanning the corpus. Safe to re-run: both are rebuilt.
+    """
+    conn.executescript(
+        """
+        DROP TABLE IF EXISTS chunk_lookup;
+        DROP TABLE IF EXISTS coverage;
+        CREATE TABLE chunk_lookup (chunk_id TEXT PRIMARY KEY, rid INTEGER NOT NULL)
+            WITHOUT ROWID;
+        INSERT OR IGNORE INTO chunk_lookup SELECT chunk_id, rowid FROM chunks;
+        CREATE TABLE coverage AS
+            SELECT ticker, filing_type, period AS filed, COUNT(*) AS chunks
+            FROM chunks GROUP BY ticker, filing_type, period;
+        """
+    )
+    conn.commit()
 
 
 def build_and_store_keyword_index(

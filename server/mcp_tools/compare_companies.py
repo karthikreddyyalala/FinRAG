@@ -1,95 +1,52 @@
-"""compare_companies MCP tool: multi-hop lookup, one hop per ticker (Week 5).
+"""compare_companies: the same metric across 2 to 5 companies, looked up in parallel.
 
-Per CLAUDE.md Tool 3 spec: "multi-hop retrieval (separate query per company,
-merged answer)". Reuses get_financials.build_financials_answer for the
-per-company hop rather than reimplementing the lookup.
+Parallel, not sequential: the old sequential loop through a throttled model
+pushed comparisons past the 120 s Lambda timeout.
 """
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
-from server.mcp_tools.get_financials import build_financials_answer
-
-
-def build_comparison_answer(
-    tickers: list[str],
-    metric: str,
-    period: str,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-) -> dict[str, Any]:
-    """Look up the same metric/period across several companies.
-
-    A failure on one ticker (typo, uningested company) is captured per-company
-    rather than aborting the whole comparison -- the other lookups already
-    succeeded and there is no reason to discard them.
-
-    Returns:
-        {"metric", "period", "companies": [...], "cost_usd", "latency_ms"}
-        Each company entry is either a get_company_financials result or, on
-        failure, {"ticker", "error"}. cost_usd sums each successful hop's
-        own cost_usd -- a failed hop contributes 0 (it never reached the
-        generation call that costs anything).
-    """
-    start = time.monotonic()
-
-    companies = []
-    for ticker in tickers:
-        try:
-            companies.append(
-                # C5 (CLAUDE.md Phase C): build_financials_answer defaults
-                # to Haiku for a single-metric lookup, but a comparison
-                # across several companies is CLAUDE.md's "complex
-                # comparison" case -- stays on Sonnet, overridden explicitly
-                # per hop rather than inheriting the single-lookup default.
-                build_financials_answer(
-                    ticker, metric, period,
-                    bedrock_client=bedrock_client, pinecone_index=pinecone_index,
-                    keyword_index=keyword_index, embed_fn=embed_fn, model="sonnet",
-                )
-            )
-        except Exception as e:
-            companies.append({"ticker": ticker, "error": str(e)})
-
-    total_cost_usd = sum(c.get("cost_usd", 0.0) for c in companies)
-
-    return {
-        "metric": metric,
-        "period": period,
-        "companies": companies,
-        "cost_usd": round(total_cost_usd, 6),
-        "latency_ms": int((time.monotonic() - start) * 1000),
-    }
+from server.mcp_tools.common import READ_ONLY, GetDeps, check_length, clean_ticker, run_tool
+from server.mcp_tools.get_financials import financials_passages
 
 
-def register_compare_companies_tool(
-    mcp: MCPServer,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-) -> None:
-    """Register the compare_companies tool on an MCPServer instance."""
+def register_compare_companies_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
+    """Register compare_companies on an MCPServer."""
 
-    @mcp.tool()
+    @mcp.tool(title="Compare companies", annotations=READ_ONLY)
     def compare_companies(tickers: list[str], metric: str, period: str) -> dict[str, Any]:
-        """Compare the same financial metric across several companies.
+        """Find passages reporting the same metric for several companies, side by side.
+
+        Returns passages per company, or an error for a company FinRAG does not cover.
 
         Args:
-            tickers: Company tickers to compare, e.g. ["TSLA", "F"].
-            metric: Metric name, e.g. "gross margin".
-            period: Reporting period, e.g. "2024-2025".
-
-        Returns:
-            Dict with metric, period, and a per-company list of results
-            (or errors for tickers that failed to look up).
+            tickers: 2 to 5 tickers, e.g. ["TSLA", "F"].
+            metric: Metric name, e.g. "revenue".
+            period: Reporting period, e.g. "2024".
         """
-        return build_comparison_answer(
-            tickers, metric, period, bedrock_client, pinecone_index, keyword_index, embed_fn
-        )
+        if len(tickers) > 10:  # 10 allows duplicates
+            raise ToolError("Compare 2 to 5 companies.")
+        symbols = list(dict.fromkeys(clean_ticker(t) for t in tickers))
+        if not 2 <= len(symbols) <= 5:
+            raise ToolError("Compare 2 to 5 companies.")
+        check_length("metric", metric, 100)
+        check_length("period", period, 40)
+
+        def work(deps):
+            def one(symbol):
+                try:
+                    return financials_passages(deps, symbol, metric, period)
+                except ToolError as e:
+                    return {"error": str(e)}
+
+            with ThreadPoolExecutor(max_workers=len(symbols)) as pool:
+                results = dict(zip(symbols, pool.map(one, symbols)))
+            return {"metric": metric, "period": period, "results": results}
+
+        arguments = {"tickers": symbols, "metric": metric, "period": period}
+        return run_tool(get_deps, "compare_companies", arguments, work, cache=True)

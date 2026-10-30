@@ -3,9 +3,11 @@ import { useState, useMemo } from "react";
 import { motion } from "motion/react";
 import { CheckCircleIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { verifyAnswer } from "@/lib/verifier";
-import { RECORDINGS } from "@/lib/recordings";
+import live from "@/data/live/live-check.json";
 
-const SOURCE_CHUNK = RECORDINGS[0].citations[0]?.text ?? "";
+// A real passage returned by the live server (text shortened to 600 characters).
+const SOURCE_CHUNK =
+  live.samples.search_sec_filings.passages.find((p) => p.text.includes("(1,577)"))?.text ?? "";
 const BASE_ANSWER = "3M's capital expenditure in fiscal year 2018 was $1,577 million.";
 
 /**
@@ -47,8 +49,8 @@ export function VerifierDemo() {
           live, in your browser. This is a TypeScript port of the production verifier&apos;s matching rule.
         </p>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <h3 className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-wide text-[var(--color-muted)]">
               Retrieved source chunk
             </h3>
@@ -78,7 +80,7 @@ export function VerifierDemo() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <div className="min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             <h3 className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-wide text-[var(--color-muted)]">
               Generated answer (editable)
             </h3>

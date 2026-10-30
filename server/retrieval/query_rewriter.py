@@ -1,23 +1,10 @@
-"""Query rewriting via Claude Haiku on Bedrock: expand tickers, extract dates.
+"""Deterministic GAAP term expansion for retrieval.
 
-Uses a cross-region inference profile ID (the `us.` prefix), not the bare
-`anthropic.claude-*` model ID -- Claude Haiku 4.5 rejects on-demand
-invocation without it (verified against AWS Bedrock docs).
+The LLM rewrite step that used to live here was removed in M1: the MCP
+client's own model now phrases the query (the tool arguments), and the
+server runs no chat model.
 """
 from __future__ import annotations
-
-import socket
-from typing import Any
-
-import botocore.exceptions
-
-HAIKU_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-
-SYSTEM_PROMPT = (
-    "Expand ticker symbols to company names. Extract time constraints. "
-    "Optimize for financial document retrieval. Return rewritten query only."
-)
-
 
 # Questions name a metric the way an analyst says it; filings label the same
 # figure with its GAAP line item. "Capital expenditure" never appears in 3M's
@@ -81,96 +68,3 @@ def expand_financial_terms(query: str) -> str:
     if not additions:
         return query
     return f"{query} {' '.join(dict.fromkeys(additions))}"
-
-
-def _is_bedrock_unavailable(exc: Exception) -> bool:
-    """True when Bedrock is throttling, unreachable, or not enabled here.
-
-    Kept in sync with the identical check in answer_generator.py (deliberately
-    duplicated rather than imported across module boundaries -- see that
-    module's comment). A plain network ReadTimeoutError took down a
-    150-question eval run because timeout/connection faults are real
-    botocore/socket exception types, not phrases in the message, and the
-    text-only check did not catch them.
-    """
-    timeout_types = (
-        botocore.exceptions.ReadTimeoutError
-        | botocore.exceptions.ConnectTimeoutError
-        | botocore.exceptions.EndpointConnectionError
-        | socket.timeout
-    )
-    if isinstance(exc, timeout_types):
-        return True
-    text = str(exc)
-    return (
-        "Throttling" in text
-        or "throttl" in text.lower()
-        or "ResourceNotFoundException" in text
-    )
-
-
-def _rewrite_openai(query: str) -> str:
-    """Rewrite via OpenAI, the fallback when Bedrock is unavailable.
-
-    This is itself the last line of defense for every single question, so a
-    transient connection error here must be retried, not just re-raised --
-    the equivalent gap in answer_generator.py's fallback killed a
-    150-question eval run at the very last question.
-    """
-    import os
-    import time
-
-    import openai
-    from openai import OpenAI
-
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    for attempt in range(8):
-        try:
-            r = client.chat.completions.create(
-                model="gpt-4o-mini",
-                temperature=0,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": query},
-                ],
-            )
-            return r.choices[0].message.content.strip()
-        except Exception as oe:
-            retriable = (
-                isinstance(oe, openai.APIConnectionError | openai.APITimeoutError)
-                or "429" in str(oe)
-                or "rate_limit" in str(oe).lower()
-            )
-            if retriable:
-                wait = 15 * (attempt + 1)
-                print(f"    [{type(oe).__name__}] waiting {wait}s ...", flush=True)
-                time.sleep(wait)
-            else:
-                raise
-    raise RuntimeError("OpenAI fallback: exhausted retries")
-
-
-def rewrite_query(bedrock_client: Any, query: str) -> str:
-    """Rewrite a user query for better financial document retrieval.
-
-    Expands tickers and time constraints via the LLM, then appends GAAP
-    line-item phrasing. The LLM rewrite alone preserves the analyst's
-    vocabulary ("capital expenditure"), which is not the vocabulary the
-    filing uses, so the deterministic expansion runs on top of it.
-
-    Falls back to OpenAI gpt-4o-mini if Bedrock is throttled.
-    """
-    try:
-        response = bedrock_client.converse(
-            modelId=HAIKU_MODEL_ID,
-            system=[{"text": SYSTEM_PROMPT}],
-            messages=[{"role": "user", "content": [{"text": query}]}],
-            inferenceConfig={"temperature": 0},
-        )
-        rewritten = response["output"]["message"]["content"][0]["text"].strip()
-    except Exception as e:
-        if not _is_bedrock_unavailable(e):
-            raise
-        rewritten = _rewrite_openai(query)
-
-    return expand_financial_terms(rewritten)

@@ -119,7 +119,7 @@ def hybrid_search(
     """Run BM25 and Pinecone search in parallel, merge and dedup the results.
 
     Args:
-        rewritten_query: The query text from query_rewriter.rewrite_query().
+        rewritten_query: The GAAP-expanded query text.
         keyword_index: A sync_pinecone.KeywordIndex (SQLite FTS5, BM25-ranked).
         pinecone_index: A Pinecone Index handle.
         embed_fn: Callable(text) -> embedding vector, for the Pinecone query.

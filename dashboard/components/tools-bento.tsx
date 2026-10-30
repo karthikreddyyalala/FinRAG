@@ -1,60 +1,109 @@
-import { RECORDINGS } from "@/lib/recordings";
+import live from "@/data/live/live-check.json";
+
+type Passage = { id: string; citation: string; text: string };
+const S = live.samples;
+
+/** Table text with empty and repeated cells dropped, cut to a short window around `anchor`. */
+function excerpt(text: string, anchor?: string, max = 190): string {
+  const cells = text.replace(/ /g, " ").split(/\s*\|\s*|\n/).map((c) => c.trim());
+  const kept = cells.filter((c, i) => c && c !== cells.slice(0, i).filter(Boolean).at(-1));
+  const clean = kept.join(" | ");
+  const at = anchor ? clean.indexOf(anchor) : -1;
+  const start = at > 40 ? at - 40 : 0;
+  return (start ? "... " : "") + clean.slice(start, start + max).trim() + " ...";
+}
+
+function pick(passages: Passage[], id: string, anchor?: string) {
+  const p = passages.find((x) => x.id.startsWith(id)) ?? passages[0];
+  return { citation: p.citation, text: excerpt(p.text, anchor) };
+}
+
+const search = S.search_sec_filings.passages as Passage[];
+const financials = S.get_company_financials.result.passages as Passage[];
+const compare = S.compare_companies.result.results as Record<string, { passages: Passage[] }>;
+const latest = S.get_latest_filing.result;
+const covered = S.list_covered_companies.result;
+const verify = S.verify_figures;
 
 const TOOLS = [
   {
     name: "search_sec_filings",
-    description: "Full four-stage pipeline over free-text financial questions.",
-    request: { query: RECORDINGS[0].question },
-    response: { answer: RECORDINGS[0].answer.slice(0, 140) + "…", citations: RECORDINGS[0].citations.length },
+    description: "Free-text search over every filing. Optional ticker and fiscal year filters.",
+    request: { question: "3M capital expenditure", ticker: "MMM", fiscal_year: 2018 },
+    response: {
+      passages: [pick(search, "dd73d7", "Purchases of property"), `... ${search.length - 1} more`],
+    },
     span: "md:col-span-2",
   },
   {
     name: "get_company_financials",
-    description: "Targeted lookup for a known ticker, metric, and period. Routed to Haiku, about 3x cheaper on a spot-check.",
-    request: { ticker: "MMM", metric: "capital_expenditure", period: "FY2018" },
-    response: { answer: "$1,577 million", citation: "MMM 10-K 2019-02-07" },
+    description: "Passages for one metric, one company, one period.",
+    request: S.get_company_financials.arguments,
+    response: { passages: [pick(financials, "dd73d7", "Purchases of property"), `... ${financials.length - 1} more`] },
     span: "",
   },
   {
     name: "compare_companies",
-    description: "Multi-hop: one lookup per ticker, merged into a side-by-side answer.",
-    request: { tickers: ["TSLA", "F"], metric: "revenue", period: "2024" },
+    description: "Two to five tickers, one metric. Passages come back per ticker.",
+    request: S.compare_companies.arguments,
     response: {
-      TSLA: "$97.69 billion",
-      F: "$167,218 million",
+      results: {
+        TSLA: [pick(compare.TSLA.passages, "ddb8b", "total revenues")],
+        F: [pick(compare.F.passages, "f79a1", "Vehicles, parts")],
+      },
     },
     span: "",
   },
   {
     name: "get_latest_filing",
-    description: "Metadata lookup + a short summary, no full RAG pipeline.",
-    request: { ticker: "AAPL", filing_type: "10-Q" },
-    response: { filing_date: "most recent on EDGAR", summary: "3-sentence executive summary" },
+    description: "Looked up live from EDGAR, with a flag for whether it is already in the corpus.",
+    request: S.get_latest_filing.arguments,
+    response: { filing: latest.filing, in_corpus: latest.in_corpus },
     span: "md:col-span-2",
   },
-] as const;
+  {
+    name: "list_covered_companies",
+    description: "Every ticker with first and last filing date per form. Call it to see exact years.",
+    request: S.list_covered_companies.arguments,
+    response: {
+      total_filings: covered.total_filings,
+      companies: [covered.companies[0], `... ${covered.companies.length - 1} more`],
+    },
+    span: "md:col-span-2",
+  },
+  {
+    name: "verify_figures",
+    description: "Send your draft answer and the passage ids. Each number comes back grounded or not_found.",
+    request: { ...verify.arguments, passage_ids: [...verify.arguments.passage_ids.slice(0, 2), "..."] },
+    response: { grounded: verify.result.grounded, not_found: verify.result.not_found, checked_against: verify.result.checked_against },
+    span: "",
+  },
+];
 
 export function ToolsBento() {
   return (
     <section id="tools" className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
-          Four tools, one grounded answer each.
+          Six tools. Evidence in, your model writes.
         </h2>
+        <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
+          Requests and responses below are real calls to the live server, with passage text shortened.
+        </p>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {TOOLS.map((tool) => (
             <div
               key={tool.name}
-              className={`rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${tool.span}`}
+              className={`min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${tool.span}`}
             >
               <h3 className="font-[family-name:var(--font-mono)] text-sm font-semibold text-[var(--color-grounded)]">
                 {tool.name}
               </h3>
               <p className="mt-2 text-sm text-[var(--color-muted)]">{tool.description}</p>
-              <pre className="mt-4 overflow-auto rounded-xl bg-[var(--color-elevated)] p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-[var(--color-text)]">
+              <pre className="mt-4 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-[var(--color-elevated)] p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-[var(--color-text)]">
                 {JSON.stringify(tool.request, null, 2)}
               </pre>
-              <pre className="mt-2 overflow-auto rounded-xl bg-[var(--color-elevated)] p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-[var(--color-grounded)]">
+              <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-[var(--color-elevated)] p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-[var(--color-grounded)]">
                 {JSON.stringify(tool.response, null, 2)}
               </pre>
             </div>

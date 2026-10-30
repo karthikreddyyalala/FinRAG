@@ -1,7 +1,10 @@
 """TDD: score_dataset returns valid metric dict on a small real sample."""
 import json
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -9,6 +12,8 @@ CHECKPOINT = Path(__file__).parent.parent.parent / "evals/results/financebench_a
 EXPECTED_KEYS = {"faithfulness", "answer_relevancy", "context_precision", "context_recall"}
 
 
+# Live: the ragas judge calls OpenAI (gpt-4o-mini + embeddings), so it costs money and needs a key.
+@pytest.mark.skipif(not os.environ.get("OPENAI_API_KEY"), reason="needs OPENAI_API_KEY")
 def test_score_dataset_returns_valid_metrics_on_3_questions():
     """score_dataset must return a dict with 4 metric keys, each 0-1, on 3 questions."""
     assert CHECKPOINT.exists(), f"Checkpoint missing: {CHECKPOINT}"

@@ -34,7 +34,7 @@ export function Footer() {
         </div>
       </div>
       <p className="mx-auto mt-10 max-w-[1400px] font-[family-name:var(--font-mono)] text-xs text-[var(--color-muted)]">
-        Every number on this page is cited.
+        Hover a dotted number to see its source file.
       </p>
     </footer>
   );

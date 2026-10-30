@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
 # Add project root so imports resolve without install
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from evals.run_eval import _call_pipeline, _init_clients  # noqa: E402
+
 RESULTS_DIR = Path(__file__).parent / "results"
-KEYWORD_INDEX_LOCAL_PATH = RESULTS_DIR / "keyword_index.sqlite"
 CI_DATASET = Path(__file__).parent / "eval_data" / "financebench_150.json"
 CI_SAMPLE = 30
 
@@ -18,40 +18,6 @@ CI_SAMPLE = 30
 def _load_questions(path: Path, n: int) -> list[dict]:
     items = json.loads(path.read_text())
     return items[:n]
-
-
-def _init_clients() -> tuple:
-    """Build clients once. The keyword index is a ~1GB S3 download -- loading it
-    per question would dominate CI runtime."""
-    import boto3
-    from pinecone import Pinecone
-
-    from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
-
-    bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
-    pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-    pinecone_index = pc.Index("finrag-filings")
-
-    s3 = boto3.client("s3", region_name="us-east-1")
-    keyword_index = load_keyword_index(
-        s3, "finrag-processed-filings", "keyword/index.sqlite", KEYWORD_INDEX_LOCAL_PATH
-    )
-    embed_fn = get_embed_fn(bedrock)
-    return bedrock, pinecone_index, keyword_index, embed_fn
-
-
-def _call_pipeline(question: str, clients: tuple) -> dict:
-    """Call the search_filings pipeline. Returns {answer, citations, ...}."""
-    from server.mcp_tools.search_filings import build_search_filings_answer
-
-    bedrock, pinecone_index, keyword_index, embed_fn = clients
-    return build_search_filings_answer(
-        query=question,
-        bedrock_client=bedrock,
-        pinecone_index=pinecone_index,
-        keyword_index=keyword_index,
-        embed_fn=embed_fn,
-    )
 
 
 def main() -> None:
@@ -70,10 +36,10 @@ def main() -> None:
     questions, answers, contexts, ground_truths = [], [], [], []
     for i, item in enumerate(questions_data, 1):
         print(f"  [{i}/{len(questions_data)}] {item['question'][:80]}")
-        result = _call_pipeline(item["question"], clients)
+        result = _call_pipeline(item["question"], *clients)
         questions.append(item["question"])
-        answers.append(result.get("answer", ""))
-        contexts.append([c.get("text", "") for c in result.get("citations", [])])
+        answers.append(result["answer"])
+        contexts.append([p["text"] for p in result["passages"]])
         ground_truths.append(item.get("ground_truth", ""))
 
     from evals.metrics.numerical_accuracy import numerical_accuracy

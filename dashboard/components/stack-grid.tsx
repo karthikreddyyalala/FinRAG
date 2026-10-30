@@ -1,14 +1,15 @@
 "use client";
-import { CloudIcon, DatabaseIcon, LightningIcon, ShieldCheckIcon, ClockIcon, ChartBarIcon, MagnifyingGlassIcon, CheckCircleIcon, StackIcon } from "@phosphor-icons/react";
+import { CloudIcon, DatabaseIcon, LightningIcon, PlugsConnectedIcon, BellIcon, ClockIcon, ChartBarIcon, MagnifyingGlassIcon, CheckCircleIcon, StackIcon } from "@phosphor-icons/react";
 
 const STACK = [
-  { name: "AWS Bedrock", icon: LightningIcon },
+  { name: "OpenAI embeddings", icon: LightningIcon },
+  { name: "MCP streamable HTTP", icon: PlugsConnectedIcon },
   { name: "Pinecone", icon: DatabaseIcon },
   { name: "AWS Lambda", icon: CloudIcon },
-  { name: "Cognito", icon: ShieldCheckIcon },
   { name: "DynamoDB", icon: DatabaseIcon },
   { name: "EventBridge", icon: ClockIcon },
   { name: "CloudWatch", icon: ChartBarIcon },
+  { name: "SNS alerts", icon: BellIcon },
   { name: "SQLite FTS5", icon: MagnifyingGlassIcon },
   { name: "ragas", icon: CheckCircleIcon },
   { name: "AWS CDK", icon: StackIcon },

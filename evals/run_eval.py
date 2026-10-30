@@ -38,29 +38,34 @@ def _init_clients():
     from pinecone import Pinecone
 
     from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
-    bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
     pinecone_index = pc.Index("finrag-filings")
     s3 = boto3.client("s3", region_name="us-east-1")
     keyword_index = load_keyword_index(
         s3, "finrag-processed-filings", "keyword/index.sqlite", KEYWORD_INDEX_LOCAL_PATH
     )
-    embed_fn = get_embed_fn(bedrock)
-    return bedrock, pinecone_index, keyword_index, embed_fn
+    return pinecone_index, keyword_index, get_embed_fn()
 
 
 def _call_pipeline(
-    question: str, bedrock, pinecone_index, keyword_index, embed_fn, mode: str = "full"
+    question: str, pinecone_index, keyword_index, embed_fn, mode: str = "full"
 ) -> dict:
-    from server.mcp_tools.search_filings import build_search_filings_answer
-    return build_search_filings_answer(
-        query=question,
-        bedrock_client=bedrock,
-        pinecone_index=pinecone_index,
-        keyword_index=keyword_index,
-        embed_fn=embed_fn,
-        mode=mode,
-    )
+    """Server retrieval, then the eval client writes and the verifier checks the answer."""
+    from evals.client_answer import eval_model, write_answer
+    from server.retrieval.evidence import find_passages, to_passage
+    from server.retrieval.hybrid_retriever import bm25_only_search, dense_only_search
+    from server.retrieval.numerical_verifier import verify_answer
+
+    if mode == "dense_only":
+        chunks = dense_only_search(question, pinecone_index, embed_fn, top_k=5)
+    elif mode == "bm25_only":
+        chunks = bm25_only_search(question, keyword_index, top_k=5)
+    else:
+        chunks, _ = find_passages(question, pinecone_index, keyword_index, embed_fn)
+    passages = [to_passage(c) for c in chunks]
+    answer = verify_answer(write_answer(question, passages), [p["text"] for p in passages])
+    return {"answer": answer, "passages": passages, "model": eval_model()}
 
 
 def _run_dataset(
@@ -91,9 +96,10 @@ def _run_dataset(
         result = _call_pipeline(question, *clients, mode=mode)
         row = {
             "question": question,
-            "answer": result.get("answer", ""),
-            "contexts": [c.get("text", "") for c in result.get("citations", [])],
+            "answer": result["answer"],
+            "contexts": [p["text"] for p in result["passages"]],
             "ground_truth": item.get("ground_truth", ""),
+            "model": result["model"],
         }
         results.append(row)
         cached[question] = row
