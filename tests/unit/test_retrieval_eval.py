@@ -64,3 +64,15 @@ def test_evidence_items_keep_in_scope_questions_that_have_evidence(monkeypatch):
         {"question": "d", "evidence": []},
     ]
     assert evidence_items(questions, docs) == [{"question": "a", "evidence": ["e1"]}]
+
+
+def test_no_hydrate_wrapper_forwards_search_and_finds_no_ids():
+    from evals.retrieval_eval import _NoHydrate
+
+    class Inner:
+        def search(self, query, top_k=10, **kw):
+            return [{"chunk_id": "a1", "q": query, "k": top_k}]
+
+    wrapped = _NoHydrate(Inner())
+    assert wrapped.search("capex", 7) == [{"chunk_id": "a1", "q": "capex", "k": 7}]
+    assert wrapped.get_by_ids(["a1"]) == {}
