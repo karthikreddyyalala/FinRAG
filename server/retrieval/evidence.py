@@ -13,14 +13,17 @@ from typing import Any
 
 from server.retrieval.hybrid_retriever import hybrid_search
 from server.retrieval.query_cleaner import clean_question
-from server.retrieval.query_filters import extract_filters, period_window
+from server.retrieval.query_filters import extract_filters, period_window, wants_annual
 from server.retrieval.query_rewriter import expand_financial_terms
 from server.retrieval.reranker import rerank
 
 # A large schedule table can run to tens of thousands of characters; one such
 # chunk must not flood the client's context on its own.
 MAX_PASSAGE_CHARS = 8000
-CANDIDATES_PER_SOURCE = 10
+# Measured 2026-10-30 (127 evidence questions, top 5): 10 per source with the
+# lexical scorer 22.0%, 40 with Voyage 45.7%. Deeper pools only pay off with a
+# neural reranker; lexical scoring got worse at 40 (23.6%, number metric down).
+CANDIDATES_PER_SOURCE = 40
 KEYWORD_ONLY_NOTE = "Keyword search only: semantic search is unavailable right now."
 NO_MATCH_NOTE = (
     "No passages matched. Try the filing's own wording or a different year, "
@@ -92,6 +95,8 @@ def find_passages(
     if ticker:
         candidates = [c for c in candidates if (c.get("ticker") or "").upper() == ticker]
     candidates = _with_full_text(candidates, keyword_index)
+    if wants_annual(question, years) and any(c.get("filing_type") == "10-K" for c in candidates):
+        candidates = [c for c in candidates if c.get("filing_type") != "10-Q"]
 
     if stage == "candidates":
         chunks = candidates

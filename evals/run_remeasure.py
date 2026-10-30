@@ -1,7 +1,8 @@
 # ruff: noqa: E501
 """Re-measure answer quality on the current retrieval path; re-score the old answers the same way.
 
-Run: PYTHONPATH=. python evals/run_remeasure.py [--limit N]
+Run: PYTHONPATH=. python evals/run_remeasure.py [--limit N] [--tag m3]
+--tag names the checkpoints and result file; any tag but m1 compares against the m1 answers.
 Needs OPENAI_API_KEY and PINECONE_API_KEY. Resumable (per-question checkpoints).
 """
 from __future__ import annotations
@@ -101,6 +102,7 @@ def main() -> None:
     from pipeline.sync_pinecone import get_embed_fn, load_keyword_index
 
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else None
+    tag = sys.argv[sys.argv.index("--tag") + 1] if "--tag" in sys.argv else "m1"
     # local index only: s3 client None would raise if the file were missing, never touches AWS
     kw = load_keyword_index(None, "", "", KEYWORD_INDEX_LOCAL_PATH)
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"]).Index("finrag-filings")
@@ -109,8 +111,8 @@ def main() -> None:
     fb_items = _load(FINANCEBENCH)
     cu_items = verified_custom_items(_load(CUSTOM))
     sfx = "_limit" if limit else ""
-    fb_new = answer_all(fb_items, RESULTS_DIR / f"financebench_answers_m1{sfx}.json", clients, "FB", limit)
-    cu_new = answer_all(cu_items, RESULTS_DIR / f"custom_answers_m1{sfx}.json", clients, "Custom", limit)
+    fb_new = answer_all(fb_items, RESULTS_DIR / f"financebench_answers_{tag}{sfx}.json", clients, "FB", limit)
+    cu_new = answer_all(cu_items, RESULTS_DIR / f"custom_answers_{tag}{sfx}.json", clients, "Custom", limit)
     if limit:
         print(f"{len(fb_new)}+{len(cu_new)} answered; tokens {USAGE}; cost ${cost_usd():.4f}")
         return
@@ -119,9 +121,12 @@ def main() -> None:
         by_q = {r["question"]: r for r in json.loads((RESULTS_DIR / path).read_text())}
         return [by_q[i["question"]] for i in items]
 
-    fb_old, cu_old = old("financebench_answers.json", fb_items), old("custom_answers.json", cu_items)
+    base = "" if tag == "m1" else "_m1"
+    fb_old = old(f"financebench_answers{base}.json", fb_items)
+    cu_old = old(f"custom_answers{base}.json", cu_items)
     result = {
-        "date": "2026-10-30",
+        "date": time.strftime("%Y-%m-%d"),
+        "old": f"financebench_answers{base}.json",
         "model": eval_model(),
         "retrieval": "find_passages, same code and index as the live server",
         "financebench": {"new": summarize(fb_new, True), "old": summarize(fb_old, False)},
@@ -129,7 +134,7 @@ def main() -> None:
         "combined": {"new": summarize(fb_new + cu_new, True), "old": summarize(fb_old + cu_old, False)},
         "cost_usd_estimate": round(cost_usd(), 4),
     }
-    (RESULTS_DIR / "remeasure_2026-10-30.json").write_text(json.dumps(result, indent=2))
+    (RESULTS_DIR / ("remeasure_2026-10-30.json" if tag == "m1" else f"remeasure_{tag}.json")).write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
 
 

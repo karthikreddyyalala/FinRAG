@@ -1,8 +1,8 @@
 {
-  "checked_at": "2026-10-30T14:06:25Z",
+  "checked_at": "2026-10-30T17:45:12Z",
   "url": "https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp",
-  "initialize_ms": 304,
-  "tools_list_ms": 235,
+  "initialize_ms": 287,
+  "tools_list_ms": 232,
   "tools": [
     "compare_companies",
     "get_company_financials",
@@ -15,24 +15,6 @@
     "search_sec_filings": {
       "passages": [
         {
-          "id": "2de78345fbe37e5e122fe84deaa4b8e7",
-          "ticker": "MMM",
-          "form": "10-K",
-          "filed": "2019-02-07",
-          "page": null,
-          "citation": "[MMM 10-K 2019-02-07]",
-          "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10\n |  |  |  |  |  |  |  |  |  | \nYears ended December\u00a031 |  |  |  |  |  |  |  |  |  | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 | \n |  |  |  |  |  |  |  |  |  | \nMajor GAAP Cash Flow Categories |  |  |  |  |  |  |  |  |  | \nNet cash provided by operating activities |  | $ | 6439 |  | $ | 6240 |  | $ | 6662 | \nNet cash provided by (used in) investing activities |  |  | 222 |  |  | (3,086) |  |  | (1,403) | \nNet cash used in financing activities |  |  | (6,701) |  |  | (2,655) |  |  | (4,626) | \n |  |  |  |  |  |  |  |  |  | \nFree Cas"
-        },
-        {
-          "id": "dd73d7b90db05fb25e0afad9af01cf0d",
-          "ticker": "MMM",
-          "form": "10-K",
-          "filed": "2019-02-07",
-          "page": null,
-          "citation": "[MMM 10-K 2019-02-07]",
-          "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10\n |  |  |  |  |  |  |  |  |  | \nYears ended December\u00a031 |  |  |  |  |  |  |  |  |  | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 | \nPurchases of property, plant and equipment (PP&E) |  | $ | (1,577) |  | $ | (1,373) |  | $ | (1,420) | \nProceeds from sale of PP&E and other assets |  |  | 262 |  |  | 49 |  |  | 58 | \nAcquisitions, net of cash acquired |  |  | 13 |  |  | (2,023) |  |  | (16) | \nPurchases and proceeds from maturities and sale of marketable securities\u00a0and\u00a0investments, net |  |  | 669 |  |  | (798) |  |  | (163) | \nProceed"
-        },
-        {
           "id": "5d44fe78114e18919005a0d70ddd24e4",
           "ticker": "MMM",
           "form": "10-K",
@@ -42,22 +24,40 @@
           "text": "Company pension and postretirement contributions Company pension and postretirement expense Income taxes (deferred and accrued income taxes) Net cash provided by operating activities Cash flows from operating activities can fluctuate significantly from period to period, as pension funding decisions, tax timing differences and other items can significantly impact cash flows. In 2018, cash flows provided by operating activities increased $199 million compared to the same period last year, with the increase primarily made up of higher net income and lower year-on-year pension and postretirement c"
         },
         {
-          "id": "b61e029f993f64aa61aec9106958b8da",
+          "id": "2de78345fbe37e5e122fe84deaa4b8e7",
           "ticker": "MMM",
           "form": "10-K",
           "filed": "2019-02-07",
           "page": null,
           "citation": "[MMM 10-K 2019-02-07]",
-          "text": "Earnings per share attributable to 3M common shareholders \u2014 basic Weighted average 3M common shares outstanding \u2014 diluted Earnings per share attributable to 3M common shareholders \u2014 diluted The accompanying Notes to Consolidated Financial Statements are an integral part of this statement. Consolidated Statement of Comprehensive Incom e Net income including noncontrolling interest Other comprehensive income (loss), net of tax: Defined benefit pension and postretirement plans adjustment Cash flow hedging instruments, unrealized gain (loss) Total other comprehensive income (loss), net of tax Comp"
+          "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10\n |  |  |  |  |  |  |  |  |  | \nYears ended December\u00a031 |  |  |  |  |  |  |  |  |  | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 | \n |  |  |  |  |  |  |  |  |  | \nMajor GAAP Cash Flow Categories |  |  |  |  |  |  |  |  |  | \nNet cash provided by operating activities |  | $ | 6439 |  | $ | 6240 |  | $ | 6662 | \nNet cash provided by (used in) investing activities |  |  | 222 |  |  | (3,086) |  |  | (1,403) | \nNet cash used in financing activities |  |  | (6,701) |  |  | (2,655) |  |  | (4,626) | \n |  |  |  |  |  |  |  |  |  | \nFree Cas"
         },
         {
-          "id": "0455ee57db4735d95cb11648821ebcdb",
+          "id": "92b3ab0ae49e688caee769614bc6c911",
           "ticker": "MMM",
           "form": "10-K",
           "filed": "2019-02-07",
           "page": null,
           "citation": "[MMM 10-K 2019-02-07]",
-          "text": "In 2018, free cash flow conversion was impacted by the $176 million measurement period adjustment to the tax expense recorded in December 2017 from the enactment of the TCJA, the $897 million pre-tax impact related to the resolution of the Minnesota natural resource damages (NRD), and the $381 million pre-tax impact from the gain on sale of the Communication Markets Division, net of restructuring actions related to addressing corporate functional costs following the divestiture. On a combined basis, these items reduced free cash flow conversion by 2 percentage points. In 2017, free cash flow c"
+          "text": "Refer to the \u201cOverview\u201d section for a summary of net sales by geographic area and business segment. Geographic Area Supplemental Information Employment increased 1,980 positions in 2018 and decreased by 48 positions in 2017. Capital Spending/Net Property, Plant and Equipment: Investments in property, plant and equipment enable growth across many diverse markets, helping to meet product demand and increasing manufacturing efficiency. In 2018, 63% of 3M\u2019s capital spending was within the United States, followed by Europe, Middle East and Africa; Asia Pacific; and Latin America/Canada. 3M is incre"
+        },
+        {
+          "id": "c906d99835da7f010bb33f26f4331a91",
+          "ticker": "MMM",
+          "form": "10-K",
+          "filed": "2019-02-07",
+          "page": null,
+          "citation": "[MMM 10-K 2019-02-07]",
+          "text": "The Company believes that its patents provide an important competitive advantage in many of its businesses. In general, no single patent or group of related patents is in itself essential to the Company as a whole or to any of the Company\u2019s business segments. In 2018, the Company experienced raw material price inflation across most material markets worldwide. In response, the Company continued to deploy productivity projects to minimize the impact of raw material inflation and market supply challenges, including input management, reformulations, and multi-sourcing activities. These succeeded i"
+        },
+        {
+          "id": "10902d5151e3d30be10c1f771890a01c",
+          "ticker": "MMM",
+          "form": "10-K",
+          "filed": "2019-02-07",
+          "page": null,
+          "citation": "[MMM 10-K 2019-02-07]",
+          "text": "The Company believes that its patents provide an important competitive advantage in many of its businesses. In general, no single patent or group of related patents is in itself essential to the Company as a whole or to any of the Company\u2019s business segments. In 2018, the Company experienced raw material price inflation across most material markets worldwide. In response, the Company continued to deploy productivity projects to minimize the impact of raw material inflation and market supply challenges, including input management, reformulations, and multi-sourcing activities. These succeeded i"
         }
       ]
     },
@@ -73,6 +73,15 @@
         "period": "FY2018",
         "passages": [
           {
+            "id": "f2a4ab783b73902d958dbd09eea4e096",
+            "ticker": "MMM",
+            "form": "10-K",
+            "filed": "2019-02-07",
+            "page": null,
+            "citation": "[MMM 10-K 2019-02-07]",
+            "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  | Assets | Assets | Assets | Assets | Assets | Assets | Assets | Assets |  | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization | Depreciation\u00a0&\u00a0Amortization |  | Capital\u00a0Expenditures | Capital\u00a0Expenditures | Capital\u00a0Expe"
+          },
+          {
             "id": "dd73d7b90db05fb25e0afad9af01cf0d",
             "ticker": "MMM",
             "form": "10-K",
@@ -80,24 +89,6 @@
             "page": null,
             "citation": "[MMM 10-K 2019-02-07]",
             "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10\n |  |  |  |  |  |  |  |  |  | \nYears ended December\u00a031 |  |  |  |  |  |  |  |  |  | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 | \nPurchases of property, plant and equipment (PP&E) |  | $ | (1,577) |  | $ | (1,373) |  | $ | (1,420) | \nProceeds from sale of PP&E and other assets |  |  | 262 |  |  | 49 |  |  | 58 | \nAcquisitions, net of cash acquired |  |  | 13 |  |  | (2,023) |  |  | (16) | \nPurchases and proceeds from maturities and sale of marketable securities\u00a0and\u00a0investments, net |  |  | 669 |  |  | (798) |  |  | (163) | \nProceed"
-          },
-          {
-            "id": "2de78345fbe37e5e122fe84deaa4b8e7",
-            "ticker": "MMM",
-            "form": "10-K",
-            "filed": "2019-02-07",
-            "page": null,
-            "citation": "[MMM 10-K 2019-02-07]",
-            "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10\n |  |  |  |  |  |  |  |  |  | \nYears ended December\u00a031 |  |  |  |  |  |  |  |  |  | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 | \n |  |  |  |  |  |  |  |  |  | \nMajor GAAP Cash Flow Categories |  |  |  |  |  |  |  |  |  | \nNet cash provided by operating activities |  | $ | 6439 |  | $ | 6240 |  | $ | 6662 | \nNet cash provided by (used in) investing activities |  |  | 222 |  |  | (3,086) |  |  | (1,403) | \nNet cash used in financing activities |  |  | (6,701) |  |  | (2,655) |  |  | (4,626) | \n |  |  |  |  |  |  |  |  |  | \nFree Cas"
-          },
-          {
-            "id": "5d44fe78114e18919005a0d70ddd24e4",
-            "ticker": "MMM",
-            "form": "10-K",
-            "filed": "2019-02-07",
-            "page": null,
-            "citation": "[MMM 10-K 2019-02-07]",
-            "text": "Company pension and postretirement contributions Company pension and postretirement expense Income taxes (deferred and accrued income taxes) Net cash provided by operating activities Cash flows from operating activities can fluctuate significantly from period to period, as pension funding decisions, tax timing differences and other items can significantly impact cash flows. In 2018, cash flows provided by operating activities increased $199 million compared to the same period last year, with the increase primarily made up of higher net income and lower year-on-year pension and postretirement c"
           },
           {
             "id": "f401c558804b9fda906a068d3d6c804c",
@@ -109,17 +100,26 @@
             "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | \n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | \n |  | Employees\u00a0as\u00a0of December\u00a031, | Employees\u00a0as\u00a0of December\u00a031, | Employees\u00a0as\u00a0of December\u00a031, | Employees\u00a0as\u00a0of December\u00a031"
           },
           {
-            "id": "b61e029f993f64aa61aec9106958b8da",
+            "id": "cfefd7bd9062c644599f9a93466bc937",
             "ticker": "MMM",
             "form": "10-K",
             "filed": "2019-02-07",
             "page": null,
             "citation": "[MMM 10-K 2019-02-07]",
-            "text": "Earnings per share attributable to 3M common shareholders \u2014 basic Weighted average 3M common shares outstanding \u2014 diluted Earnings per share attributable to 3M common shareholders \u2014 diluted The accompanying Notes to Consolidated Financial Statements are an integral part of this statement. Consolidated Statement of Comprehensive Incom e Net income including noncontrolling interest Other comprehensive income (loss), net of tax: Defined benefit pension and postretirement plans adjustment Cash flow hedging instruments, unrealized gain (loss) Total other comprehensive income (loss), net of tax Comp"
+            "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10\n |  |  |  |  |  |  |  |  |  | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 | \nCash Flows from Operating Activities |  |  |  |  |  |  |  |  |  | \nNet income including noncontrolling interest |  | $ | 5363 |  | $ | 4869 |  | $ | 5058 | \nAdjustments to reconcile net income including noncontrolling interest to\u00a0net cash provided by\u00a0operating activities |  |  |  |  |  |  |  |  |  | \nDepreciation and amortization |  |  | 1488 |  |  | 1544 |  |  | 1474 | \nCompany pension and postretirement contributions |  |  | (370) |  |  | (967) |  |  | (3"
+          },
+          {
+            "id": "8de443ecd7ad2a89aa121f7e7a67f901",
+            "ticker": "MMM",
+            "form": "10-K",
+            "filed": "2019-02-07",
+            "page": null,
+            "citation": "[MMM 10-K 2019-02-07]",
+            "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  |  |  |  |  |  |  |  |  | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | Property,\u00a0Plant\u00a0and | \n |  | Net\u00a0Sales | Net\u00a0Sales | Net\u00a0Sales | Net\u00a0Sales | Net\u00a0Sales | Net\u00a0Sales | Net\u00a0Sales | Net\u00a0Sales |  | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | Equipment\u00a0-\u00a0net | \n(Millions) |  | 2018 | 2018 |  | 2017 | 2017 |  | 2016 | 2016 |  | 2018 | 2018 |  | 2017 | 2017 | \nUnited States |  | $ | 12840 |  | $ | 1"
           }
         ]
       },
-      "ms": 1011
+      "ms": 1227
     },
     "compare_companies": {
       "arguments": {
@@ -146,40 +146,40 @@
                 "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31,\n |  |  | 2024 | 2024 | 2024 |  |  |  | 2023 | 2023 | 2023 |  |  |  | 2022"
               },
               {
-                "id": "73a9403da77cbf157edc3e6aa33cc0e3",
+                "id": "a65be88d358f81512a0b20b7ac9571d4",
                 "ticker": "TSLA",
                 "form": "10-K",
                 "filed": "2025-01-30",
                 "page": null,
                 "citation": "[TSLA 10-K 2025-01-30]",
-                "text": "Total automotive & services and other segment revenue Energy generation and storage segment revenue Automotive sales revenue includes revenues related to cash and financing deliveries of new vehicles, including access to our FSD (Supervised) features and their ongoing maintenance, internet connectivity, free Supercharging programs and over-the-air software updates. These deliveries are vehicles that are not subject to lease accounting. Automotive regulatory credits includes sales of regulatory credits to other automotive manufacturers. Our revenue from automotive regulatory credits is directly"
+                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31,\n |  |  | 2024 | 2024 | 2024 |  |  |  | 2023 | 2023 | 2023 |  |  |  | 2022"
               },
               {
-                "id": "ddb8bdf251f4b709cca9783248923e3c",
+                "id": "eb3874bbd4cc52c742171b7012ab3d3b",
                 "ticker": "TSLA",
                 "form": "10-K",
                 "filed": "2025-01-30",
                 "page": null,
                 "citation": "[TSLA 10-K 2025-01-30]",
-                "text": "In 2024, we recognized total revenues of $97.69 billion, representing an increase of $917 million compared to the prior year. In 2024, our net income attributable to common stockholders was $7.09 billion, representing a decrease of $7.91 billion compared to the prior year, primarily due to the impact of releasing $6.54 billion of our valuation allowance associated with U.S. federal and state deferred tax assets in the fourth quarter of 2023.We continue to ramp production and build and optimize our manufacturing capacity, expand our operations while focusing on further cost reductions and opera"
+                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  |  |  |  | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Year Ended December 31, | Ye"
               },
               {
-                "id": "5d4e21655f1884db7de9ea417eba8c7f",
+                "id": "c6485380fd687b2fde72367aa5be5704",
                 "ticker": "TSLA",
-                "form": "10-Q",
-                "filed": "2025-10-23",
+                "form": "10-K",
+                "filed": "2025-01-30",
                 "page": null,
-                "citation": "[TSLA 10-Q 2025-10-23]",
-                "text": "Net increase in cash and cash equivalents and restricted cash Cash and cash equivalents and restricted cash, beginning of period Cash and cash equivalents and restricted cash, end of period Supplemental Non-Cash Investing and Financing Activities Acquisitions of property and equipment included in liabilities Leased assets obtained in exchange for finance lease liabilities Leased assets obtained in exchange for operating lease liabilities The accompanying notes are an integral part of these consolidated financial statements. Notes to Consolidated Financial Statements Note 1 \u2013 Summary of Signifi"
+                "citation": "[TSLA 10-K 2025-01-30]",
+                "text": "false 0001318605 2024 FY http://fasb.org/us-gaap/2024#AccountingStandardsUpdate202308Member http://fasb.org/us-gaap/2024#RevenueFromContractWithCustomerExcludingAssessedTax http://fasb.org/us-gaap/2024#RevenueFromContractWithCustomerExcludingAssessedTax http://fasb.org/us-gaap/2024#RevenueFromContractWithCustomerExcludingAssessedTax http://www.tesla.com/20241231#RestructuringAndOtherExpenses http://www.tesla.com/20241231#RestructuringAndOtherExpenses P7Y P3Y http://www.tesla.com/20241231#AccruedAndOtherCurrentLiabilities http://www.tesla.com/20241231#AccruedAndOtherCurrentLiabilities http://fa"
               },
               {
-                "id": "0f5c9f5c2c34d11209564f336a7d98ab",
+                "id": "e51d1201ae1420cd96475b24d7854ac2",
                 "ticker": "TSLA",
-                "form": "10-Q",
-                "filed": "2025-07-24",
+                "form": "10-K",
+                "filed": "2025-01-30",
                 "page": null,
-                "citation": "[TSLA 10-Q 2025-07-24]",
-                "text": "Net decrease in cash and cash equivalents and restricted cash Cash and cash equivalents and restricted cash, beginning of period Cash and cash equivalents and restricted cash, end of period Supplemental Non-Cash Investing and Financing Activities Acquisitions of property and equipment included in liabilities Leased assets obtained in exchange for finance lease liabilities Leased assets obtained in exchange for operating lease liabilities The accompanying notes are an integral part of these consolidated financial statements. Notes to Consolidated Financial Statements Note 1 \u2013 Summary of Signifi"
+                "citation": "[TSLA 10-K 2025-01-30]",
+                "text": "false 0001318605 2024 FY http://fasb.org/us-gaap/2024#AccountingStandardsUpdate202308Member http://fasb.org/us-gaap/2024#RevenueFromContractWithCustomerExcludingAssessedTax http://fasb.org/us-gaap/2024#RevenueFromContractWithCustomerExcludingAssessedTax http://fasb.org/us-gaap/2024#RevenueFromContractWithCustomerExcludingAssessedTax http://www.tesla.com/20241231#RestructuringAndOtherExpenses http://www.tesla.com/20241231#RestructuringAndOtherExpenses P7Y P3Y http://www.tesla.com/20241231#AccruedAndOtherCurrentLiabilities http://www.tesla.com/20241231#AccruedAndOtherCurrentLiabilities http://fa"
               }
             ]
           },
@@ -195,46 +195,46 @@
                 "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | 2024 | 2024 | 2024 | 2024.0 | 2024.0 | 2024.0 | 2024 | 2024 | 2024 | 2024.0 | 2024.0 | 2024.0 | 2024 | 2024 | 2024\n |  |  | Company excluding Ford Credit | Company excluding Ford Credit | Company excluding Ford Credit |  |  |  | Ford Credit | Ford Credit | Ford Credit |  |  |  | Consolidated | Consolidated | Consolidated\nVehicles, parts, and accessories | Vehicles, parts, and accessories | Vehicles, parts, and accessories | $ | 167218 |  |  |  |  | $ | \u2014 | "
               },
               {
-                "id": "ee3ef3946e075008c4f5e64618ff5930",
+                "id": "2ff0066fb7433aa7c2f7498a4951aa12",
                 "ticker": "F",
                 "form": "10-K",
                 "filed": "2025-02-06",
                 "page": null,
                 "citation": "[F 10-K 2025-02-06]",
-                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | 2022 | 2022 | 2022 | 2022.0 | 2022.0 | 2022.0 | 2022 | 2022 | 2022 | 2022.0 | 2022.0 | 2022.0 | 2022 | 2022 | 2022\n |  |  | Company excluding Ford Credit | Company excluding Ford Credit | Company excluding Ford Credit |  |  |  | Ford Credit | Ford Credit | Ford Credit |  |  |  | Consolidated | Consolidated | Consolidated\nVehicles, parts, and accessories | Vehicles, parts, and accessories | Vehicles, parts, and accessories | $ | 144471 |  |  |  |  | $ | \u2014 | "
+                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, 2024 | For the Year Ended December 31, "
               },
               {
-                "id": "81ea6fc131925b9ef8b2bbac00816058",
+                "id": "ef9034ae636d71249f220206157f5062",
                 "ticker": "F",
                 "form": "10-K",
                 "filed": "2025-02-06",
                 "page": null,
                 "citation": "[F 10-K 2025-02-06]",
-                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | 2023 | 2023 | 2023 | 2023.0 | 2023.0 | 2023.0 | 2023 | 2023 | 2023 | 2023.0 | 2023.0 | 2023.0 | 2023 | 2023 | 2023\n |  |  | Company excluding Ford Credit | Company excluding Ford Credit | Company excluding Ford Credit |  |  |  | Ford Credit | Ford Credit | Ford Credit |  |  |  | Consolidated | Consolidated | Consolidated\nVehicles, parts, and accessories | Vehicles, parts, and accessories | Vehicles, parts, and accessories | $ | 161052 |  |  |  |  | $ | \u2014 | "
+                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | Ford Blue | Ford Blue | Ford Blue |  |  |  | Ford Model e | Ford Model e | Ford Model e |  |  |  | Ford Pro | Ford Pro | Ford Pro |  |  |  | Ford Next | Ford Next | Ford Next |  |  |  | Ford Credit | Ford Credit | Ford Credit |  |  |  | Unallocated Amounts and Eliminat"
               },
               {
-                "id": "761a80d554cacc82f233bd1f40d61985",
+                "id": "d4c2040287f9ca8999549c4039fc9568",
                 "ticker": "F",
-                "form": "10-Q",
-                "filed": "2025-07-31",
+                "form": "10-K",
+                "filed": "2025-02-06",
                 "page": null,
-                "citation": "[F 10-Q 2025-07-31]",
-                "text": "Includes Ford and Lincoln brand and JMC brand vehicles produced and sold in China by our unconsolidated affiliates (about 105,000 units in Q2\u00a02024 and 97,000 units in Q2\u00a02025). Change in EBIT by Causal Factor (in millions) In the second quarter of 2025, Ford Blue\u2019s wholesales decreased 6% from a year ago.  The decrease primarily reflects lower F-150 wholesales due to the non-repeat of the stock build in 2024 following the launch of the new model.  Second quarter 2025 revenue decreased 3%, driven primarily by lower wholesales and unfavorable exchange, offset partially by favorable mix and prici"
+                "citation": "[F 10-K 2025-02-06]",
+                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For the years ended December 31, | For th"
               },
               {
-                "id": "54ba015d6b151b1401effba2d2210c73",
+                "id": "94fc465cd16aed7dd44ffe05051cf690",
                 "ticker": "F",
-                "form": "10-Q",
-                "filed": "2025-07-31",
+                "form": "10-K",
+                "filed": "2025-02-06",
                 "page": null,
-                "citation": "[F 10-Q 2025-07-31]",
-                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | Ford Blue | Ford Blue | Ford Blue |  |  |  | Ford Model e | Ford Model e | Ford Model e |  |  |  | Ford Pro | Ford Pro | Ford Pro |  |  |  | Ford Credit | Ford Credit | Ford Credit |  |  |  | Unallocated Amounts and Eliminations (a) | Unallocated Amounts and Eliminations (a) | Unallocated Amounts and Eliminations (a"
+                "citation": "[F 10-K 2025-02-06]",
+                "text": "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35\n |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  | \n |  |  | 2022 | 2022 | 2022 | 2022.0 | 2022.0 | 2022.0 | 2022 | 2022 | 2022 |  |  |  | 2023 | 2023 | 2023 | 2023.0 | 2023.0 | 2023.0 | 2023 | 2023 | 2023 |  |  |  | 2024 | 2024 | 2024 | 2024.0 | 2024.0 | 2024.0 | 2024 | 2024 | 2024\n |  |  | Revenues | Revenues | Revenues |  |  |  | Long-Lived Assets (a) | Long-Lived Assets ("
               }
             ]
           }
         }
       },
-      "ms": 1264
+      "ms": 1362
     },
     "get_latest_filing": {
       "arguments": {
@@ -253,7 +253,7 @@
         "sec_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/aapl-20260627.htm",
         "in_corpus": true
       },
-      "ms": 724
+      "ms": 729
     },
     "list_covered_companies": {
       "arguments": {},
@@ -1472,17 +1472,17 @@
         ],
         "total_filings": 1082
       },
-      "ms": 415
+      "ms": 335
     },
     "verify_figures": {
       "arguments": {
         "answer": "3M spent $1,577 million on capex in 2018.",
         "passage_ids": [
-          "2de78345fbe37e5e122fe84deaa4b8e7",
-          "dd73d7b90db05fb25e0afad9af01cf0d",
           "5d44fe78114e18919005a0d70ddd24e4",
-          "b61e029f993f64aa61aec9106958b8da",
-          "0455ee57db4735d95cb11648821ebcdb"
+          "2de78345fbe37e5e122fe84deaa4b8e7",
+          "92b3ab0ae49e688caee769614bc6c911",
+          "c906d99835da7f010bb33f26f4331a91",
+          "10902d5151e3d30be10c1f771890a01c"
         ]
       },
       "result": {
@@ -1493,13 +1493,13 @@
         "unknown_ids": [],
         "checked_against": 5
       },
-      "ms": 253
+      "ms": 254
     }
   },
   "search_latency_ms": {
-    "cache_miss_p50": 922,
-    "cache_miss_max": 1145,
-    "cache_hit_p50": 339,
+    "cache_miss_p50": 1076,
+    "cache_miss_max": 1246,
+    "cache_hit_p50": 373,
     "n": 10
   }
 }

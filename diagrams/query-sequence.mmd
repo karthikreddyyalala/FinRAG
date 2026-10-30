@@ -11,6 +11,7 @@ sequenceDiagram
     participant BM as Keyword index (SQLite FTS5 in /tmp)
     participant OA as OpenAI (text-embedding-3-small)
     participant PC as Pinecone (finrag-filings, 1536-dim)
+    participant VY as Voyage AI (rerank-2.5)
 
     C->>L: POST /mcp tools/call search_sec_filings(question, ticker?, fiscal_year?)
     Note over L,BM: cold start only: download the ~964 MB index to /tmp.<br/>initialize and tools/list never load it.
@@ -27,19 +28,20 @@ sequenceDiagram
     T->>E: find_passages(question)
     E->>E: clean the question, pull ticker + years from the user's own words,<br/>add GAAP line-item wording ("capex" -> "purchases of property, plant and equipment")
     par hybrid retrieval, both filtered to ticker + period window
-        E->>BM: FTS5 MATCH ... ORDER BY bm25() (top 10)
+        E->>BM: FTS5 MATCH ... ORDER BY bm25() (top 40)
         BM-->>E: keyword hits
     and
         E->>OA: embed(question)
         OA-->>E: vector
-        E->>PC: query(vector, top_k=10, filter)
+        E->>PC: query(vector, top_k=40, filter)
         PC-->>E: semantic hits (text cut to 1,000 chars)
     end
     alt embedding fails
         E->>BM: keyword search only, with a note telling the client
     end
     E->>BM: chunk_lookup: swap every candidate for its full text
-    E->>E: lexical rerank, keep top 5
+    E->>E: fiscal-year question: drop 10-Qs when a 10-K was found
+    E->>VY: Voyage rerank-2.5, keep top 5 (word-overlap scorer if Voyage fails)
     E-->>T: passages + note
     T->>DDB: PutItem tool cache (clean results only) + call log (90-day expiry)
     T-->>C: passages [{id, citation, text}]

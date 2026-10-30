@@ -149,6 +149,10 @@ def main() -> None:
     if "--metric" in sys.argv:
         metric = sys.argv[sys.argv.index("--metric") + 1]
     label = sys.argv[sys.argv.index("--label") + 1] if "--label" in sys.argv else ""
+    if "--per-source" in sys.argv:
+        import server.retrieval.evidence as evidence
+
+        evidence.CANDIDATES_PER_SOURCE = int(sys.argv[sys.argv.index("--per-source") + 1])
     search = lambda q: find_passages(q, *clients, stage=stage)[0]  # noqa: E731
     if metric == "evidence":
         docs = json.loads((ROOT / "eval_data" / "financebench_docs.json").read_text())

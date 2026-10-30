@@ -108,20 +108,20 @@
     "source_detail": "Companies in the index (index coverage table, 2026-10-30)"
   },
   "warm_search_p50_ms": {
-    "value": 922,
-    "display": "0.92 s",
+    "value": 1076,
+    "display": "1.08 s",
     "source_file": "dashboard/data/live/live-check.json",
-    "source_detail": "Live server, search_sec_filings cache miss, warm, p50 of 10 calls, 2026-10-30"
+    "source_detail": "Live server, search_sec_filings cache miss, warm, p50 of 10 calls, Voyage reranker, 2026-10-30"
   },
   "warm_search_max_ms": {
-    "value": 1145,
-    "display": "1.15 s",
+    "value": 1246,
+    "display": "1.25 s",
     "source_file": "dashboard/data/live/live-check.json",
-    "source_detail": "Live server, search_sec_filings cache miss, warm, slowest of 10 calls, 2026-10-30"
+    "source_detail": "Live server, search_sec_filings cache miss, warm, slowest of 10 calls, Voyage reranker, 2026-10-30"
   },
   "cache_hit_p50_ms": {
-    "value": 339,
-    "display": "0.34 s",
+    "value": 373,
+    "display": "0.37 s",
     "source_file": "dashboard/data/live/live-check.json",
     "source_detail": "Live server, search_sec_filings repeated call served from the 24 h cache, p50 of 10 calls, 2026-10-30"
   },
@@ -132,9 +132,9 @@
     "source_detail": "First call after deploy, server-side; it loads the 964 MB index. Recorded 2026-10-30"
   },
   "cost_per_search_usd": {
-    "value": 3e-05,
-    "display": "$0.00003",
+    "value": 0.0017,
+    "display": "$0.0017",
     "source_file": "estimate",
-    "source_detail": "Estimate, not a bill: 2 GB Lambda arm64 x about 1 s at $0.0000133334 per GB-s, plus one text-embedding-3-small query embedding"
+    "source_detail": "Estimate, not a bill: about 32,600 Voyage rerank-2.5 tokens at $0.05 per million (the first 200M tokens are free), plus 2 GB Lambda arm64 x about 1 s and one text-embedding-3-small query embedding"
   }
 }

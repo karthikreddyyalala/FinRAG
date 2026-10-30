@@ -60,12 +60,12 @@ sequenceDiagram
     T->>E: find_passages
     E->>E: ticker + years from the question, GAAP line-item wording
     par
-        E->>BM: keyword search (top 10)
+        E->>BM: keyword search (top 40)
     and
-        E->>PC: vector search (top 10)
+        E->>PC: vector search (top 40)
     end
     E->>BM: swap each hit for its full text
-    E->>E: rerank, keep top 5
+    E->>E: Voyage rerank-2.5, keep top 5
     T-->>C: passages with citations
     C->>C: client's model writes the answer
     C->>T: verify_figures(answer, passage_ids)
@@ -75,7 +75,7 @@ sequenceDiagram
 - **Corpus:** 1,082 filings (519 10-Q, 299 10-K, 264 8-K), 171,790 chunks, 71 companies. Tables are kept as tables. A weekly job pulls new filings from EDGAR.
 - **No chat model on the server.** Query embeddings use OpenAI `text-embedding-3-small`. If the embedding call fails, search falls back to keyword-only and the result says so.
 - **Full text before ranking.** Pinecone metadata holds only the first 1,000 characters of a chunk. 75% of chunks are longer than that (the average chunk is 3,728 characters), so every hit is swapped for its full text from the keyword index before reranking. Passages sent to the client are capped at 8,000 characters and marked `[... truncated]` past that.
-- **Reranker:** a word-overlap scorer. A neural reranker is next.
+- **Reranker:** Voyage `rerank-2.5`, a hosted cross-encoder, scores all candidates (up to 40 per search source) against the question and keeps 5. A question that names a fiscal year but no quarter prefers the 10-K over 10-Qs. If Voyage is unreachable, a word-overlap scorer takes over and the search still returns passages. Until 2026-10-30 that word-overlap scorer was all production ever ran: the Lambda never installed the local cross-encoder the code was written for.
 - **Verifier:** compares parsed magnitudes, not raw text. A plain substring test would treat a made-up "$1,234" as grounded whenever the source contains "$1,234.56". It does not convert units, so "$1.58 billion" is not grounded by "1,577" (millions), and plain digits like "1577" are not checked.
 
 The full sequence, with every component, is in [diagrams/query-sequence.mmd](diagrams/query-sequence.mmd).
@@ -88,11 +88,11 @@ Measured against the deployed URL by [scripts/live_check.py](scripts/live_check.
 
 | | |
 |---|---|
-| Search, warm, cache miss | 0.92 s median, 1.15 s max (10 questions) |
-| Search, cache hit | 0.34 s median |
+| Search, warm, cache miss | 1.08 s median, 1.25 s max (10 questions, Voyage reranker) |
+| Search, cache hit | 0.37 s median |
 | First call after a deploy (cold) | 14.9 s, mostly loading the 964 MB index |
 | `initialize` / `tools/list` | 0.30 s / 0.24 s (neither loads the index) |
-| Cost per search (estimate) | about $0.00003: 2 GB Lambda for about 1 s, plus one embedding |
+| Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens ($0 within the first 200M free), plus 2 GB Lambda for about 1 s and one embedding |
 
 The old pipeline averaged 24.1 s per question, because it spent most of that time waiting on throttled model calls.
 
@@ -108,21 +108,36 @@ Same index, same day, top 5 after reranking:
 
 The new path drops the LLM rewrite and retrieves about as well: the number lands in the top 5 for one more of 92 questions, and the evidence for four more of 127. Swapping in full text is what makes the difference.
 
+### Neural reranker (2026-10-30)
+
+Same index, same day, top 5. "Lexical" is the word-overlap scorer; every row includes the 10-K preference for fiscal-year questions. 0 Voyage fallbacks in every run. Results: `evals/results/retrieval_*_m3_*.json`.
+
+| Reranker, candidates per source | Evidence in top 5 (127) | Evidence ranked first | Number in top 5 (92) | MRR |
+|---|---|---|---|---|
+| Before (lexical, 10, no 10-K preference) | 13.4% | 3.1% | 52.2% | 0.455 |
+| Lexical, 10 | 22.0% | 8.7% | 53.3% | 0.478 |
+| Lexical, 40 | 23.6% | 10.2% | 51.1% | 0.451 |
+| Voyage, 10 | 28.3% | 23.6% | 62.0% | 0.555 |
+| **Voyage, 40 (live)** | **45.7%** | **36.2%** | **63.0%** | **0.580** |
+
+The 10-K preference alone moved evidence from 13.4% to 22.0%. More candidates only pay off with a neural reranker: the word-overlap scorer got slightly worse with 40.
+
 ### Answer quality on the new server (2026-10-30)
 
-Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py`. Results: `evals/results/remeasure_2026-10-30.json`.
+Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py --tag m3`. Results: `evals/results/remeasure_2026-10-30.json` (word-overlap) and `evals/results/remeasure_m3.json` (Voyage).
 
-| FinanceBench (150) | September | Now |
-|---|---|---|
-| Refused to answer | 121 | 99 |
-| Stated the right number, among answered questions (of 110 with a numeric answer) | 15 | 25 |
-| Answers whose every figure is in the retrieved passages | not measured | 145 (96.7%) |
+| FinanceBench (150) | September | Word-overlap rerank | Voyage rerank (live) |
+|---|---|---|---|
+| Refused to answer | 121 | 99 | 55 |
+| Stated the right number, among answered questions (of 110 with a numeric answer) | 15 | 25 | 49 |
+| Answers whose every figure is in the retrieved passages | not measured | 145 (96.7%) | 126 (84%) |
 
 How to read these:
 
-- **It answers more often and gets more right**, but it still refuses about two in three questions. Most refusals are real: retrieval returned the wrong passages, often for ratio questions (working capital, days payable) that need several statement lines.
+- **Better ranking roughly halved refusals and doubled correct answers.** It still refuses 55 of 150. Most remaining refusals are ratio questions (working capital, days payable) that need several statement lines in the same 5 passages.
+- **The figure check fell because more answers compute something.** 23 of the 95 answers contain a figure not found verbatim: mostly ratios the model calculated ("2.1%") or unit conversions ("$8.738 billion" for 8,738 million). `verify_figures` does not convert units or check arithmetic, by design, so it flags these for the client to show.
 - **"Stated the right number" is an automated check** (within 2% of the ground truth) and is not hand-graded. An earlier version counted stray numbers inside refusals as hits; that inflated the September figure to 52, which is why I now count answered questions only.
-- **The 48 hand-verified custom questions are mostly unanswerable on this path** (42 refusals). Of the 6 answers, 2 are right and 4 quote the wrong period or company.
+- **The 48 hand-verified custom questions:** refusals fell from 42 to 18 with the Voyage reranker. The automated number check matches only 1 of the 48, so whether those answers are right needs hand grading.
 - **ragas was not re-run.** Its September scores are below.
 
 ### Answer quality (September 2026, before this server)
@@ -198,7 +213,9 @@ You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 o
    ```bash
    aws ssm put-parameter --region us-east-1 --name /finrag/openai-api-key --type SecureString --value <your-openai-key>
    aws ssm put-parameter --region us-east-1 --name /finrag/pinecone-api-key --type SecureString --value <your-pinecone-key>
+   aws ssm put-parameter --region us-east-1 --name /finrag/voyage-api-key --type SecureString --value <your-voyage-key>
    ```
+   All three are required: a Lambda fails its cold start if one is missing. Voyage needs a payment method on file; without one it allows 10K tokens a minute and a single search uses about 33K. The first 200M tokens are free.
 5. Deploy. `cdk.json` already points at the app, and `bootstrap` is needed once per account and region:
 
    ```bash
@@ -218,8 +235,8 @@ You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 o
 
 ## Status
 
-Done: ingestion, hybrid retrieval with full-text hydration, figure verifier, six evidence tools, public deployment with rate limits, caching, logging, health checks and alarms, weekly refresh, eval harness, public site.
+Done: ingestion, hybrid retrieval with full-text hydration, neural reranking (Voyage), figure verifier, six evidence tools, public deployment with rate limits, caching, logging, health checks and alarms, weekly refresh, eval harness, public site.
 
-Next: XBRL facts for any public company, a neural reranker, re-measuring answer quality on the new server, an eval that penalizes refusals.
+Next: XBRL facts for any public company, multi-line retrieval for ratio questions, hand-graded answers for the custom set.
 
 Other diagrams are in `diagrams/`. `ingestion-sequence.mmd` is current; `week1-sequence.mmd` and `week3-eval-sequence.mmd` show earlier designs, kept as history.

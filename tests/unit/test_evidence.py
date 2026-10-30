@@ -115,3 +115,38 @@ def test_keyword_note_is_kept_when_nothing_matches():
     chunks, note = find_passages("revenue", pinecone_returning([]), index, broken)
     assert chunks == []
     assert note == f"{KEYWORD_ONLY_NOTE} {NO_MATCH_NOTE}"
+
+
+NFLX_Q = chunk("q1", "Netflix revenue for the quarter 8,541,668", ticker="NFLX",
+               filing_type="10-Q", period="2023-10-20")
+NFLX_K = chunk("k1", "Netflix revenues 33,723,297 for the year", ticker="NFLX",
+               filing_type="10-K", period="2024-01-26")
+
+
+def test_fiscal_year_question_prefers_the_annual_report_over_10qs():
+    """'Netflix revenue FY2023' ranked 10-Qs over the FY2023 10-K (2026-10-30)."""
+    index = FakeKeywordIndex([NFLX_Q, NFLX_K])
+    chunks, _ = find_passages("Netflix revenue FY2023", pinecone_returning([]), index, _embed)
+    assert [c["chunk_id"] for c in chunks] == ["k1"]
+
+
+def test_quarter_question_keeps_10qs():
+    index = FakeKeywordIndex([NFLX_Q, NFLX_K])
+    chunks, _ = find_passages(
+        "Netflix revenue for the third quarter of 2023", pinecone_returning([]), index, _embed
+    )
+    assert "q1" in [c["chunk_id"] for c in chunks]
+
+
+def test_annual_question_keeps_10qs_when_no_10k_was_found():
+    index = FakeKeywordIndex([NFLX_Q])
+    chunks, _ = find_passages("Netflix revenue FY2023", pinecone_returning([]), index, _embed)
+    assert [c["chunk_id"] for c in chunks] == ["q1"]
+
+
+def test_fiscal_year_argument_also_prefers_the_annual_report():
+    index = FakeKeywordIndex([NFLX_Q, NFLX_K])
+    chunks, _ = find_passages(
+        "Netflix revenue", pinecone_returning([]), index, _embed, ticker="NFLX", years=(2023, 2023)
+    )
+    assert [c["chunk_id"] for c in chunks] == ["k1"]

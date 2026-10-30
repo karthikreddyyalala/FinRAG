@@ -13,6 +13,7 @@ from typing import Any
 SECRET_PARAMETERS = {
     "openai-api-key": "OPENAI_API_KEY",
     "pinecone-api-key": "PINECONE_API_KEY",
+    "voyage-api-key": "VOYAGE_API_KEY",
 }
 
 

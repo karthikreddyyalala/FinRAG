@@ -26,37 +26,50 @@ export function ResultsSection() {
           <p className="max-w-[65ch] text-[var(--color-muted)]">
             Re-measured on 2026-10-30: the same 150 FinanceBench questions through the live server&apos;s retrieval,
             answers written by gpt-4o-mini, September answers re-scored with the same code. Automated checks, not
-            hand-graded.
+            hand-graded. &ldquo;Voyage rerank&rdquo; is the same server with a neural reranker over 40 candidates per
+            search instead of a word-overlap scorer over 10.
           </p>
-          <table className="mt-4 w-full min-w-[480px] text-left text-sm">
+          <table className="mt-4 w-full min-w-[560px] text-left text-sm">
             <thead className="text-[var(--color-muted)]">
               <tr className="border-b border-[var(--color-border)]">
                 <th className="py-2 pr-4 font-medium">FinanceBench, 150 questions</th>
                 <th className="py-2 pr-4 font-medium">September</th>
-                <th className="py-2 font-medium">Now</th>
+                <th className="py-2 pr-4 font-medium">Word-overlap rerank</th>
+                <th className="py-2 font-medium">Voyage rerank</th>
               </tr>
             </thead>
             <tbody className="font-[family-name:var(--font-mono)] tabular-nums">
               <tr className="border-b border-[var(--color-border)]">
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Refused to answer</td>
                 <td className="py-2 pr-4">121</td>
-                <td className="py-2 text-[var(--color-grounded)]">99</td>
+                <td className="py-2 pr-4">99</td>
+                <td className="py-2 text-[var(--color-grounded)]">55</td>
               </tr>
               <tr className="border-b border-[var(--color-border)]">
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Right number, among answered (of 110)</td>
                 <td className="py-2 pr-4">15</td>
-                <td className="py-2 text-[var(--color-grounded)]">25</td>
+                <td className="py-2 pr-4">25</td>
+                <td className="py-2 text-[var(--color-grounded)]">49</td>
+              </tr>
+              <tr className="border-b border-[var(--color-border)]">
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Evidence passage in the top 5 (of 127)</td>
+                <td className="py-2 pr-4">not measured</td>
+                <td className="py-2 pr-4">13.4%</td>
+                <td className="py-2 text-[var(--color-grounded)]">45.7%</td>
               </tr>
               <tr>
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Every figure found in its sources</td>
                 <td className="py-2 pr-4">not measured</td>
-                <td className="py-2 text-[var(--color-grounded)]">96.7%</td>
+                <td className="py-2 pr-4">96.7%</td>
+                <td className="py-2 text-[var(--color-grounded)]">84%</td>
               </tr>
             </tbody>
           </table>
           <p className="mt-3 max-w-[65ch] text-sm text-[var(--color-muted)]">
-            It still refuses about two in three questions, mostly ratio questions where retrieval misses a statement
-            line. The charts below are the September pipeline.
+            It now answers 95 of 150 and refuses 55, still mostly ratio questions that need several statement lines.
+            The figure check fell because more answers compute something: 23 of 95 contain a ratio or a unit
+            conversion (&ldquo;$8.738 billion&rdquo; for 8,738 million) that the check does not convert, by design.
+            The charts below are the September pipeline.
           </p>
         </div>
 
