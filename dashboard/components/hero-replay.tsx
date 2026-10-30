@@ -72,7 +72,7 @@ function ReplayPlayer({ recording }: { recording: Recording }) {
       {(phase === "pipeline" || phase === "streaming" || phase === "done") && (
         <div className="mt-4">
           <p className="mb-2 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-muted)]">
-            {recording.tool} returned {recording.passages.length} passages in {recording.tool_ms} ms
+            {recording.tool} returned {recording.passages.length} passages
           </p>
           <PipelineRail activeIndex={stageIndex} />
         </div>
@@ -109,7 +109,7 @@ function ReplayPlayer({ recording }: { recording: Recording }) {
             {recording.verify.grounded.length > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-grounded)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-grounded)]">
                 <CheckCircleIcon size={12} weight="fill" />
-                {recording.verify.grounded.length} figures grounded
+                grounded: {recording.verify.grounded.join(", ")}
               </span>
             )}
             {recording.verify.not_found.length > 0 && (
