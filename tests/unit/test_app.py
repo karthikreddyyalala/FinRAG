@@ -101,3 +101,46 @@ def test_health_check_fails_loudly_on_no_passages_or_keyword_fallback(found):
          patch.object(main, "find_passages", return_value=found), \
          pytest.raises(RuntimeError, match="health check failed"):
         main.handler({"finrag_health_check": True}, MagicMock())
+
+
+# What clients are told must match what the server does.
+
+def _tool_descriptions(handler):
+    resp = handler(_event(TOOLS_LIST), MagicMock())
+    return {t["name"]: t["description"] for t in json.loads(resp["body"])["result"]["tools"]}
+
+
+def test_instructions_state_the_real_company_count_and_citation_format():
+    from pathlib import Path
+
+    from server.main import INSTRUCTIONS
+    from server.retrieval.evidence import format_citation
+
+    corpus = json.loads((Path(__file__).parents[2] / "dashboard/data/corpus.json").read_text())
+    assert f"{corpus['companies']} large US-listed companies" in INSTRUCTIONS
+    # EDGAR filings are HTML, so no chunk has a page number and no citation shows one.
+    example = format_citation({"ticker": "MMM", "filing_type": "10-K",
+                               "period": "2019-02-07", "page_number": None})
+    assert f"e.g. {example}." in INSTRUCTIONS
+    assert " p." not in INSTRUCTIONS
+
+
+def test_verify_figures_description_matches_what_it_checks(handler):
+    from server.retrieval.numerical_verifier import check_figures
+
+    description = _tool_descriptions(handler)["verify_figures"]
+    # Plain digits are not checked at all; units are not converted.
+    assert check_figures("1577", ["(1,577)"]) == ([], [])
+    assert '"1577"' in description
+    assert check_figures("$1.58 billion", ["(1,577)"]) == ([], ["$1.58 billion"])
+    assert '"$1.58 billion"' in description
+    assert "unknown_ids" in description
+
+
+def test_search_fiscal_year_doc_states_its_range_and_window(handler):
+    from server.retrieval.query_filters import period_window
+
+    description = _tool_descriptions(handler)["search_sec_filings"]
+    assert "1993 to 2100" in description
+    assert period_window((2018, 2018)) == ("2018-01-01", "2019-12-31")
+    assert "filed in that year or the next" in description

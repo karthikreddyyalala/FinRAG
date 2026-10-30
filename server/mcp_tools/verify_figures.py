@@ -1,4 +1,4 @@
-"""verify_figures: which figures in a draft answer the cited passages actually contain."""
+"""verify_figures: which figures in a draft answer the cited passages contain."""
 from __future__ import annotations
 
 from typing import Any
@@ -18,11 +18,15 @@ def register_verify_figures_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
 
     @mcp.tool(title="Verify figures", annotations=READ_ONLY)
     def verify_figures(answer: str, passage_ids: list[str]) -> dict[str, Any]:
-        """Check that every figure in a draft answer appears in the passages it cites.
+        """Check the figures in a draft answer against the passages it cites.
 
         Call this before giving a final answer that contains numbers. Fix or flag
-        anything in not_found. Matching is by value: "(1,577)" in a cash flow
-        table grounds "$1,577 million", but "$1,234.56" does not ground "$1,234".
+        anything in not_found. It checks dollar amounts ("$1,577 million"),
+        percentages ("12.5%") and comma-grouped numbers ("1,577"); other numbers,
+        such as "1577" or a year, are not checked. Matching is by value as written,
+        with no unit conversion: "(1,577)" in a cash flow table grounds
+        "$1,577 million" but not "$1.58 billion", and "$1,234.56" does not ground
+        "$1,234". unknown_ids lists passage ids that matched nothing.
 
         Args:
             answer: The draft answer text.
