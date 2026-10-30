@@ -88,12 +88,15 @@ METRICS: dict[str, tuple[str, ...]] = {
     "total assets": ("Assets",),
     "current assets": ("AssetsCurrent", "CurrentAssets"),
     "total liabilities": ("Liabilities",),
+    "total liabilities and equity": ("LiabilitiesAndStockholdersEquity", "EquityAndLiabilities"),
+    "total equity": ("StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+                     "StockholdersEquity", "Equity"),
     "current liabilities": ("LiabilitiesCurrent", "CurrentLiabilities"),
     "cash": ("CashAndCashEquivalentsAtCarryingValue", "CashAndCashEquivalents",
              "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
     "accounts receivable": ("AccountsReceivableNetCurrent", "ReceivablesNetCurrent",
                             "TradeAndOtherCurrentReceivables"),
-    "inventory": ("InventoryNet", "Inventories"),
+    "inventory": ("InventoryNet", "Inventories", "InventoryFinishedGoodsNetOfReserves"),
     "accounts payable": ("AccountsPayableCurrent", "AccountsPayableTradeCurrent",
                          "TradeAndOtherCurrentPayables"),
     "property plant and equipment": ("PropertyPlantAndEquipmentNet", "PropertyPlantAndEquipment"),
@@ -128,8 +131,10 @@ ALIASES = {
     "total equity": "shareholders equity", "buybacks": "share repurchases",
     "income before taxes": "pretax income", "tax expense": "income tax expense",
 }
-# Derived metrics: computed from two reported facts, formula returned with them.
+# Derived metrics: first minus second, formula returned with both inputs.
 DERIVED = {"free cash flow": ("operating cash flow", "capital expenditure")}
+# Used only when the company tags no figure of its own: Verizon never tags total liabilities.
+FALLBACKS = {"total liabilities": ("total liabilities and equity", "total equity")}
 
 _PERIOD = re.compile(
     r"^(?:(?P<q1>q[1-4])\s*(?:fy|fiscal(?:\s+year)?)?\s*(?P<y1>\d{4})"
@@ -323,8 +328,13 @@ def resolve_metric(metric: str) -> tuple[str, tuple[str, ...]]:
     return name, ()
 
 
-def suggest(facts: dict[str, Any], metric: str, limit: int = 8) -> list[dict[str, str]]:
-    """Concepts this company reports whose name or label shares the metric's words."""
+def suggest(facts: dict[str, Any], metric: str, fy: int | None = None, fp: str = "FY",
+            limit: int = 8) -> list[dict[str, str]]:
+    """Concepts this company reports whose name or label shares the metric's words.
+
+    With a period, only concepts that have a value for it, value included, so a
+    company that renamed a line item (Nike's inventory after 2011) is still found.
+    """
     words = {w for w in _normalize(metric).split() if len(w) > 2}
     scored = []
     for ns in NAMESPACES:
@@ -332,11 +342,30 @@ def suggest(facts: dict[str, Any], metric: str, limit: int = 8) -> list[dict[str
             spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", concept)
             text = f"{spaced} {node.get('label') or ''}".lower()
             hits = sum(w in text for w in words)
-            if hits:
-                label = node.get("label") or concept
-                scored.append((hits, -len(concept), f"{ns}:{concept}", label))
-    scored.sort(reverse=True)
-    return [{"concept": c, "label": label} for _, _, c, label in scored[:limit]]
+            if not hits:
+                continue
+            entry = {"concept": f"{ns}:{concept}", "label": node.get("label") or concept}
+            if fy is not None:
+                hit = find_fact(facts, concept, fy, fp)
+                if not hit:
+                    continue
+                entry["value"] = display(hit["row"]["val"], hit["unit"])
+            scored.append((hits, -len(concept), entry))
+    scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    return [entry for _, _, entry in scored[:limit]]
+
+
+def _difference(ticker: str, metric: str, period: str | None, first: str, second: str
+                ) -> dict[str, Any]:
+    """first minus second, both looked up, with the formula and both inputs."""
+    a, b = lookup(ticker, first, period), lookup(ticker, second, period)
+    if "error" in a or "error" in b:
+        return {"metric": metric, "error": "; ".join(p["error"] for p in (a, b) if "error" in p)}
+    value = a["value"] - abs(b["value"])
+    return {"metric": metric, "value": value, "unit": a["unit"],
+            "display": display(value, a["unit"]), "period": a["period"],
+            "formula": f"{first} {a['display']} minus {second} {b['display']}",
+            "inputs": [a, b], "citation": a["citation"]}
 
 
 def lookup(ticker: str, metric: str, period: str | None) -> dict[str, Any]:
@@ -347,16 +376,7 @@ def lookup(ticker: str, metric: str, period: str | None) -> dict[str, Any]:
     name, concepts = resolve_metric(metric)
 
     if name in DERIVED:
-        parts = [lookup(ticker, part, period) for part in DERIVED[name]]
-        if any("error" in p for p in parts):
-            return {"metric": metric, "error": "; ".join(p["error"] for p in parts if "error" in p)}
-        ocf, capex = parts
-        value = ocf["value"] - abs(capex["value"])
-        return {"metric": metric, "value": value, "unit": "USD", "display": display(value, "USD"),
-                "period": ocf["period"],
-                "formula": f"operating cash flow {ocf['display']} minus capital expenditure "
-                           f"{capex['display']}",
-                "inputs": parts, "citation": ocf["citation"]}
+        return _difference(ticker, metric, period, *DERIVED[name])
 
     if not concepts:
         return {"metric": metric,
@@ -389,13 +409,18 @@ def lookup(ticker: str, metric: str, period: str | None) -> dict[str, Any]:
                 if hit.get(key):
                     entry[key] = hit[key]
             return entry
+    if name in FALLBACKS:
+        derived = _difference(ticker, metric, period, *FALLBACKS[name])
+        if "error" not in derived:
+            return derived
+    label = f"{fp} {year}" if fp != "FY" else f"FY{year}"
     years = sorted({r["fy"] for c in concepts if (f := _concept_rows(facts, c))
                     for r in f[3] if r.get("fy")}, reverse=True)[:8]
-    label = f"{fp} {year}" if fp != "FY" else f"FY{year}"
     return {"metric": metric,
             "error": f"{ticker} has no tagged {name} for {label}."
-                     + (f" Fiscal years with data: {years}." if years else ""),
-            "suggestions": suggest(facts, metric) if not years else []}
+                     + (f" Fiscal years with data: {years}." if years else "")
+                     + " If a suggestion is the same line item, pass its concept as the metric.",
+            "suggestions": suggest(facts, metric, year, fp)}
 
 
 def value_for_id(fid: str) -> tuple[float, str] | None:

@@ -190,3 +190,32 @@ def test_figures_are_checked_against_facts_at_the_precision_written(figure, grou
         f"Revenue was {figure}.", [33_723_297_000, 12.03])
     assert (found == [figure]) is grounded
     assert (missing == [figure]) is not grounded
+
+
+def test_total_liabilities_is_derived_when_a_company_never_tags_it():
+    """Verizon tags no total-liabilities line: total liabilities and equity minus equity."""
+    facts = {"facts": {"us-gaap": {
+        "LiabilitiesAndStockholdersEquity": {"label": "Total L&E", "units": {"USD": [
+            _instant(379_680, "2022-12-31", 2022, "FY", "10-K", "2023-02-10")]}},
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest": {
+            "label": "Total equity", "units": {"USD": [
+                _instant(92_430, "2022-12-31", 2022, "FY", "10-K", "2023-02-10")]}},
+    }}}
+    with patch.object(xbrl_facts, "company_facts", return_value=facts):
+        entry = lookup("VZ", "total liabilities", "FY2022")
+    assert entry["value"] == 379_680 - 92_430
+    assert "minus" in entry["formula"]
+
+
+def test_a_miss_suggests_concepts_that_have_a_value_for_that_period():
+    """Nike's InventoryNet stops in 2011; the miss should point at what it tags now."""
+    facts = {"facts": {"us-gaap": {
+        "InventoryNet": {"label": "Inventories", "units": {"USD": [
+            _instant(2_715, "2011-05-31", 2011, "FY", "10-K", "2011-07-22")]}},
+        "InventoryOtherConcept": {"label": "Inventories", "units": {"USD": [
+            _instant(6_854, "2021-05-31", 2021, "FY", "10-K", "2021-07-20")]}},
+    }}}
+    with patch.object(xbrl_facts, "company_facts", return_value=facts):
+        entry = lookup("NKE", "inventory", "FY2021")
+    assert entry["suggestions"][0]["concept"] == "us-gaap:InventoryOtherConcept"
+    assert entry["suggestions"][0]["value"] == "$6,854"

@@ -105,6 +105,11 @@ def run_one(question: str, mcp: McpClient, tools: list[dict], oai, model: str) -
                                                    temperature=0, max_tokens=1200)
                 break
             except Exception as e:  # rate limits and blips; insufficient_quota is fatal
+                if "context_length_exceeded" in str(e):
+                    # Searching round after round without settling; a real client
+                    # would hit the same wall. Scored as no answer.
+                    return {"answer": "", "calls": calls, "contexts": contexts, "usage": usage,
+                            "note": "context window exceeded before a final answer"}
                 if "insufficient_quota" in str(e) or attempt == 5:
                     raise
                 time.sleep(2 ** attempt)
