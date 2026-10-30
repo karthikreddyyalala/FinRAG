@@ -239,4 +239,6 @@ Done: ingestion, hybrid retrieval with full-text hydration, neural reranking (Vo
 
 Next: XBRL facts for any public company, multi-line retrieval for ratio questions, hand-graded answers for the custom set.
 
+What changed, what was broken before, and what each change measured: [CHANGELOG.md](CHANGELOG.md).
+
 Other diagrams are in `diagrams/`. `ingestion-sequence.mmd` is current; `week1-sequence.mmd` and `week3-eval-sequence.mmd` show earlier designs, kept as history.
