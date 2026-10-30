@@ -5,7 +5,9 @@ does not provide" -- all 28 MMM filings carry near-identical PP&E cash-flow
 rows, and nothing tied "FY2018" to the 10-K filed 2019-02-07, so 2022-2023
 look-alikes crowded it out of the top 5.
 """
-from server.retrieval.query_filters import extract_filters, period_window
+import pytest
+
+from server.retrieval.query_filters import extract_filters, period_window, wants_annual
 
 
 def test_company_name_maps_to_ticker():
@@ -73,3 +75,16 @@ def test_period_window_covers_both_fiscal_year_conventions():
     covers both without knowing each company's fiscal calendar."""
     assert period_window((2018, 2018)) == ("2018-01-01", "2019-12-31")
     assert period_window((2023, 2025)) == ("2023-01-01", "2026-12-31")
+
+
+@pytest.mark.parametrize("query, expected", [
+    ("Netflix revenue FY2023", True),
+    ("What was 3M's capex in 2018?", True),
+    ("Netflix revenue in Q3 2023", False),
+    ("revenue for the three months ended June 30, 2023", False),
+    ("third quarter 2023 operating margin", False),
+    ("AMD 10-Q 2023 inventory", False),
+    ("Netflix revenue", False),  # no year named: no preference
+])
+def test_wants_annual(query, expected):
+    assert wants_annual(query) is expected

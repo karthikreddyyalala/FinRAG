@@ -82,6 +82,19 @@ def extract_filters(query: str) -> dict[str, Any]:
     return {"ticker": _extract_ticker(query), "years": _extract_years(query)}
 
 
+# A question naming a year but no quarter or interim period wants the annual
+# report: "Netflix revenue FY2023" ranked two 10-Qs above the FY2023 10-K.
+_INTERIM = re.compile(
+    r"\b(q[1-4]|quarters?|quarterly|(three|six|nine) months|10-?q|interim|half[- ]year)\b",
+    re.IGNORECASE,
+)
+
+
+def wants_annual(query: str, years: tuple[int, int] | None = None) -> bool:
+    """True when a fiscal year is asked for (in the query or as `years`) and no interim period."""
+    return (years or _extract_years(query)) is not None and not _INTERIM.search(query)
+
+
 def period_window(years: tuple[int, int]) -> tuple[str, str]:
     """Filing-date window (ISO strings) for questions about these fiscal years.
 

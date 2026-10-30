@@ -1,9 +1,10 @@
 """Rerank candidates from hybrid retrieval: top-N -> top-K by relevance.
 
-Two backends. The CrossEncoder (cross-encoder/ms-marco-MiniLM-L-6-v2) is the
-intended one and runs on Lambda. It is unusable on macOS + Python 3.13 --
-torch deadlocks on a mutex during the first forward pass and never returns --
-so a dependency-free lexical scorer takes over there.
+Two backends. Voyage's hosted cross-encoder (rerank-2.5) ranks every search
+when VOYAGE_API_KEY is set. Until 2026-10-30 production had no neural
+reranker at all: the Lambda never installed sentence-transformers, so the old
+local CrossEncoder path silently fell through to the lexical scorer. That
+dependency-free scorer is now the fallback when Voyage is unreachable.
 
 Blind `chunks[:top_k]` truncation is NOT an acceptable fallback: hybrid_search
 interleaves two differently-scaled score spaces (BM25 and cosine), so list
@@ -12,11 +13,18 @@ position alone does not encode cross-source relevance.
 from __future__ import annotations
 
 import math
+import os
 import re
-from functools import lru_cache
 from typing import Any
 
-MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+import requests
+
+VOYAGE_URL = "https://api.voyageai.com/v1/rerank"
+VOYAGE_MODEL = "rerank-2.5"
+VOYAGE_TIMEOUT_S = 10
+# Same cut as evidence.MAX_PASSAGE_CHARS: the reranker judges what the client
+# will be shown, and it caps tokens billed per search.
+MAX_DOC_CHARS = 8000
 
 _STOPWORDS = frozenset(
     "a an and are as at be by for from has have in is it its of on or that the "
@@ -90,25 +98,22 @@ def _lexical_score(
     return score
 
 
-@lru_cache(maxsize=1)
-def _get_model():
-    """Load the CrossEncoder once per process (Lambda warm start)."""
-    from sentence_transformers import CrossEncoder
-
-    return CrossEncoder(MODEL_NAME, device="cpu")
-
-
-def _crossencoder_available() -> bool:
-    import platform
-    import sys
-
-    if platform.system() == "Darwin" and sys.version_info >= (3, 13):
-        return False
-    try:
-        import sentence_transformers  # noqa: F401
-    except ImportError:
-        return False
-    return True
+def _voyage_order(query: str, chunks: list[dict[str, Any]], top_k: int) -> list[int]:
+    """Indices of the top_k chunks, most relevant first, as Voyage ranks them."""
+    resp = requests.post(
+        VOYAGE_URL,
+        headers={"Authorization": f"Bearer {os.environ['VOYAGE_API_KEY']}"},
+        json={
+            "query": query,
+            "documents": [(c.get("text") or "")[:MAX_DOC_CHARS] for c in chunks],
+            "model": VOYAGE_MODEL,
+            "top_k": top_k,
+            "truncation": True,
+        },
+        timeout=VOYAGE_TIMEOUT_S,
+    )
+    resp.raise_for_status()
+    return [d["index"] for d in resp.json()["data"]]
 
 
 def rerank(
@@ -120,15 +125,15 @@ def rerank(
     """Rerank candidate chunks by relevance to the query, keeping the top_k.
 
     Args:
-        query: The ORIGINAL user query, not the rewritten one -- CrossEncoder
-            is trained on natural-language queries.
+        query: The ORIGINAL user query, not the rewritten one -- the
+            cross-encoder is trained on natural-language queries.
         chunks: Candidates from hybrid_search(), interleaved across sources.
         top_k: How many chunks to keep.
         lexical_query: Query text for the lexical fallback only. Pass the
             GAAP-expanded form here: the fallback scores by term overlap, so
             on the natural query it would discard the very chunk dense search
             found -- "capital expenditure" shares no term with "Purchases of
-            property, plant and equipment". CrossEncoder keeps using `query`,
+            property, plant and equipment". Voyage keeps using `query`,
             since it is trained on natural phrasing.
 
     Returns:
@@ -137,14 +142,12 @@ def rerank(
     if not chunks:
         return []
 
-    if _crossencoder_available():
+    if os.environ.get("VOYAGE_API_KEY"):
         try:
-            model = _get_model()
-            scores = model.predict([(query, c.get("text", "")) for c in chunks])
-            ranked = sorted(zip(scores, chunks), key=lambda p: p[0], reverse=True)
-            return [chunk for _, chunk in ranked[:top_k]]
-        except Exception:
-            pass  # fall through to the lexical scorer
+            return [chunks[i] for i in _voyage_order(query, chunks, top_k)]
+        except Exception as exc:
+            print(f"finrag: Voyage rerank failed ({type(exc).__name__}: {exc}); "
+                  "lexical rerank", flush=True)
 
     query_terms = _terms(lexical_query or query)
     chunk_terms = [_terms(c.get("text", "")) for c in chunks]
