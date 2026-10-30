@@ -2,6 +2,33 @@
 
 What changed, what was broken before, how it was found, and what it measured. Newest first. Every number here was measured on the same index on the same day as its "before", unless it says otherwise. Raw results are in `evals/results/` (gitignored, kept locally); the scripts that produce them are committed.
 
+## 2026-10-30: Exact figures for any US-listed company, and an end-to-end eval (M2, PR #21)
+
+**What was broken.** After three rounds of retrieval fixes, the one-shot test still refused about 4 in 10 questions with a numeric answer. Comparing with other finance MCP servers showed why: they don't search filing text for numbers at all. They read the XBRL data every 10-K and 10-Q carries, where each figure is a tagged value. FinRAG was asking search to find one table row among 171,790 chunks and asking a model to read it out of HTML tables. Ratio questions needed two or three such rows at once, and fourth-quarter questions asked for a number no filing states.
+
+**How it was found.** A $0 probe against SEC's company facts API reproduced FinanceBench answers exactly (3M FY2018 capex 1,577; Amcor FY2020 receivables 1,615.9; Boeing FY2018 net PP&E 12,645; Microsoft FY2016 cost of revenue 32,780; Nike FY2019 current assets 16,525; Netflix FY2023 revenue 33,723.3, USD millions) and 9 of 10 custom fourth-quarter questions. The tenth answer key, Honeywell Q4 2025 at 6,860, subtracts the original nine months from the restated full year; the 10-K's own tagged Q4 is 9,758.
+
+**What changed.**
+- `get_company_financials(ticker, metrics, period)` and `compare_companies` return exact tagged figures for any company SEC knows, with unit, period dates, source filing, link, citation and an id. They used to return passages for 71 companies.
+- Traps handled: a 10-K's comparative years (all tagged with the filing's fiscal year), amendments (the original filing wins), Q4 (the 10-K's tagged figure, else full year minus nine months, labelled), year-to-date 10-Q cash flows (labelled), net sales versus total revenues (Walmart's membership income), companies that tag no total liabilities (Verizon: derived, formula shown), renamed line items (Nike's inventory after 2011: a miss suggests concepts with a value for that period).
+- `verify_figures` accepts figure ids. Against a figure it converts units and accepts rounding to the precision written: 33,723,297,000 grounds "$33.7 billion" but not "$34.7 billion".
+- Server instructions tell clients to use figures for numbers and search for explanations.
+
+**New eval: what a user sees.** `evals/run_agentic.py` drives the real MCP server in-process (same schemas, descriptions, errors and instructions; live Pinecone, Voyage and SEC) with a tool-calling client, gpt-4o-mini, and scores right, wrong and refused.
+
+| | Search only | Search + exact figures |
+|---|---|---|
+| FinanceBench right / wrong / refused (of 110) | 67 / 21 / 22 | 92 / 14 / 4 |
+| Right when it answers | 76% | 87% |
+| Custom set right / wrong / refused (of 48) | 13 / 32 / 3 | 39 / 7 / 2 |
+| Tool calls per question | 5.8 | 3.3 |
+
+The search-only run had 36 Voyage rate-limit fallbacks in about 1,100 searches; the figures run had none. Eval spend: about $2.20 of OpenAI in total.
+
+**Also fixed: the answer checker read unitless keys wrong.** It compared "$94,036 million" (94,036,000,000) with the key's "$94036.00" (USD millions) and scored exact answers as wrong. Every earlier run is re-scored; FinanceBench right / wrong / refused in the one-shot test is now September 16/4/90, word-overlap 26/9/75, Voyage 54/14/42, clean tables 53/9/48.
+
+**Also: a run that outgrows the context window counts as no answer.** Searching passages only, the model sometimes searched round after round until the conversation exceeded 128K tokens. That crashed the first search-only run; it is now scored as a refusal, which is what a user would get.
+
 ## 2026-10-30: Clean table text (M3, PR #21)
 
 **Status: kept, after a gate that first said to revert it.**
@@ -22,18 +49,18 @@ The header row is column numbers instead of years, every merged cell is copied i
 - Two columns merge only if some row repeats the same value in both and no row disagrees, so two real years with equal values (0.20 and 0.20) stay apart, and blank cells keep their column.
 - Checked on 3,000 random tables: no number is lost. Tables over the passage cap: 3,599 to 128.
 
-**Measured** (FinanceBench, 110 questions with a numeric answer; gpt-4o-mini writes the answers):
+**Measured** (FinanceBench, 110 questions with a numeric answer; gpt-4o-mini writes the answers; re-scored with the fixed answer checker described above):
 
 | | Voyage rerank | + clean tables |
 |---|---|---|
-| Right number | 49 | 47 |
-| Wrong number | 19 | 15 |
+| Right number | 54 | 53 |
+| Wrong number | 14 | 9 |
 | Refused | 42 | 48 |
-| Right when it answers | 72% | 76% |
+| Right when it answers | 79% | 85% |
 | Custom set: wrong / refused (of 48) | 29 / 18 | 18 / 29 |
 | Evidence in top 5 (127) | 45.7% | 46.5% |
 
-**Why it was kept although refusals rose.** The gate as written (fewer refusals, more right numbers) failed, and the first call was to revert. Reading the 18 answers that became refusals changed that: 17 had been wrong. Most reported a full-year figure as a quarter, for example "Amazon Q4 2025 revenue $716,924 million" (the full year; the quarter was $213,386 million). With garbled tables the model could not see "Year Ended December 31"; with clean ones it declines. Of the 3 right answers lost, one was a real loss (an Adobe calculation), one was still right but missed by the automated check (3M "$1,577 million"), and one had been wrong all along (Amcor).
+**Why it was kept although refusals rose.** The gate as written (fewer refusals, more right numbers) failed, and the first call was to revert. Reading the 18 answers that became refusals changed that: 17 had been wrong. Most reported a full-year figure as a quarter, for example "Amazon Q4 2025 revenue $716,924 million" (the full year; the quarter was $213,386 million). With garbled tables the model could not see "Year Ended December 31"; with clean ones it declines. Of the right answers lost, one was a real loss (an Adobe calculation) and one had been wrong all along (Amcor); a third, 3M "$1,577 million", was right throughout and only looked lost because of the answer-checker bug fixed above.
 
 **Lesson: refusals alone are the wrong scoreboard.** They reward a confident wrong answer over an honest "not found". `evals/run_remeasure.py` now records wrong answers, and every result is reported as right, wrong and refused.
 
