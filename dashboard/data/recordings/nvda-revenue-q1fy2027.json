@@ -7,47 +7,47 @@
     "ticker": "NVDA",
     "fiscal_year": 2026
   },
-  "tool_ms": 443,
+  "tool_ms": 1294,
   "passages": [
     {
-      "id": "baebf2c1453425abaaa351a97f536542",
+      "id": "12850bc32b518ff6af9da90b7c0370aa",
       "citation": "[NVDA 10-Q 2026-05-20]",
       "ticker": "NVDA",
       "form": "10-Q",
       "filed": "2026-05-20",
-      "excerpt": "Three Months Ended | Apr 26, 2026 | Apr 27, 2025 | Revenue | 100.0 | % | 100.0 | % | Cost of revenue | 25.1 | 39.5 | Gross profit | 74.9 | 60.5 | Operating expenses | Research and development | 7.7 | 9.1 | Sales, general and administrative | 1.6 | 2.4 | Total operating expenses | 9.3 | 11.5 | Operat"
+      "excerpt": "...| 37869 | 17599 | AI Clouds, Industrial, & Enterprise | 37377 | 21513 | Edge Computing | 6369 | 4950 | Total revenue | $81615 | $44062"
     },
     {
-      "id": "3d391e2cc556b45b37b61e7810c1cfa5",
+      "id": "780a41451e720c7838017419a907388a",
       "citation": "[NVDA 10-Q 2026-05-20]",
       "ticker": "NVDA",
       "form": "10-Q",
       "filed": "2026-05-20",
-      "excerpt": "Three Months Ended | Apr 26, 2026 | Apr 27, 2025 | Revenue | $ | 81615 | $ | 44062 | Cost of revenue | 20458 | 17394 | Gross profit | 61157 | 26668 | Operating expenses | Research and development | 6321 | 3989 | Sales, general and administrative | 1300 | 1041 | Total operating expenses | 7621 | 5030"
+      "excerpt": "..., & Enterprise | 37377 | 28500 | 21513 | 31% | 74% | Edge Computing | 6369 | 5813 | 4950 | 10% | 29% | Total revenue | $81615 | $68127 | $44062 | 20% | 85%"
     },
     {
-      "id": "1bde11a66b831b1c15676a8dca786f50",
+      "id": "62f28904cb2b23ce1a034315639d799e",
+      "citation": "[NVDA 10-Q 2026-05-20]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-05-20",
+      "excerpt": "Compute & Networking | Graphics | Total | (In millions) | Three Months Ended Apr 26, 2026 | Revenue | $74550 | $7065 | $81615 | Other segment items (1) | 21215 | 4124 | 25339 | Operating income | $53335 | $2941 | $56276 | Three Months Ended Apr 27, 2025 | Revenue | $39589 | $4473 | $44062 | Other se"
+    },
+    {
+      "id": "57533a8231a46fbf5b56f56f67b8c93b",
+      "citation": "[NVDA 10-Q 2026-05-20]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-05-20",
+      "excerpt": "...9 | $25685 | Taiwan | 12006 | 7648 | China (including Hong Kong) | 4550 | 9659 | Other | 1290 | 1070 | Total revenue | $81615 | $44062"
+    },
+    {
+      "id": "0c3d3bf7ed36534be21caaaea1183fd2",
       "citation": "[NVDA 10-Q 2026-08-26]",
       "ticker": "NVDA",
       "form": "10-Q",
       "filed": "2026-08-26",
-      "excerpt": "Three Months Ended | Six Months Ended | Jul 26, 2026 | Jul 27, 2025 | Jul 26, 2026 | Jul 27, 2025 | Revenue | 100.0 | % | 100.0 | % | 100.0 | % | 100.0 | % | Cost of revenue | 25.0 | 27.6 | 25.0 | 33.4 | Gross profit | 75.0 | 72.4 | 75.0 | 66.6 | Operating expenses | Research and development | 7.4 |"
-    },
-    {
-      "id": "bf9bbda74216435c67f5396f5b2e39cf",
-      "citation": "[NVDA 10-Q 2026-08-26]",
-      "ticker": "NVDA",
-      "form": "10-Q",
-      "filed": "2026-08-26",
-      "excerpt": "Three Months Ended | Six Months Ended | Jul 26, 2026 | Jul 27, 2025 | Jul 26, 2026 | Jul 27, 2025 | Revenue | $ | 96221 | $ | 46743 | $ | 177837 | $ | 90805 | Cost of revenue | 24079 | 12890 | 44538 | 30284 | Gross profit | 72142 | 33853 | 133299 | 60521 | Operating expenses | Research and developme"
-    },
-    {
-      "id": "189a7f9c84d606a30326eaad583be020",
-      "citation": "[NVDA 10-Q 2026-05-20]",
-      "ticker": "NVDA",
-      "form": "10-Q",
-      "filed": "2026-05-20",
-      "excerpt": "0001045810 1/31 2027 Q1 FALSE http://fasb.org/us-gaap/2025#AccruedLiabilitiesCurrent 590 xbrli:shares iso4217:USD iso4217:USD xbrli:shares xbrli:pure nvda:segment 0001045810 2026-01-26 2026-04-26 0001045810 2026-05-15 0001045810 2025-01-27 2025-04-27 0001045810 2026-04-26 0001045810 2026-01-25 00010"
+      "excerpt": "...rise | 40313 | 32196 | 16928 | 25% | 138% | Edge Computing | 7198 | 6369 | 5647 | 13% | 27% | Total revenue | $96221 | $81615 | $46743 | 18% | 106%"
     }
   ],
   "answer": "Nvidia's total revenue for the three months ended April 26, 2026, was $81,615 million [NVDA 10-Q 2026-05-20].",
@@ -58,5 +58,5 @@
     ],
     "not_found": []
   },
-  "recorded_at": "2026-10-30T14:14:13Z"
+  "recorded_at": "2026-10-30T20:48:36Z"
 }

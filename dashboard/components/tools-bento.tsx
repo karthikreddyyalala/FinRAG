@@ -19,8 +19,18 @@ function pick(passages: Passage[], id: string, anchor?: string) {
 }
 
 const search = S.search_sec_filings.passages as Passage[];
-const financials = S.get_company_financials.result.passages as Passage[];
-const compare = S.compare_companies.result.results as Record<string, { passages: Passage[] }>;
+type Figure = {
+  label: string; display: string; citation: string; id: string;
+  period: { fiscal_year: number; fiscal_period: string; end: string };
+  source: { url: string };
+};
+const financials = S.get_company_financials.result.results as Figure[];
+const compare = S.compare_companies.result.results as Record<string, { results: Figure[] }>;
+
+/** The fields a client reads from one figure. */
+function figure(f: Figure) {
+  return { label: f.label, display: f.display, period: f.period, citation: f.citation, id: f.id };
+}
 const latest = S.get_latest_filing.result;
 const covered = S.list_covered_companies.result;
 const verify = S.verify_figures;
@@ -37,20 +47,19 @@ const TOOLS = [
   },
   {
     name: "get_company_financials",
-    description: "Passages for one metric, one company, one period.",
+    description: "Exact reported figures for any US-listed company, read from the XBRL data in its filings, with period, filing link and citation. Q4 is labelled when derived.",
     request: S.get_company_financials.arguments,
-    response: { passages: [pick(financials, "dd73d7", "Purchases of property"), `... ${financials.length - 1} more`] },
-    span: "",
+    response: { results: financials.map(figure) },
+    span: "md:col-span-2",
   },
   {
     name: "compare_companies",
-    description: "Two to five tickers, one metric. Passages come back per ticker.",
+    description: "The same figures for two to five companies, side by side.",
     request: S.compare_companies.arguments,
     response: {
-      results: {
-        TSLA: [pick(compare.TSLA.passages, "ddb8b", "total revenues")],
-        F: [pick(compare.F.passages, "f79a1", "Vehicles, parts")],
-      },
+      results: Object.fromEntries(
+        Object.entries(compare).map(([t, c]) => [t, c.results.map((f) => `${f.display} ${f.citation}`)]),
+      ),
     },
     span: "",
   },
@@ -69,11 +78,11 @@ const TOOLS = [
       total_filings: covered.total_filings,
       companies: [covered.companies[0], `... ${covered.companies.length - 1} more`],
     },
-    span: "md:col-span-2",
+    span: "",
   },
   {
     name: "verify_figures",
-    description: "Send your draft answer and the passage ids. Each dollar amount, percentage and comma-grouped number comes back grounded or not_found.",
+    description: "Send your draft answer and the passage and figure ids. Each dollar amount, percentage and comma-grouped number comes back grounded or not_found; against a figure, units convert.",
     request: { ...verify.arguments, passage_ids: [...verify.arguments.passage_ids.slice(0, 2), "..."] },
     response: { grounded: verify.result.grounded, not_found: verify.result.not_found, checked_against: verify.result.checked_against },
     span: "",
@@ -85,12 +94,13 @@ export function ToolsBento() {
     <section id="tools" className="px-4 py-24 md:px-8">
       <div className="mx-auto max-w-[1400px]">
         <h2 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tighter md:text-4xl">
-          Six tools. Evidence in, your model writes.
+          Six tools. Figures and evidence in, your model writes.
         </h2>
         <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
           Requests and responses below are real calls to the live server, with passage text shortened.
+          Figures work for any US-listed company; passage search covers 71.
         </p>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 md:grid-flow-dense md:grid-cols-3">
           {TOOLS.map((tool) => (
             <div
               key={tool.name}
