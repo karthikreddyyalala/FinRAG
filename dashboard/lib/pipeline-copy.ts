@@ -34,14 +34,14 @@ export const PIPELINE_COPY = [
     id: "retrieve",
     rail: "BM25 + Pinecone",
     stage: "BM25 and Pinecone",
-    technical: "Keyword search (SQLite FTS5) and vector search (Pinecone, query embedded with OpenAI text-embedding-3-small) run in parallel, 10 candidates each. If the embedding fails, search falls back to keyword-only and says so in a note.",
+    technical: "Keyword search (SQLite FTS5) and vector search (Pinecone, query embedded with OpenAI text-embedding-3-small) run in parallel, 40 candidates each. If the embedding fails, search falls back to keyword-only and says so in a note.",
     simple: "Two searches run at once, one by exact words and one by meaning, so a miss in one can be caught by the other.",
   },
   {
     id: "rerank",
     rail: "Full text + rerank",
     stage: "Full text and rerank",
-    technical: "Each candidate is swapped for its full stored text (an indexed chunk_id lookup), because Pinecone only holds the first 1,000 characters. A lexical rerank then keeps the top 5.",
+    technical: "Each candidate is swapped for its full stored text (an indexed chunk_id lookup), because Pinecone only holds the first 1,000 characters. Voyage rerank-2.5, a neural cross-encoder, then scores every candidate against the question and keeps the top 5. A question naming a fiscal year but no quarter prefers the 10-K over 10-Qs. If Voyage is unreachable, a word-overlap scorer takes over.",
     simple: "Each hit is replaced by its complete passage, then the 5 best are kept.",
   },
   {

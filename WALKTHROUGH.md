@@ -88,9 +88,9 @@ Each of these should fail cleanly, with a message that tells the client what to 
 | `verify_figures` with "$9,999 million" against the 3M passages | `not_found: ["$9,999 million"]` |
 | `verify_figures` with "$1.58 billion" against the 3M passages | `not_found: ["$1.58 billion"]`: units are not converted, so write `$1,577 million` |
 
-## 6. Known weakness to look at
+## 6. Fixed weakness worth checking
 
-"Netflix revenue FY2023" returns quarterly 10-Q passages. The FY2023 10-K (filed 2024-01-26) is in the index but isn't ranked into the top 5. That's a ranking problem, not missing data, and the planned neural reranker targets it. Your model should still say when a passage covers a quarter rather than the full year.
+"Netflix revenue FY2023" used to return quarterly 10-Q passages while the FY2023 10-K (filed 2024-01-26) sat lower in the ranking. Two changes fixed it: a question that names a fiscal year but no quarter now prefers the 10-K, and Voyage's reranker orders the candidates. Ask it now and the first passage should be from the 10-K. Ask "Netflix revenue in the third quarter of 2023" and 10-Q passages still come back.
 
 ## 7. Run the tests locally
 
