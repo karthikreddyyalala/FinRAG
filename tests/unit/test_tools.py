@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 from pipeline.edgar_client import FilingMetadata
 from server.mcp_tools.common import Deps
 from server.mcp_tools.compare_companies import register_compare_companies_tool
@@ -52,30 +54,73 @@ def test_search_rejects_an_empty_question():
     assert is_error and "empty" in text
 
 
-def test_get_company_financials_echoes_the_lookup_and_returns_passages():
+@pytest.fixture
+def sec_facts():
+    """SEC's company facts from the XBRL fixture, never the network."""
+    from server.retrieval import xbrl_facts
+    from tests.unit.test_xbrl_facts import FACTS
+
+    def cik(ticker):
+        if ticker == "ZZZ":
+            raise xbrl_facts.FactsError("SEC has no company with ticker ZZZ.")
+        return 1065280
+
+    with patch.object(xbrl_facts, "company_facts", return_value=FACTS), \
+         patch.object(xbrl_facts, "cik_for", side_effect=cik):
+        yield
+
+
+def test_get_company_financials_returns_exact_figures_with_sources(sec_facts):
     with tool_client(*ALL, deps=_deps()) as call:
         is_error, result = call("get_company_financials",
-                                {"ticker": "MMM", "metric": "capital expenditure",
-                                 "period": "FY2018"})
+                                {"ticker": "NFLX", "metrics": ["revenue", "total assets"],
+                                 "period": "FY2023"})
     assert not is_error
-    assert (result["ticker"], result["metric"], result["period"]) == (
-        "MMM", "capital expenditure", "FY2018")
-    assert [p["id"] for p in result["passages"]] == ["a1"]
+    revenue, assets = result["results"]
+    assert (revenue["value"], revenue["citation"]) == (33_723_297_000, "[NFLX 10-K 2024-01-26]")
+    assert assets["display"] == "$48,732.0 million"
 
 
-def test_compare_reports_an_uncovered_company_without_failing_the_others():
+def test_get_company_financials_works_for_companies_outside_the_corpus(sec_facts):
+    """XBRL covers every SEC filer, not only the 71 companies with indexed passages."""
+    with tool_client(*ALL, deps=_deps()) as call:
+        is_error, result = call("get_company_financials",
+                                {"ticker": "NFLX", "metrics": ["revenue"], "period": "Q4 2023"})
+    assert not is_error and "derived" in result["results"][0]
+
+
+def test_bad_period_is_a_tool_error_that_says_what_works(sec_facts):
+    with tool_client(*ALL, deps=_deps()) as call:
+        is_error, text = call("get_company_financials",
+                              {"ticker": "NFLX", "metrics": ["revenue"], "period": "soon"})
+    assert is_error and "Q3 2024" in text
+
+
+def test_compare_reports_an_unknown_company_without_failing_the_others(sec_facts):
     with tool_client(*ALL, deps=_deps()) as call:
         is_error, result = call("compare_companies",
-                                {"tickers": ["MMM", "ZZZ"], "metric": "revenue", "period": "2018"})
+                                {"tickers": ["NFLX", "ZZZ"], "metrics": ["revenue"],
+                                 "period": "FY2023"})
     assert not is_error
-    assert result["results"]["MMM"]["passages"]
-    assert "not in FinRAG's corpus" in result["results"]["ZZZ"]["error"]
+    assert result["results"]["NFLX"]["results"][0]["value"] == 33_723_297_000
+    assert "no company with ticker ZZZ" in result["results"]["ZZZ"]["error"]
+
+
+def test_verify_checks_figures_against_fact_ids(sec_facts):
+    answer = "Netflix revenue was $33.7 billion in FY2023, not $34.7 billion."
+    with tool_client(*ALL, deps=_deps()) as call:
+        is_error, result = call("verify_figures", {
+            "answer": answer, "passage_ids": ["xbrl:NFLX:us-gaap:Revenues:FY2023", "xbrl:bad"]})
+    assert not is_error
+    assert result["grounded"] == ["$33.7 billion"]
+    assert result["not_found"] == ["$34.7 billion"]
+    assert result["unknown_ids"] == ["xbrl:bad"]
 
 
 def test_compare_needs_two_to_five_companies():
     with tool_client(*ALL, deps=_deps()) as call:
         is_error, text = call("compare_companies",
-                              {"tickers": ["MMM"], "metric": "revenue", "period": "2018"})
+                              {"tickers": ["MMM"], "metrics": ["revenue"], "period": "2018"})
     assert is_error and "2 to 5" in text
 
 
@@ -160,7 +205,7 @@ def test_latest_filing_looks_up_the_cik_once_per_ticker():
 def test_compare_rejects_too_many_tickers():
     with tool_client(*ALL, deps=_deps()) as call:
         is_error, text = call("compare_companies", {"tickers": ["MMM"] * 11,
-                                                    "metric": "revenue", "period": "2024"})
+                                                    "metrics": ["revenue"], "period": "2024"})
     assert is_error and "2 to 5" in text
 
 

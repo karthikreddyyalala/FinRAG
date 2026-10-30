@@ -49,25 +49,32 @@ HEALTH_CHECK = {"question": "3M capital expenditure FY2018", "ticker": "MMM",
                 "years": (2018, 2018)}
 
 INSTRUCTIONS = """\
-FinRAG searches the SEC filings (10-K, 10-Q, 8-K) of 71 large US-listed companies. \
-Call list_covered_companies to see exactly which companies and years are covered.
+FinRAG answers questions about US public companies from their SEC filings, with sources.
 
-The tools return source passages, not answers. Write the answer yourself from the passages:
-- Cite every figure with its passage's citation, e.g. [MMM 10-K 2019-02-07].
-- Never state a number that is not in a passage. If the passages lack it, say so.
-- Filings use GAAP line items: capital expenditure is "Purchases of property, plant and \
-equipment"; revenue is often "Net sales"; operating cash flow is "Net cash provided by \
-operating activities".
-- A number in parentheses is negative or a cash outflow: (1,577) spent means 1,577 spent.
-- Write figures in the passage's own units, e.g. $1,577 million rather than $1.6 billion: \
-verify_figures compares values as written and does not convert units.
+For a reported figure (revenue, net income, capex, total assets, EPS, ...), call \
+get_company_financials. It works for any company SEC knows and returns the exact value \
+from the filing's XBRL data, with its period, source filing, link and citation. Pass every \
+figure a calculation needs in one call, e.g. ["revenue", "cost of revenue"] for gross \
+margin, then compute the ratio yourself and show its inputs. compare_companies does the same \
+for 2 to 5 companies.
 
-Before a final answer that contains figures, call verify_figures with your draft and the \
-ids of the passages you used, then fix or flag anything listed in not_found.
+For explanations, risks, guidance, segment detail and anything else written in the filing, \
+call search_sec_filings. It searches the full text of the 10-K, 10-Q and 8-K filings of 71 \
+large companies (list_covered_companies lists them) and returns cited passages.
 
-Use search_sec_filings for open questions, get_company_financials for one metric, \
-compare_companies for several companies, and get_latest_filing for any company's newest \
-filing on sec.gov. Stock prices and news are not in SEC filings."""
+Write the answer yourself:
+- Cite every figure, e.g. [MMM 10-K 2019-02-07].
+- Never state a number that no tool returned. If the tools lack it, say so.
+- A fourth quarter is never filed on its own; get_company_financials says when Q4 is derived \
+as full year minus nine months. Fiscal years are the company's own (Walmart FY2026 ended \
+January 2026).
+- In passages, a number in parentheses is negative or a cash outflow: (1,577) spent means \
+1,577 spent.
+
+Before a final answer that contains figures, call verify_figures with your draft and the ids \
+of the passages and figures you used (figure ids start with "xbrl:"), then fix or flag \
+anything listed in not_found. get_latest_filing links any company's newest filing on \
+sec.gov. Stock prices and news are not in SEC filings."""
 
 REGISTERS = (
     register_search_filings_tool, register_get_financials_tool, register_compare_companies_tool,

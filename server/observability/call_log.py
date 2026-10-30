@@ -28,12 +28,15 @@ def log_call(
 ) -> None:
     """Record one tool call. Never raises."""
     passages = _passages(result)
+    figures = _figures(result)
     record = {
         "tool": tool,
         "arguments": json.dumps(arguments, default=str)[:MAX_ARGUMENT_CHARS],
         "latency_ms": latency_ms,
         "n_passages": len(passages),
-        "tickers": sorted({p["ticker"] for p in passages if p.get("ticker")}),
+        "n_figures": sum(len(f) for f in figures.values()),
+        "tickers": sorted({p["ticker"] for p in passages if p.get("ticker")}
+                          | {t for t, f in figures.items() if f}),
         "cache_hit": cache_hit,
         "rate_limited": rate_limited,
         "error": error,
@@ -53,10 +56,20 @@ def log_call(
 
 
 def _passages(result: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Passages in a single result, or across compare_companies' per-ticker results."""
+    """Passages in a search result. Figure results (get_company_financials) hold none."""
     if not result:
         return []
-    found = list(result.get("passages", []))
-    for value in (result.get("results") or {}).values():
-        found.extend(value.get("passages", []))
-    return found
+    return list(result.get("passages", []))
+
+
+def _figures(result: dict[str, Any] | None) -> dict[str, list[dict[str, Any]]]:
+    """Figures found per ticker: get_company_financials' list or compare_companies' dict."""
+    if not result:
+        return {}
+    entries = result.get("results")
+    if isinstance(entries, list):
+        return {result.get("ticker", ""): [e for e in entries if "value" in e]}
+    if isinstance(entries, dict):
+        return {t: [e for e in (v.get("results") or []) if "value" in e]
+                for t, v in entries.items()}
+    return {}

@@ -117,3 +117,43 @@ def check_figures(answer: str, source_chunks: list[str]) -> tuple[list[str], lis
         target = grounded if _is_grounded(match.group(), source_values) else not_found
         target.append(match.group())
     return grounded, not_found
+
+
+_SCALE = {"billion": 1e9, "b": 1e9, "million": 1e6, "m": 1e6, "thousand": 1e3, "k": 1e3}
+_FIGURE = re.compile(r"(\d[\d,]*)(?:\.(\d+))?\s?(billion|million|thousand|B|M|K)?\b")
+
+
+def _matches_value(figure: str, value: float) -> bool:
+    """Does `figure` state `value`, rounded to the precision it is written at?
+
+    "$33.7 billion" states 33,723,297,000 (within 0.05 billion) but "$33,700
+    million" does not (that claims precision to the million). A figure without
+    a scale word is also read as thousands, millions or billions, the units
+    filings print in.
+    """
+    m = _FIGURE.search(figure)
+    if not m:
+        return False
+    whole, frac, unit = m.groups()
+    number = float(whole.replace(",", "") + (f".{frac}" if frac else ""))
+    half_step = 0.5 * 10 ** -(len(frac) if frac else 0)
+    scales = [_SCALE[unit.lower()]] if unit else [1, 1e3, 1e6, 1e9]
+    return any(abs(number * s - abs(value)) <= half_step * s + 1e-9 for s in scales)
+
+
+def check_figures_against_values(
+    answer: str, values: list[float]
+) -> tuple[list[str], list[str]]:
+    """(grounded, not_found) for the answer's figures against exact reported values.
+
+    For XBRL facts, which are stored in full units: 33,723,297,000 grounds
+    "$33,723.3 million" and "$33.7 billion" but not "$34.7 billion". Percentages
+    are never grounded here; a ratio is computed, not reported.
+    """
+    grounded: list[str] = []
+    not_found: list[str] = []
+    for match in NUMBER_PATTERN.finditer(answer):
+        figure = match.group()
+        hit = not figure.endswith("%") and any(_matches_value(figure, v) for v in values)
+        (grounded if hit else not_found).append(figure)
+    return grounded, not_found
