@@ -2,9 +2,10 @@
 latency, and cost.
 
 "Cost" here is estimated AWS Lambda compute cost (duration x memory x
-on-demand price), not per-query LLM spend -- that's already tracked
-per-query in DynamoDB (finrag-query-logs, see server/observability/logger.py
-and README's "aws dynamodb scan" command). Duplicating it as a custom
+on-demand price). The server runs no chat model, so there is no LLM spend to
+show; per-call records go to DynamoDB (finrag-query-logs, written by
+server/observability/call_log.py) and to `finrag_call` CloudWatch log lines
+(query them with Logs Insights). Duplicating them as a custom
 CloudWatch metric would mean a PutMetricData call on every query for numbers
 this dashboard can't act on any faster than a DynamoDB scan already does.
 """
@@ -75,9 +76,9 @@ class ObservabilityStack(Stack):
             ),
             cloudwatch.TextWidget(
                 markdown=(
-                    "**Per-query LLM cost** (Bedrock/OpenAI, not shown above) is tracked "
-                    "per-row in DynamoDB `finrag-query-logs`, not as a CloudWatch metric -- "
-                    "see README's `aws dynamodb scan --table-name finrag-query-logs` command."
+                    "**Per-call records** (the server runs no chat model, so no LLM cost) go to "
+                    "DynamoDB `finrag-query-logs` and to `finrag_call` lines in the "
+                    "server log group; query them with Logs Insights."
                 ),
                 width=12,
             ),

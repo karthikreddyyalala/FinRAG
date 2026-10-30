@@ -2,8 +2,12 @@
 
 The published index (s3://finrag-processed-filings/keyword/index.sqlite) was
 built before build_keyword_index wrote these tables. Adding them reads the
-file once instead of re-chunking the corpus. Old server code ignores the
-extra tables, so uploading the upgraded file is safe before or after a deploy.
+file once instead of re-chunking the corpus. Upload it BEFORE deploying
+server code that needs the tables: a new-code Lambda instance that cold-starts
+first caches the old file in /tmp and fails every retrieval until it is
+replaced (redeploy or change an env var to force fresh instances). Old server
+code ignores the extra tables, so uploading early is safe. Never restore an
+old-format index while new code is live.
 
 Usage:
     PYTHONPATH=. .venv/bin/python scripts/upgrade_keyword_index.py PATH

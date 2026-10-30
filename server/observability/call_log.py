@@ -45,6 +45,7 @@ def log_call(
         dynamodb_resource.Table(table_name).put_item(Item={
             "query_id": str(uuid.uuid4()),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "expires_at": int(time.time()) + 90 * 24 * 3600,  # DynamoDB TTL
             **{k: v for k, v in record.items() if v is not None},
         })
     except Exception:

@@ -40,3 +40,12 @@ def test_a_logging_fault_never_raises():
 def test_no_dynamodb_still_prints_the_line(capsys):
     log_call(None, "t", tool="x", arguments={}, latency_ms=1, result=None)
     assert "finrag_call" in capsys.readouterr().out
+
+
+def test_dynamodb_item_expires_in_90_days_but_cloudwatch_line_does_not(capsys):
+    import time
+    dynamodb = MagicMock()
+    log_call(dynamodb, "t", tool="verify_figures", arguments={}, latency_ms=1, result=None)
+    item = dynamodb.Table.return_value.put_item.call_args.kwargs["Item"]
+    assert abs(item["expires_at"] - (time.time() + 90 * 24 * 3600)) < 60
+    assert "expires_at" not in capsys.readouterr().out

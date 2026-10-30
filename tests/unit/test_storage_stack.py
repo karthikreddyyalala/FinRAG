@@ -56,3 +56,12 @@ def test_rate_limit_table_expires_its_counters():
         "TimeToLiveSpecification": {"AttributeName": "expires_at", "Enabled": True},
         "BillingMode": "PAY_PER_REQUEST",
     })
+
+
+def test_query_logs_expire_via_ttl():
+    app = cdk.App()
+    template = Template.from_stack(StorageStack(app, "TtlStack"))
+    template.has_resource_properties("AWS::DynamoDB::Table", {
+        "TableName": "finrag-query-logs",
+        "TimeToLiveSpecification": {"AttributeName": "expires_at", "Enabled": True},
+    })

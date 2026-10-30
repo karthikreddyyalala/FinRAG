@@ -29,12 +29,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PACKAGES = ("server", "pipeline")
 # boto3 is omitted: the Lambda runtime provides it.
 RUNTIME_REQUIREMENTS = (
-    "fastapi>=0.115,<1.0",
-    "mangum>=0.19,<1.0",
-    "mcp>=2.0,<3.0",
-    "pinecone>=8.0,<9.0",
-    "openai>=1.50,<3.0",
-    "requests>=2.31,<3.0",
+    "fastapi==0.141.1",
+    "mangum==0.22.0",
+    "mcp==2.2.0",
+    "pinecone==8.1.2",
+    "openai==2.54.0",
+    "requests==2.34.2",
 )
 PYTHON_VERSION = "3.13"
 
@@ -104,6 +104,9 @@ class McpServerStack(Stack):
             timeout=Duration.minutes(2),
             environment={"FINRAG_SSM_PREFIX": "/finrag"},  # names only, never values
             log_group=log_group,
+            # EventBridge invokes async; default retries turn one failed health check
+            # into 3 errors (false page) and triple OpenAI/Pinecone calls in an outage.
+            retry_attempts=0,
         )
 
         fn.add_to_role_policy(iam.PolicyStatement(

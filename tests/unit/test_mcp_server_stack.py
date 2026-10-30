@@ -86,3 +86,8 @@ def test_health_check_runs_every_5_minutes_with_its_marker_event():
     props = rule["Properties"]
     assert props["ScheduleExpression"] == "rate(5 minutes)"
     assert json.loads(props["Targets"][0]["Input"]) == {"finrag_health_check": True}
+
+
+def test_no_async_retries():
+    _template().has_resource_properties(
+        "AWS::Lambda::EventInvokeConfig", {"MaximumRetryAttempts": 0})

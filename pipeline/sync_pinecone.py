@@ -1,4 +1,4 @@
-"""Embeds chunks with Bedrock Titan V2 and upserts them into Pinecone.
+"""Embeds chunks (OpenAI text-embedding-3-small via get_embed_fn) and upserts them into Pinecone.
 
 Uses the `pinecone` package (not the deprecated `pinecone-client`).
 """
@@ -30,7 +30,7 @@ MAX_TOKENS_PER_REQUEST = 150_000
 MAX_ITEMS_PER_REQUEST = 2048
 MAX_CHARS_PER_TEXT = 6000
 
-# The only chunk fields read downstream (rerank, generation, citations, and
+# The only chunk fields read downstream (rerank, evidence passages, citations, and
 # chunk_id for dedup against Pinecone). Everything else -- table_rows in
 # particular -- is dead weight in the BM25 payload.
 BM25_CHUNK_FIELDS = ("chunk_id", "text", "ticker", "filing_type", "period", "page_number")

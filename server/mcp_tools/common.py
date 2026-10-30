@@ -38,7 +38,7 @@ GetDeps = Callable[[], Deps]
 def clean_ticker(ticker: str) -> str:
     """Upper-cased ticker, or a ToolError the model can act on."""
     if not _TICKER.match(ticker or ""):
-        raise ToolError(f"{str(ticker)[:20]!r} is not a ticker symbol, e.g. 'MMM' or 'BRK.B'.")
+        raise ToolError(f"{str(ticker)[:20]!r} is not a ticker symbol, e.g. 'MMM' or 'BRK-B'.")
     return ticker.upper()
 
 
