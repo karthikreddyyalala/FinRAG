@@ -49,7 +49,7 @@ export function BaselineComparisonChart() {
           ))}
         </div>
       </div>
-      <p className="mt-1 text-xs text-[var(--color-muted)]">FinanceBench 150Q, per README&apos;s baseline comparison table.</p>
+      <p className="mt-1 text-xs text-[var(--color-muted)]">FinanceBench 150Q. Share of stated figures found in the retrieved text, so refusals raise it. Answers mostly by the gpt-4o-mini fallback.</p>
 
       <div className="mt-4 h-64">
         <ResponsiveContainer width="100%" height="100%">

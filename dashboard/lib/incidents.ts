@@ -34,7 +34,7 @@ export const INCIDENTS = [
     symptom: "The identical question, through the identical fixed pipeline, was correct once and wrong once.",
     root_cause:
       'A coin flip at each API\'s default temperature (1.0). The same query could return a correctly cited figure or "the context does not provide this figure" on two separate runs.',
-    fix: "All four LLM call sites (Bedrock + OpenAI fallback, rewriter + generator) now pin temperature=0.",
+    fix: "All four LLM call sites (Bedrock + OpenAI fallback, rewriter + generator) now pin temperature=0. All four have since been removed from the server.",
   },
   {
     title: "The XBRL prior-year-comparative trap",

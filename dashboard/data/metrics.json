@@ -39,19 +39,19 @@
     "value": 0.1621412728127228,
     "display": "16.2%",
     "source_file": "evals/results/eval_combined_1790613849.json",
-    "source_detail": "Combined 198Q, answer_relevancy (ragas, low — see caveat)"
+    "source_detail": "Combined 198Q, answer_relevancy (ragas, low, see caveat)"
   },
   "context_precision_combined": {
     "value": 0.15302328842923724,
     "display": "15.3%",
     "source_file": "evals/results/eval_combined_1790613849.json",
-    "source_detail": "Combined 198Q, context_precision (ragas, low — see caveat)"
+    "source_detail": "Combined 198Q, context_precision (ragas, low, see caveat)"
   },
   "context_recall_combined": {
     "value": 0.08922558922558921,
     "display": "8.9%",
     "source_file": "evals/results/eval_combined_1790613849.json",
-    "source_detail": "Combined 198Q, context_recall (ragas, low — see caveat)"
+    "source_detail": "Combined 198Q, context_recall (ragas, low, see caveat)"
   },
   "baseline_dense_only_numerical_accuracy": {
     "value": 0.8652624434389141,

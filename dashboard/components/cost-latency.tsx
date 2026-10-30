@@ -15,7 +15,7 @@ export function CostLatency() {
         </h2>
         <p className="mt-4 max-w-[65ch] text-[var(--color-muted)]">
           Measured against the live server on 2026-10-30, 10 searches. A warm search takes{" "}
-          <Cited metric="warm_search_p50_ms" /> at the median and never more than{" "}
+          <Cited metric="warm_search_p50_ms" /> at the median, and the slowest of the 10 took{" "}
           <Cited metric="warm_search_max_ms" />. One search costs about <Cited metric="cost_per_search_usd" />, an
           estimate from Lambda time plus one embedding, not a bill. There is no chat model cost, because the server
           runs none.

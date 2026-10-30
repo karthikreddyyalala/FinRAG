@@ -33,7 +33,7 @@ export function SectionRail() {
   return (
     <nav
       aria-label="Section navigation"
-      className="fixed left-6 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-4 xl:flex"
+      className="fixed left-6 top-1/2 z-30 hidden -translate-y-1/2 flex-col gap-4 2xl:flex"
     >
       {RAIL_SECTIONS.map(({ id, icon: Icon, label }) => (
         <a
