@@ -1,145 +1,68 @@
-"""get_latest_filing MCP tool: metadata lookup + brief summary (Week 5).
+"""get_latest_filing: a company's newest filing of a form type, live from EDGAR.
 
-Per CLAUDE.md Tool 4 spec: "metadata lookup + brief summarization, no full
-RAG pipeline". Metadata comes straight from EDGAR (live, authoritative --
-the corpus can lag it by up to a week between refresh crons); the summary is
-one cheap Haiku call over whatever corpus chunks already exist for that
-company, not the four-stage rewrite/hybrid/rerank/verify pipeline the other
-three tools run.
+Works for any company SEC knows, not only the ones FinRAG has ingested;
+in_corpus says whether the other tools can search that filing.
 """
 from __future__ import annotations
 
-import socket
-from dataclasses import asdict
+import re
 from typing import Any
 
-import botocore.exceptions
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import ToolAnnotations
 
-from pipeline.edgar_client import get_cik_for_ticker, list_filings
-from server.retrieval.query_rewriter import HAIKU_MODEL_ID
+from pipeline.edgar_client import ARCHIVE_URL, get_cik_for_ticker, list_filings
+from server.mcp_tools.common import GetDeps, clean_ticker, run_tool
 
-NOT_INGESTED_MESSAGE = (
-    "No summary available -- this filing has not yet been ingested into the corpus."
-)
-
-SUMMARY_SYSTEM_PROMPT = (
-    "Summarize the following SEC filing excerpts in exactly 3 sentences. "
-    "Be concrete and specific. Do not speculate beyond what the excerpts say."
-)
+_FORM = re.compile(r"^[0-9A-Za-z][0-9A-Za-z\-/]{0,9}$")
 
 
-def _is_bedrock_unavailable(exc: Exception) -> bool:
-    """True when Bedrock is throttling, unreachable, or not enabled here.
+def register_get_latest_filing_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
+    """Register get_latest_filing on an MCPServer."""
 
-    Kept in sync with the identical check in query_rewriter.py and
-    answer_generator.py (deliberately duplicated, not imported -- see
-    those modules' comments). Every other LLM call site in this codebase
-    already fell back to OpenAI after being burned by exactly this
-    failure mode killing a live run.
-    """
-    timeout_types = (
-        botocore.exceptions.ReadTimeoutError
-        | botocore.exceptions.ConnectTimeoutError
-        | botocore.exceptions.EndpointConnectionError
-        | socket.timeout
+    @mcp.tool(
+        title="Get latest filing",
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
     )
-    if isinstance(exc, timeout_types):
-        return True
-    text = str(exc)
-    return (
-        "Throttling" in text
-        or "throttl" in text.lower()
-        or "ResourceNotFoundException" in text
-    )
-
-
-def _call_openai_summary(ticker: str, filing_type: str, context: str) -> str:
-    import os
-
-    from openai import OpenAI
-
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    r = client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
-            {"role": "user", "content": f"{ticker} {filing_type}:\n\n{context}"},
-        ],
-    )
-    return r.choices[0].message.content.strip()
-
-
-def _summarize(bedrock_client: Any, ticker: str, filing_type: str, chunks: list[dict]) -> str:
-    if not chunks:
-        return NOT_INGESTED_MESSAGE
-
-    context = "\n\n".join(c.get("text", "") for c in chunks)
-    user_text = f"{ticker} {filing_type}:\n\n{context}"
-    try:
-        response = bedrock_client.converse(
-            modelId=HAIKU_MODEL_ID,
-            system=[{"text": SUMMARY_SYSTEM_PROMPT}],
-            messages=[{"role": "user", "content": [{"text": user_text}]}],
-            inferenceConfig={"temperature": 0},
-        )
-        return response["output"]["message"]["content"][0]["text"].strip()
-    except Exception as e:
-        if not _is_bedrock_unavailable(e):
-            raise
-        return _call_openai_summary(ticker, filing_type, context)
-
-
-def build_latest_filing_answer(
-    ticker: str,
-    filing_type: str,
-    bedrock_client: Any,
-    keyword_index: Any,
-) -> dict[str, Any]:
-    """Look up a company's most recent filing of a given type, with a brief summary.
-
-    Args:
-        ticker: Company ticker, e.g. "AAPL".
-        filing_type: SEC form type, e.g. "10-Q" or "10-K".
-        bedrock_client: A boto3 bedrock-runtime client (Haiku only).
-        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
-
-    Returns:
-        {"filing": {ticker, cik, form_type, filing_date, accession_number,
-        primary_document}, "summary": str}
-
-    Raises:
-        ValueError: If EDGAR has no filing of this type for this ticker.
-    """
-    cik = get_cik_for_ticker(ticker)
-    filings = list_filings(ticker, cik, form_limits={filing_type: 1})
-    if not filings:
-        raise ValueError(f"No {filing_type} filings found for {ticker!r} on EDGAR")
-    filing = filings[0]
-
-    chunks = keyword_index.search(f"{ticker} {filing_type}", top_k=5)
-    summary = _summarize(bedrock_client, ticker, filing_type, chunks)
-
-    return {"filing": asdict(filing), "summary": summary}
-
-
-def register_get_latest_filing_tool(
-    mcp: MCPServer,
-    bedrock_client: Any,
-    keyword_index: Any,
-) -> None:
-    """Register the get_latest_filing tool on an MCPServer instance."""
-
-    @mcp.tool()
-    def get_latest_filing(ticker: str, filing_type: str) -> dict[str, Any]:
-        """Get metadata and a brief summary of a company's most recent filing.
+    def get_latest_filing(ticker: str, filing_type: str = "10-K") -> dict[str, Any]:
+        """Get a company's most recent SEC filing of a given type, with a link to it on sec.gov.
 
         Args:
-            ticker: Company ticker, e.g. "AAPL".
-            filing_type: SEC form type, e.g. "10-Q" or "10-K".
-
-        Returns:
-            Dict with filing metadata and a 3-sentence summary.
+            ticker: Any ticker SEC knows, e.g. "AAPL".
+            filing_type: SEC form, e.g. "10-K" (default), "10-Q", "8-K".
         """
-        return build_latest_filing_answer(ticker, filing_type, bedrock_client, keyword_index)
+        symbol = clean_ticker(ticker)
+        if not _FORM.match(filing_type or ""):
+            raise ToolError(f"{filing_type!r} is not an SEC form type, e.g. '10-K'.")
+        form = filing_type.upper()
+
+        def work(deps):
+            try:
+                cik = get_cik_for_ticker(symbol)
+            except ValueError:
+                raise ToolError(f"SEC has no company with ticker {symbol}.") from None
+            filings = list_filings(symbol, cik, form_limits={form: 1})
+            if not filings:
+                raise ToolError(f"EDGAR lists no {form} filings for {symbol}.")
+            f = filings[0]
+            in_corpus = any(
+                row["ticker"] == symbol and row["filing_type"] == form
+                and row["filed"] == f.filing_date
+                for row in deps.keyword_index.coverage()
+            )
+            return {
+                "filing": {"ticker": symbol, "cik": f.cik, "form": f.form_type,
+                           "filed": f.filing_date, "accession": f.accession_number,
+                           "primary_document": f.primary_document},
+                "sec_url": ARCHIVE_URL.format(
+                    cik=f.cik, accession_no_dashes=f.accession_number.replace("-", ""),
+                    primary_document=f.primary_document,
+                ),
+                "in_corpus": in_corpus,
+            }
+
+        # Not cached: EDGAR is the source of truth and a new filing can land any day.
+        return run_tool(
+            get_deps, "get_latest_filing", {"ticker": symbol, "filing_type": form}, work
+        )

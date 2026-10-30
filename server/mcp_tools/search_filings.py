@@ -1,255 +1,57 @@
-"""search_sec_filings MCP tool: full retrieval pipeline (Week 2).
-
-rewrite -> hybrid search -> rerank -> generate -> verify, per CLAUDE.md's
-query flow. Replaces Week 1's direct-Pinecone-only version.
-"""
+"""search_sec_filings: passages that answer a free-text financial question."""
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
 from typing import Any
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
-from server.generation.answer_generator import generate_answer
-from server.observability.logger import estimate_cost_usd, log_query
-from server.observability.query_cache import get_cached_answer, put_cached_answer
-from server.retrieval.hybrid_retriever import bm25_only_search, dense_only_search, hybrid_search
-from server.retrieval.numerical_verifier import verify_answer
-from server.retrieval.query_cleaner import clean_question
-from server.retrieval.query_filters import extract_filters, period_window
-from server.retrieval.query_rewriter import rewrite_query
-from server.retrieval.reranker import rerank
+from server.mcp_tools.common import (
+    READ_ONLY,
+    GetDeps,
+    check_length,
+    clean_ticker,
+    passages_result,
+    require_covered,
+    run_tool,
+)
+from server.retrieval.evidence import find_passages
 
-BASELINE_MODES = ("dense_only", "bm25_only")
-QUERY_LOG_TABLE = "finrag-query-logs"
-QUERY_CACHE_TABLE = "finrag-query-cache"
-
-
-def _retrieve_full(
-    query: str,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-    top_k: int,
-    do_rerank: bool = True,
-) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
-    """Rewrite, hybrid-search and rerank. Returns (rewritten, candidates, top, ms).
-
-    With do_rerank=False the third item is the unreranked candidates.
-    """
-    ms: dict[str, int] = {}
-    # Instructions like "Round your answer..." only matter to generation; they
-    # add words no filing contains, so retrieval searches on the cleaned text.
-    search_query = clean_question(query)
-
-    stage_start = time.monotonic()
-    rewritten = rewrite_query(bedrock_client, search_query)
-    ms["rewrite"] = int((time.monotonic() - stage_start) * 1000)
-
-    # From the user's own words, not the LLM rewrite, which can add
-    # names or years the user never asked about.
-    stage_start = time.monotonic()
-    filters = extract_filters(query)
-    candidates = hybrid_search(
-        rewritten, keyword_index, pinecone_index, embed_fn,
-        ticker=filters["ticker"],
-        period_range=period_window(filters["years"]) if filters["years"] else None,
-    )
-    ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
-
-    if not do_rerank:
-        return rewritten, candidates, candidates, ms
-
-    # The rewritten form carries the GAAP phrasing the lexical fallback
-    # needs; CrossEncoder still sees the natural query it was trained on.
-    stage_start = time.monotonic()
-    top_chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=rewritten)
-    ms["rerank"] = int((time.monotonic() - stage_start) * 1000)
-    return rewritten, candidates, top_chunks, ms
+MAX_QUESTION_CHARS = 500
 
 
-def retrieve_chunks(
-    query: str,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-    stage: str = "reranked",
-    top_k: int = 5,
-) -> list[dict[str, Any]]:
-    """Run only the retrieval half, for evals that measure retrieval on its own.
+def register_search_filings_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
+    """Register search_sec_filings on an MCPServer."""
 
-    Args:
-        stage: "candidates" returns the merged hybrid results before reranking;
-            "reranked" returns the final top_k that generation would see.
-    """
-    if stage not in ("candidates", "reranked"):
-        raise ValueError(f"unknown stage {stage!r}; expected 'candidates' or 'reranked'")
-    _, _, chunks, _ = _retrieve_full(
-        query, bedrock_client, pinecone_index, keyword_index, embed_fn, top_k,
-        do_rerank=stage == "reranked",
-    )
-    return chunks
+    @mcp.tool(title="Search SEC filings", annotations=READ_ONLY)
+    def search_sec_filings(
+        question: str, ticker: str | None = None, fiscal_year: int | None = None
+    ) -> dict[str, Any]:
+        """Find passages in SEC filings (10-K, 10-Q, 8-K) that answer a financial question.
 
-
-def build_search_filings_answer(
-    query: str,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-    top_k: int = 5,
-    mode: str = "full",
-    dynamodb_resource: Any = None,
-) -> dict[str, Any]:
-    """Run the retrieval pipeline and format a cited answer.
-
-    Args:
-        query: Natural language financial question.
-        bedrock_client: A boto3 bedrock-runtime client (used for rewrite,
-            generation, and -- via embed_fn's closure -- embeddings).
-        pinecone_index: A Pinecone Index handle.
-        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
-        embed_fn: Callable(text) -> embedding vector, for the Pinecone query.
-        top_k: Number of chunks to keep after reranking (or, in a baseline
-            mode, the number of chunks fetched directly with no reranking).
-        mode: "full" (default) runs the four-stage pipeline: rewrite ->
-            hybrid search -> rerank -> generate -> verify. "dense_only" and
-            "bm25_only" are CLAUDE.md's Baseline A/B: no rewrite, a single
-            retrieval source, no rerank -- for evals/run_eval.py's
-            baseline-vs-full comparison.
-        dynamodb_resource: A boto3 DynamoDB resource. When given, logs this
-            query's cost/latency breakdown to QUERY_LOG_TABLE (best-effort;
-            never raises). None (the default) skips logging entirely --
-            every eval/test call site passes nothing and stays unaffected.
-            Also gates the query result cache (QUERY_CACHE_TABLE, "full"
-            mode only): a hit skips the whole pipeline and returns
-            cost_usd=0.0; a miss runs the pipeline as normal and writes the
-            answer to the cache with a 24h TTL before returning.
-
-    Returns:
-        {"answer": str, "citations": [...], "cost_usd": float, "latency_ms": int}
-    """
-    if mode not in ("full", *BASELINE_MODES):
-        raise ValueError(f"unknown mode {mode!r}; expected 'full' or one of {BASELINE_MODES}")
-
-    start = time.monotonic()
-    stage_latency_ms: dict[str, int] = {}
-    cost_usd = 0.0
-    rewritten = query
-
-    # C4 (CLAUDE.md Phase C): scoped to "full" mode only -- the baseline
-    # modes exist purely to measure the uncached pipeline for evals/
-    # run_eval.py's Baseline A/B comparison, and must never short-circuit.
-    if mode == "full" and dynamodb_resource is not None:
-        cached = get_cached_answer(dynamodb_resource, QUERY_CACHE_TABLE, query)
-        if cached is not None:
-            latency_ms = int((time.monotonic() - start) * 1000)
-            log_query(
-                dynamodb_resource, QUERY_LOG_TABLE,
-                query=query, rewritten_query=query, answer=cached["answer"],
-                citations=cached["citations"], cost_usd=0.0, latency_ms_total=latency_ms,
-                latency_ms_per_stage={"cache_lookup": latency_ms}, cache_hit=True,
-            )
-            return {
-                "answer": cached["answer"],
-                "citations": cached["citations"],
-                "cost_usd": 0.0,
-                "latency_ms": latency_ms,
-            }
-
-    if mode == "dense_only":
-        stage_start = time.monotonic()
-        top_chunks = dense_only_search(query, pinecone_index, embed_fn, top_k=top_k)
-        stage_latency_ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
-    elif mode == "bm25_only":
-        stage_start = time.monotonic()
-        top_chunks = bm25_only_search(query, keyword_index, top_k=top_k)
-        stage_latency_ms["retrieve"] = int((time.monotonic() - stage_start) * 1000)
-    else:
-        rewritten, _candidates, top_chunks, retrieval_ms = _retrieve_full(
-            query, bedrock_client, pinecone_index, keyword_index, embed_fn, top_k
-        )
-        stage_latency_ms.update(retrieval_ms)
-        cost_usd += estimate_cost_usd("haiku", query, rewritten)
-
-    stage_start = time.monotonic()
-    raw_answer = generate_answer(bedrock_client, query, top_chunks)
-    stage_latency_ms["generate"] = int((time.monotonic() - stage_start) * 1000)
-    generate_input = "\n\n".join(chunk.get("text", "") for chunk in top_chunks) + query
-    cost_usd += estimate_cost_usd("sonnet", generate_input, raw_answer)
-
-    stage_start = time.monotonic()
-    source_texts = [chunk["text"] for chunk in top_chunks]
-    verified_answer = verify_answer(raw_answer, source_texts)
-    stage_latency_ms["verify"] = int((time.monotonic() - stage_start) * 1000)
-
-    citations = [
-        {
-            "ticker": chunk.get("ticker"),
-            "filing_type": chunk.get("filing_type"),
-            "period": chunk.get("period"),
-            "page": chunk.get("page_number"),
-            "text": chunk.get("text", ""),
-        }
-        for chunk in top_chunks
-    ]
-
-    latency_ms = int((time.monotonic() - start) * 1000)
-
-    if mode == "full" and dynamodb_resource is not None:
-        put_cached_answer(dynamodb_resource, QUERY_CACHE_TABLE, query, verified_answer, citations)
-
-    if dynamodb_resource is not None:
-        log_query(
-            dynamodb_resource, QUERY_LOG_TABLE,
-            query=query, rewritten_query=rewritten, answer=verified_answer,
-            citations=citations, cost_usd=cost_usd, latency_ms_total=latency_ms,
-            latency_ms_per_stage=stage_latency_ms,
-        )
-
-    return {
-        "answer": verified_answer,
-        "citations": citations,
-        "cost_usd": round(cost_usd, 6),
-        "latency_ms": latency_ms,
-    }
-
-
-def register_search_filings_tool(
-    mcp: MCPServer,
-    bedrock_client: Any,
-    pinecone_index: Any,
-    keyword_index: Any,
-    embed_fn: Callable[[str], list[float]],
-    dynamodb_resource: Any = None,
-) -> None:
-    """Register the search_sec_filings tool on an MCPServer instance.
-
-    Args:
-        mcp: The MCPServer instance to register the tool on.
-        bedrock_client: A boto3 bedrock-runtime client.
-        pinecone_index: A Pinecone Index handle.
-        keyword_index: sync_pinecone.KeywordIndex over the full corpus.
-        embed_fn: Callable(text) -> embedding vector.
-        dynamodb_resource: A boto3 DynamoDB resource for per-query cost/
-            latency logging. None skips logging (e.g. local dev, tests).
-    """
-
-    @mcp.tool()
-    def search_sec_filings(query: str) -> dict[str, Any]:
-        """Search ingested SEC filings and return a cited answer.
+        Returns source passages, not an answer. Write the answer from them and
+        cite each figure with its passage's citation.
 
         Args:
-            query: Natural language financial question, e.g. "How did
-                Nvidia data center revenue change from Q1 2024 to Q1 2026?"
-
-        Returns:
-            Dict with answer text, citations, cost_usd, and latency_ms.
+            question: The question in plain words, e.g. "3M capital expenditure in FY2018".
+            ticker: Optional ticker to search one company only, e.g. "MMM".
+            fiscal_year: Optional fiscal year, e.g. 2018.
         """
-        return build_search_filings_answer(
-            query, bedrock_client, pinecone_index, keyword_index, embed_fn,
-            dynamodb_resource=dynamodb_resource,
-        )
+        if not question.strip():
+            raise ToolError("question is empty.")
+        check_length("question", question, MAX_QUESTION_CHARS)
+        symbol = clean_ticker(ticker) if ticker else None
+        if fiscal_year is not None and not 1993 <= fiscal_year <= 2100:
+            raise ToolError(f"fiscal_year {fiscal_year} is outside 1993 to 2100.")
+
+        def work(deps):
+            if symbol:
+                require_covered(symbol, deps.keyword_index)
+            years = (fiscal_year, fiscal_year) if fiscal_year else None
+            return passages_result(*find_passages(
+                question, deps.pinecone_index, deps.keyword_index, deps.embed_fn,
+                ticker=symbol, years=years,
+            ))
+
+        arguments = {"question": question, "ticker": symbol, "fiscal_year": fiscal_year}
+        return run_tool(get_deps, "search_sec_filings", arguments, work, cache=True)
