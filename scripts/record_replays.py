@@ -36,14 +36,24 @@ CASES = [
     {"id": "compare-tsla-f",
      "question": "Compare Tesla and Ford total revenue in 2024.",
      "tool": "compare_companies",
-     "arguments": {"tickers": ["TSLA", "F"], "metric": "revenue", "period": "2024"}},
+     "arguments": {"tickers": ["TSLA", "F"], "metrics": ["revenue"], "period": "FY2024"}},
 ]
 
 
 def flatten(result: dict) -> list[dict]:
-    if "results" in result:  # compare_companies: one passage list per ticker
-        return [p for r in result["results"].values() for p in r["passages"]]
-    return result["passages"]
+    """Passages for the answer writer. XBRL figures become one-line passages with their id."""
+    if "results" not in result:
+        return result["passages"]
+    out = []
+    for ticker, company in result["results"].items():
+        for f in company.get("results", []):
+            if "value" in f:
+                out.append({"id": f["id"], "citation": f["citation"], "ticker": ticker,
+                            "form": f["source"]["form"], "filed": f["source"]["filed"],
+                            "text": f"{ticker} {f['label']} {f['period']['fiscal_period']} "
+                                    f"{f['period']['fiscal_year']} (period ended "
+                                    f"{f['period']['end']}): {f['display']}"})
+    return out
 
 
 def tidy(text: str) -> str:

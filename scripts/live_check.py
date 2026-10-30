@@ -17,6 +17,7 @@ from pathlib import Path
 import requests
 
 OUT = Path("dashboard/data/live/live-check.json")
+CAPEX_FACT = "xbrl:MMM:us-gaap:PaymentsToAcquirePropertyPlantAndEquipment:FY2018"
 HEADERS = {"content-type": "application/json", "accept": "application/json, text/event-stream"}
 PACE_SECONDS = 2.5
 QUESTIONS = [
@@ -82,9 +83,10 @@ def main() -> None:
     assert not is_error and search["passages"], search
     samples["search_sec_filings"] = search
     for name, args in [
-        ("get_company_financials", {"ticker": "MMM", "metric": "capital expenditure",
+        ("get_company_financials", {"ticker": "MMM", "metrics": ["capital expenditure"],
                                     "period": "FY2018"}),
-        ("compare_companies", {"tickers": ["TSLA", "F"], "metric": "revenue", "period": "2024"}),
+        ("compare_companies", {"tickers": ["TSLA", "F"], "metrics": ["revenue"],
+                               "period": "FY2024"}),
         ("get_latest_filing", {"ticker": "AAPL", "filing_type": "10-Q"}),
         ("list_covered_companies", {}),
         ("verify_figures", {"answer": "3M spent $1,577 million on capex in 2018.",
@@ -94,6 +96,11 @@ def main() -> None:
         assert not is_error, (name, result)
         samples[name] = {"arguments": args, "result": result, "ms": ms}
     report["samples"] = trimmed(samples)
+    # A figure id from get_company_financials grounds a rounded, unit-converted figure.
+    is_error, fact_check, _ = tool(url, "verify_figures", {
+        "answer": "3M spent $1.58 billion on capex in 2018.", "passage_ids": [CAPEX_FACT]})
+    assert not is_error and fact_check["grounded"] == ["$1.58 billion"], fact_check
+    report["fact_verify"] = fact_check
 
     miss, hit = [], []
     for q in QUESTIONS:
