@@ -48,7 +48,7 @@ export const PIPELINE_COPY = [
     id: "evidence",
     rail: "Evidence",
     stage: "Evidence returned",
-    technical: "The tool returns the passages with their ids and citations, such as [MMM 10-K 2019-02-07]. It does not return an answer.",
+    technical: "The tool returns up to 5 passages with their ids and citations, such as [MMM 10-K 2019-02-07], each capped at 8,000 characters. It does not return an answer.",
     simple: "You get the source passages, each labeled with the filing it came from.",
   },
   {
@@ -62,14 +62,14 @@ export const PIPELINE_COPY = [
     id: "verify",
     rail: "verify_figures",
     stage: "verify_figures",
-    technical: "The client sends its answer and the passage ids. Every number is checked by parsed magnitude against the passages and returned as grounded or not_found.",
-    simple: "Every number in the answer is checked against the sources. Anything missing is flagged.",
+    technical: "The client sends its answer and the passage ids. Every dollar amount, percentage and comma-grouped number is checked by parsed magnitude against the passages and returned as grounded or not_found. Units are not converted, so $1.58 billion does not match 1,577 (millions).",
+    simple: "The dollar amounts and percentages in the answer are checked against the sources. Anything missing is flagged.",
   },
   {
     id: "log",
     rail: "Log",
     stage: "Log",
-    technical: "Every call is logged to CloudWatch and DynamoDB, with a 90 day expiry.",
-    simple: "A record of each call is kept for 90 days in case something needs checking.",
+    technical: "Every tool call is logged to CloudWatch (kept 30 days) and to DynamoDB (expires after 90 days).",
+    simple: "A record of each call is kept for up to 90 days in case something needs checking.",
   },
 ] as const;

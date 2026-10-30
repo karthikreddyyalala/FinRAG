@@ -70,7 +70,7 @@ sequenceDiagram
     Note over B: 568 MB peak -- the old in-memory rank-bm25 build peaked<br/>at 7.5 GB and needed a temporary EC2 box
     B->>S3P: upload keyword/index.sqlite (~900 MB)
     B->>B: exit 1 if any ticker failed or is uncovered
-    Note over PC,S3P: corpus ready: 164,092 chunks / 70 companies
+    Note over PC,S3P: corpus ready: 171,790 chunks / 71 companies (2026-10-30)
 
     rect rgb(240, 248, 255)
     Note over B,S3P: DEPLOYED WEEKLY CRON (actual production path -- FinragIngestionStack)

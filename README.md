@@ -2,7 +2,7 @@
 
 A public MCP server that gives Claude, Cursor or any MCP client cited passages from real SEC filings, plus a tool that checks every figure in the answer against those passages.
 
-Ask a chatbot for a company's revenue and it may give you stale data or a number it made up. FinRAG searches 10-K, 10-Q and 8-K filings from SEC EDGAR and returns the five best passages, each with a citation. Your own model writes the answer from them, then calls `verify_figures`, which lists every number it can't find in the cited passages. If nothing matches, the tools say so instead of guessing.
+Ask a chatbot for a company's revenue and it may give you stale data or a number it made up. FinRAG searches 10-K, 10-Q and 8-K filings from SEC EDGAR and returns the five best passages, each with a citation. Your own model writes the answer from them, then calls `verify_figures`, which lists every dollar amount, percentage and comma-grouped number it can't find in the cited passages. If nothing matches, the tools say so instead of guessing.
 
 **Live site:** [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app)
 
@@ -14,9 +14,9 @@ Server URL:
 https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp
 ```
 
-- **Claude (web or desktop):** add it as a custom connector and paste the URL.
+- **Claude (web or desktop):** Customize > Connectors > + Add > Add custom connector. Paste the URL and choose No sign in if asked. On Team and Enterprise plans an Owner adds it first under Organization settings > Connectors. Free plans allow one custom connector.
 - **Claude Code:** `claude mcp add --transport http finrag https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp`
-- **Cursor and other clients that speak streamable HTTP:**
+- **Cursor:** add this to `.cursor/mcp.json` in your project or `~/.cursor/mcp.json`. Other clients that speak streamable HTTP take the same URL, though their config keys may differ.
 
 ```json
 {
@@ -40,9 +40,9 @@ https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp
 | `search_sec_filings(question, ticker?, fiscal_year?)` | The 5 best passages for a free-text question, with citations |
 | `get_company_financials(ticker, metric, period)` | Passages for one company, one metric, one period |
 | `compare_companies(tickers, metric, period)` | Passages per company, 2 to 5 tickers, searched in parallel |
-| `get_latest_filing(ticker, filing_type)` | The newest 10-K, 10-Q or 8-K straight from EDGAR, with a link and whether it's in the corpus |
+| `get_latest_filing(ticker, filing_type?)` | The newest filing of a form (default 10-K) straight from EDGAR, for any company SEC lists, with a link and whether it's in the corpus |
 | `list_covered_companies()` | Every company, form and date range that can be searched |
-| `verify_figures(answer, passage_ids)` | Each number in the answer, sorted into `grounded` or `not_found` |
+| `verify_figures(answer, passage_ids)` | Each dollar amount, percentage and comma-grouped number in the answer, sorted into `grounded` or `not_found`, plus any `unknown_ids` |
 
 ## How it works
 
@@ -74,9 +74,9 @@ sequenceDiagram
 
 - **Corpus:** 1,082 filings (519 10-Q, 299 10-K, 264 8-K), 171,790 chunks, 71 companies. Tables are kept as tables. A weekly job pulls new filings from EDGAR.
 - **No chat model on the server.** Query embeddings use OpenAI `text-embedding-3-small`. If the embedding call fails, search falls back to keyword-only and the result says so.
-- **Full text before ranking.** Pinecone metadata holds only the first 1,000 characters of a chunk. 75% of chunks are longer (3,728 on average), so every hit is swapped for its full text from the keyword index before reranking.
+- **Full text before ranking.** Pinecone metadata holds only the first 1,000 characters of a chunk. 75% of chunks are longer than that (the average chunk is 3,728 characters), so every hit is swapped for its full text from the keyword index before reranking. Passages sent to the client are capped at 8,000 characters and marked `[... truncated]` past that.
 - **Reranker:** a word-overlap scorer. A neural reranker is next.
-- **Verifier:** compares parsed magnitudes, not raw text. A plain substring test would treat a made-up "$1,234" as grounded whenever the source contains "$1,234.56".
+- **Verifier:** compares parsed magnitudes, not raw text. A plain substring test would treat a made-up "$1,234" as grounded whenever the source contains "$1,234.56". It does not convert units, so "$1.58 billion" is not grounded by "1,577" (millions), and plain digits like "1577" are not checked.
 
 The full sequence, with every component, is in [diagrams/query-sequence.mmd](diagrams/query-sequence.mmd).
 
@@ -106,7 +106,7 @@ Same index, same day, top 5 after reranking:
 | New, without full text | 47.8% | 0.431 | 10.2% |
 | New | 52.2% | 0.455 | 13.4% |
 
-The new path drops the LLM rewrite and still retrieves slightly better. Swapping in full text is what makes the difference.
+The new path drops the LLM rewrite and retrieves about as well: the number lands in the top 5 for one more of 92 questions, and the evidence for four more of 127. Swapping in full text is what makes the difference.
 
 ### Answer quality (September 2026, before this server)
 
@@ -148,27 +148,56 @@ Keyword-only scored highest, and I first published that as "keyword search beats
 
 ## Deployment
 
-AWS Lambda behind a Function URL. There's no API Gateway, because a cold start that downloads the index takes longer than API Gateway's 29 second limit.
+AWS Lambda behind a Function URL, with no API Gateway. A cold start downloads the 964 MB index (14.9 s when measured), close enough to API Gateway's 29 second cap that a slow download would cross it. The Function URL allows the Lambda's full 2 minutes.
 
 - Python 3.13, arm64, 2 GB memory, 2 GB ephemeral storage. Async retries are off.
 - No sign-in. A shared DynamoDB rate limit (30 a minute, 1,000 a day) protects the account. It fails open if DynamoDB is down.
 - A 24 h DynamoDB cache for identical tool calls. Degraded results, like keyword-only searches, are never cached.
-- Every call is logged as a `finrag_call` line in CloudWatch and as a DynamoDB item that expires after 90 days.
-- An EventBridge health check runs a real search every 5 minutes. Alarms on server errors and refresh failures publish to an SNS topic.
+- Every tool call is logged as a `finrag_call` line in CloudWatch (kept 30 days) and as a DynamoDB item that expires after 90 days.
+- An EventBridge health check runs a real search every 5 minutes, which also keeps one instance warm. Alarms on server errors and refresh failures publish to an SNS topic, which emails you only if you deploy with `-c alert_email`.
 - A weekly EventBridge job refreshes the corpus from EDGAR.
 - Secrets are in SSM Parameter Store. IAM is scoped to the specific resources used.
 
 ### Deploy your own
 
-```bash
-git clone https://github.com/karthikreddyyalala/FinRAG.git && cd FinRAG
-aws ssm put-parameter --name /finrag/openai-api-key --type SecureString --value <your-key>
-aws ssm put-parameter --name /finrag/pinecone-api-key --type SecureString --value <your-key>
-PYTHONPATH=. npx aws-cdk deploy --all --app "python3 infra/app.py" --require-approval never
-python3 scripts/bootstrap_corpus.py
-```
+You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 or newer, an OpenAI API key and a Pinecone account. Everything deploys to us-east-1.
 
-Then connect your client to the `McpEndpoint` output, the same way as above. Add `-c alert_email=you@example.com` to the deploy to get alarm emails and a $10 monthly budget alert.
+1. In Pinecone, create a serverless index named `finrag-filings` with 1536 dimensions and the cosine metric (it must match OpenAI `text-embedding-3-small`).
+2. Clone and install:
+
+   ```bash
+   git clone https://github.com/karthikreddyyalala/FinRAG.git && cd FinRAG
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+3. S3 bucket names are global, so rename the two buckets to your own (replace `yourname`):
+
+   ```bash
+   perl -pi -e 's/finrag-(raw|processed)-filings/yourname-$1-filings/g' $(git grep -lE 'finrag-(raw|processed)-filings' -- '*.py')
+   ```
+   Also set `SEC_USER_AGENT` in `pipeline/edgar_client.py` to your own name and email. SEC asks every client to identify itself.
+4. Store your keys where the Lambdas read them:
+
+   ```bash
+   aws ssm put-parameter --region us-east-1 --name /finrag/openai-api-key --type SecureString --value <your-openai-key>
+   aws ssm put-parameter --region us-east-1 --name /finrag/pinecone-api-key --type SecureString --value <your-pinecone-key>
+   ```
+5. Deploy. `cdk.json` already points at the app, and `bootstrap` is needed once per account and region:
+
+   ```bash
+   npx aws-cdk bootstrap aws://<account-id>/us-east-1
+   npx aws-cdk deploy --all --require-approval never -c alert_email=you@example.com
+   ```
+   `-c alert_email` is optional. It subscribes that address to the alarms (confirm the email AWS sends) and adds a $10 monthly budget alert. Until step 6 finishes, the 5-minute health check fails and the error alarm fires.
+6. Build the corpus. This runs locally, reads the keys from the environment, and takes hours. It pays OpenAI for about 170,000 chunk embeddings (a few dollars) and writes them to Pinecone; the free tier's monthly write limit may not cover all of it, and the script resumes where it stopped.
+
+   ```bash
+   export OPENAI_API_KEY=<your-openai-key> PINECONE_API_KEY=<your-pinecone-key>
+   PYTHONPATH=. python scripts/bootstrap_corpus.py
+   aws s3 sync evals/results/chunk_cache s3://yourname-processed-filings/chunk_cache/
+   ```
+   The sync gives the weekly refresh its starting point; without it the refresh tries to re-ingest everything. PYPL is skipped because it is listed in `KNOWN_UNAVAILABLE` in `scripts/bootstrap_corpus.py`; remove it there to include it.
+7. Connect your client to the `McpEndpoint` stack output (it already ends in `/mcp`), the same way as above.
 
 ## Status
 
@@ -176,4 +205,4 @@ Done: ingestion, hybrid retrieval with full-text hydration, figure verifier, six
 
 Next: XBRL facts for any public company, a neural reranker, re-measuring answer quality on the new server, an eval that penalizes refusals.
 
-Other diagrams are in `diagrams/`.
+Other diagrams are in `diagrams/`. `ingestion-sequence.mmd` is current; `week1-sequence.mmd` and `week3-eval-sequence.mmd` show earlier designs, kept as history.

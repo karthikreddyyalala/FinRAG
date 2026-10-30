@@ -56,7 +56,7 @@ const TOOLS = [
   },
   {
     name: "get_latest_filing",
-    description: "Looked up live from EDGAR, with a flag for whether it is already in the corpus.",
+    description: "Any company SEC lists, any form (10-K by default), looked up live from EDGAR, with a flag for whether it is already in the corpus.",
     request: S.get_latest_filing.arguments,
     response: { filing: latest.filing, in_corpus: latest.in_corpus },
     span: "md:col-span-2",
@@ -73,7 +73,7 @@ const TOOLS = [
   },
   {
     name: "verify_figures",
-    description: "Send your draft answer and the passage ids. Each number comes back grounded or not_found.",
+    description: "Send your draft answer and the passage ids. Each dollar amount, percentage and comma-grouped number comes back grounded or not_found.",
     request: { ...verify.arguments, passage_ids: [...verify.arguments.passage_ids.slice(0, 2), "..."] },
     response: { grounded: verify.result.grounded, not_found: verify.result.not_found, checked_against: verify.result.checked_against },
     span: "",
