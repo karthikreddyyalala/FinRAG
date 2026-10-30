@@ -57,9 +57,9 @@ def main() -> None:
     if "--no-rerank" in args:
         # A/B: take the first top_k candidates instead of reranking them.
         args.remove("--no-rerank")
-        import server.mcp_tools.search_filings as search_filings
+        import server.retrieval.evidence as evidence
 
-        search_filings.rerank = lambda q, c, top_k=5, lexical_query=None: c[:top_k]
+        evidence.rerank = lambda q, c, top_k=5, lexical_query=None: c[:top_k]
     only_ratio = "--ratio-only" in args
     if only_ratio:
         args.remove("--ratio-only")

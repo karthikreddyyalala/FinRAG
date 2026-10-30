@@ -136,22 +136,9 @@ def evidence_items(questions: list[dict], docs: list[dict]) -> list[dict]:
     ]
 
 
-class _NoHydrate:
-    """Keyword index whose id lookup finds nothing: dense hits keep 1,000 chars."""
-
-    def __init__(self, inner):
-        self._inner = inner
-
-    def search(self, *args, **kwargs):
-        return self._inner.search(*args, **kwargs)
-
-    def get_by_ids(self, ids):
-        return {}
-
-
 def main() -> None:
     from evals.run_eval import _init_clients
-    from server.mcp_tools.search_filings import retrieve_chunks
+    from server.retrieval.evidence import find_passages
 
     stage = "reranked"
     if "--stage" in sys.argv:
@@ -162,20 +149,7 @@ def main() -> None:
     if "--metric" in sys.argv:
         metric = sys.argv[sys.argv.index("--metric") + 1]
     label = sys.argv[sys.argv.index("--label") + 1] if "--label" in sys.argv else ""
-    path = sys.argv[sys.argv.index("--path") + 1] if "--path" in sys.argv else "old"
-    if path == "old":
-        search = lambda q: retrieve_chunks(q, *clients, stage=stage)  # noqa: E731
-    else:
-        # M1 gate: the evidence path has no LLM rewrite. new-nohydrate isolates
-        # the effect of restoring full text to dense hits.
-        from server.retrieval.evidence import find_passages
-
-        _bedrock, pinecone_index, keyword_index, embed_fn = clients
-        if path == "new-nohydrate":
-            keyword_index = _NoHydrate(keyword_index)
-        search = lambda q: find_passages(  # noqa: E731
-            q, pinecone_index, keyword_index, embed_fn, stage=stage
-        )[0]
+    search = lambda q: find_passages(q, *clients, stage=stage)[0]  # noqa: E731
     if metric == "evidence":
         docs = json.loads((ROOT / "eval_data" / "financebench_docs.json").read_text())
         items = evidence_items(questions, docs)
