@@ -29,6 +29,8 @@ def register_compare_companies_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
             metric: Metric name, e.g. "revenue".
             period: Reporting period, e.g. "2024".
         """
+        if len(tickers) > 10:  # 10 allows duplicates
+            raise ToolError("Compare 2 to 5 companies.")
         symbols = list(dict.fromkeys(clean_ticker(t) for t in tickers))
         if not 2 <= len(symbols) <= 5:
             raise ToolError("Compare 2 to 5 companies.")

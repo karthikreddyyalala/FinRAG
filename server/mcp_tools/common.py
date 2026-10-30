@@ -38,7 +38,7 @@ GetDeps = Callable[[], Deps]
 def clean_ticker(ticker: str) -> str:
     """Upper-cased ticker, or a ToolError the model can act on."""
     if not _TICKER.match(ticker or ""):
-        raise ToolError(f"{ticker!r} is not a ticker symbol, e.g. 'MMM' or 'BRK.B'.")
+        raise ToolError(f"{str(ticker)[:20]!r} is not a ticker symbol, e.g. 'MMM' or 'BRK.B'.")
     return ticker.upper()
 
 
@@ -63,6 +63,16 @@ def passages_result(chunks: list[dict[str, Any]], note: str | None) -> dict[str,
     return result
 
 
+def _cacheable(result: dict[str, Any]) -> bool:
+    """Only clean results are stored: a degraded or empty one would stick for 24 h."""
+    if result.get("note"):
+        return False
+    entries = result.get("results")
+    if isinstance(entries, dict):
+        return not any(isinstance(e, dict) and e.get("note") for e in entries.values())
+    return True
+
+
 def run_tool(
     get_deps: GetDeps,
     tool: str,
@@ -77,7 +87,13 @@ def run_tool(
     details); the log record keeps the real error.
     """
     start = time.monotonic()
-    deps = get_deps()
+    try:
+        deps = get_deps()
+    except Exception as e:
+        log_call(None, QUERY_LOG_TABLE, tool=tool, arguments=arguments,
+                 latency_ms=int((time.monotonic() - start) * 1000), result=None,
+                 error=f"DepsError: {type(e).__name__}: {e}")
+        raise
     state: dict[str, Any] = {"cache_hit": False, "rate_limited": False, "error": None,
                              "result": None}
     try:
@@ -91,7 +107,7 @@ def run_tool(
             state["cache_hit"] = True
         else:
             result = work(deps)
-            if use_cache:
+            if use_cache and _cacheable(result):
                 put_cached(deps.dynamodb, QUERY_CACHE_TABLE, tool, arguments, result)
         state["result"] = result
         return result

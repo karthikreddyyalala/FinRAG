@@ -29,8 +29,12 @@ def register_verify_figures_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
             passage_ids: The id of each passage the answer relied on (1 to 20).
         """
         check_length("answer", answer, MAX_ANSWER_CHARS)
+        if len(passage_ids) > MAX_PASSAGE_IDS:
+            raise ToolError(f"Pass 1 to {MAX_PASSAGE_IDS} passage ids.")
+        if any(len(i) > 100 for i in passage_ids):
+            raise ToolError("passage id is too long.")
         ids = list(dict.fromkeys(passage_ids))
-        if not 1 <= len(ids) <= MAX_PASSAGE_IDS:
+        if not ids:
             raise ToolError(f"Pass 1 to {MAX_PASSAGE_IDS} passage ids.")
 
         def work(deps):
@@ -40,4 +44,7 @@ def register_verify_figures_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
                     "unknown_ids": [i for i in ids if i not in found],
                     "checked_against": len(found)}
 
-        return run_tool(get_deps, "verify_figures", {"answer": answer, "passage_ids": ids}, work)
+        return run_tool(
+            get_deps, "verify_figures",
+            {"answer_chars": len(answer), "passage_ids": ids}, work,
+        )

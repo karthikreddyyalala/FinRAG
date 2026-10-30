@@ -6,6 +6,7 @@ in_corpus says whether the other tools can search that filing.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 from mcp.server import MCPServer
@@ -14,6 +15,12 @@ from mcp.types import ToolAnnotations
 
 from pipeline.edgar_client import ARCHIVE_URL, get_cik_for_ticker, list_filings
 from server.mcp_tools.common import GetDeps, clean_ticker, run_tool
+
+
+@lru_cache(maxsize=4096)
+def _cik(symbol: str) -> int:
+    return get_cik_for_ticker(symbol)
+
 
 _FORM = re.compile(r"^[0-9A-Za-z][0-9A-Za-z\-/]{0,9}$")
 
@@ -39,7 +46,7 @@ def register_get_latest_filing_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
 
         def work(deps):
             try:
-                cik = get_cik_for_ticker(symbol)
+                cik = _cik(symbol)
             except ValueError:
                 raise ToolError(f"SEC has no company with ticker {symbol}.") from None
             filings = list_filings(symbol, cik, form_limits={form: 1})
@@ -62,7 +69,9 @@ def register_get_latest_filing_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
                 "in_corpus": in_corpus,
             }
 
-        # Not cached: EDGAR is the source of truth and a new filing can land any day.
+        # Cached: a result can be up to 24 h old, fine for "latest filing", and it keeps
+        # visitors from turning the server into an EDGAR client.
         return run_tool(
-            get_deps, "get_latest_filing", {"ticker": symbol, "filing_type": form}, work
+            get_deps, "get_latest_filing", {"ticker": symbol, "filing_type": form}, work,
+            cache=True,
         )

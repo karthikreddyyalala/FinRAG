@@ -47,3 +47,35 @@ def test_every_call_is_logged_even_when_the_work_fails():
     ):
         run_tool(lambda: _deps(None), "t", {}, MagicMock(side_effect=ToolError("bad input")))
     assert log.call_args.kwargs["error"] == "ToolError: bad input"
+
+
+def _stored(result):
+    with (
+        patch("server.mcp_tools.common.check_rate_limit"),
+        patch("server.mcp_tools.common.get_cached", return_value=None),
+        patch("server.mcp_tools.common.put_cached") as put,
+    ):
+        run_tool(lambda: _deps(MagicMock()), "t", {}, lambda d: result, cache=True)
+    return put.called
+
+
+def test_degraded_result_is_not_cached():
+    assert not _stored({"passages": [], "note": "Keyword search only: semantic search is down"})
+
+
+def test_compare_result_with_a_noted_entry_is_not_cached():
+    assert not _stored({"results": {"A": {"passages": []}, "B": {"passages": [], "note": "n"}}})
+
+
+def test_clean_and_error_results_are_cached():
+    assert _stored({"results": {"A": {"passages": [{"id": "a"}]}, "B": {"error": "not covered"}}})
+
+
+def test_dependency_failure_is_logged_and_reraised():
+    def boom():
+        raise RuntimeError("no key")
+
+    with patch("server.mcp_tools.common.log_call") as log, pytest.raises(RuntimeError):
+        run_tool(boom, "t", {"q": 1}, lambda d: {})
+    assert "no key" in log.call_args.kwargs["error"]
+    assert log.call_args.args[0] is None

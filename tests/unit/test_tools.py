@@ -138,3 +138,50 @@ def test_a_crash_inside_a_tool_hides_its_details():
         is_error, text = call("search_sec_filings", {"question": "capex", "ticker": "MMM"})
     assert is_error
     assert "secret" not in text
+
+
+def test_latest_filing_looks_up_the_cik_once_per_ticker():
+    from server.mcp_tools.get_latest_filing import _cik
+
+    _cik.cache_clear()
+    filing = FilingMetadata(ticker="MMM", cik=66740, form_type="10-K", filing_date="2019-02-07",
+                            accession_number="0000066740-19-000010", primary_document="mmm.htm")
+    with (
+        patch("server.mcp_tools.get_latest_filing.get_cik_for_ticker",
+              return_value=66740) as cik,
+        patch("server.mcp_tools.get_latest_filing.list_filings", return_value=[filing]),
+        tool_client(*ALL, deps=_deps()) as call,
+    ):
+        call("get_latest_filing", {"ticker": "MMM"})
+        call("get_latest_filing", {"ticker": "MMM"})
+    assert cik.call_count == 1
+
+
+def test_compare_rejects_too_many_tickers():
+    with tool_client(*ALL, deps=_deps()) as call:
+        is_error, text = call("compare_companies", {"tickers": ["MMM"] * 11,
+                                                    "metric": "revenue", "period": "2024"})
+    assert is_error and "2 to 5" in text
+
+
+def test_verify_rejects_too_many_ids_and_long_ids():
+    with tool_client(*ALL, deps=_deps()) as call:
+        many = call("verify_figures", {"answer": "x", "passage_ids": [f"i{n}" for n in range(21)]})
+        long = call("verify_figures", {"answer": "x", "passage_ids": ["a" * 101]})
+    assert many[0]
+    assert long[0] and "too long" in long[1]
+
+
+def test_huge_ticker_is_not_echoed_back():
+    with tool_client(*ALL, deps=_deps()) as call:
+        is_error, text = call("search_sec_filings", {"question": "q", "ticker": "A" * 5000})
+    assert is_error and len(text) < 300
+
+
+def test_verify_figures_does_not_log_the_answer_text():
+    from unittest.mock import patch as p
+
+    with p("server.mcp_tools.common.log_call") as log, tool_client(*ALL, deps=_deps()) as call:
+        call("verify_figures", {"answer": "Capex was $1,577 million", "passage_ids": ["a1"]})
+    args = log.call_args.kwargs["arguments"]
+    assert "answer" not in args and args["answer_chars"] == 24
