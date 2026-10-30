@@ -101,3 +101,19 @@ def verify_answer(answer: str, source_chunks: list[str]) -> str:
             + out[match.end() :]
         )
     return out
+
+
+def check_figures(answer: str, source_chunks: list[str]) -> tuple[list[str], list[str]]:
+    """Split the answer's figures into (grounded, not_found) against the sources.
+
+    Same matching as verify_answer (parsed magnitude, so "(1,577)" grounds
+    "$1,577 million" but "$1,234.56" does not ground "$1,234"); reports
+    instead of rewriting, for clients that write their own answers.
+    """
+    source_values = _source_values(" ".join(source_chunks))
+    grounded: list[str] = []
+    not_found: list[str] = []
+    for match in NUMBER_PATTERN.finditer(answer):
+        target = grounded if _is_grounded(match.group(), source_values) else not_found
+        target.append(match.group())
+    return grounded, not_found
