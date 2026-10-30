@@ -4,7 +4,7 @@ What changed, what was broken before, how it was found, and what it measured. Ne
 
 ## 2026-10-30: Clean table text (M3, PR #21)
 
-**Status: measuring.** Results go here before it ships.
+**Status: kept, after a gate that first said to revert it.**
 
 **What was broken.** About 45% of the index (76,751 of 171,790 chunks) is tables, stored exactly as `pandas.read_html` serialized them:
 
@@ -21,6 +21,21 @@ The header row is column numbers instead of years, every merged cell is copied i
 - `clean_table_text` in `server/retrieval/evidence.py` rebuilds each table at serve time, before the reranker and the client see it: drops the column-number header and spacer columns, merges a merged cell's copies, and joins `$`, `(`, `)` and `%` to their number. No re-indexing.
 - Two columns merge only if some row repeats the same value in both and no row disagrees, so two real years with equal values (0.20 and 0.20) stay apart, and blank cells keep their column.
 - Checked on 3,000 random tables: no number is lost. Tables over the passage cap: 3,599 to 128.
+
+**Measured** (FinanceBench, 110 questions with a numeric answer; gpt-4o-mini writes the answers):
+
+| | Voyage rerank | + clean tables |
+|---|---|---|
+| Right number | 49 | 47 |
+| Wrong number | 19 | 15 |
+| Refused | 42 | 48 |
+| Right when it answers | 72% | 76% |
+| Custom set: wrong / refused (of 48) | 29 / 18 | 18 / 29 |
+| Evidence in top 5 (127) | 45.7% | 46.5% |
+
+**Why it was kept although refusals rose.** The gate as written (fewer refusals, more right numbers) failed, and the first call was to revert. Reading the 18 answers that became refusals changed that: 17 had been wrong. Most reported a full-year figure as a quarter, for example "Amazon Q4 2025 revenue $716,924 million" (the full year; the quarter was $213,386 million). With garbled tables the model could not see "Year Ended December 31"; with clean ones it declines. Of the 3 right answers lost, one was a real loss (an Adobe calculation), one was still right but missed by the automated check (3M "$1,577 million"), and one had been wrong all along (Amcor).
+
+**Lesson: refusals alone are the wrong scoreboard.** They reward a confident wrong answer over an honest "not found". `evals/run_remeasure.py` now records wrong answers, and every result is reported as right, wrong and refused.
 
 **Also fixed: a refusal could count as correct.** The automated check matched stray numbers inside refusal text ("cannot determine ... 2022 ..."), so 11 of 55 refusals were scored as correct. `evals/failure_breakdown.py` now never scores a refusal as correct.
 

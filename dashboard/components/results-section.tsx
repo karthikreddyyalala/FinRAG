@@ -29,13 +29,14 @@ export function ResultsSection() {
             hand-graded. &ldquo;Voyage rerank&rdquo; is the same server with a neural reranker over 40 candidates per
             search instead of a word-overlap scorer over 10.
           </p>
-          <table className="mt-4 w-full min-w-[560px] text-left text-sm">
+          <table className="mt-4 w-full min-w-[640px] text-left text-sm">
             <thead className="text-[var(--color-muted)]">
               <tr className="border-b border-[var(--color-border)]">
                 <th className="py-2 pr-4 font-medium">FinanceBench, 150 questions</th>
                 <th className="py-2 pr-4 font-medium">September</th>
                 <th className="py-2 pr-4 font-medium">Word-overlap rerank</th>
-                <th className="py-2 font-medium">Voyage rerank</th>
+                <th className="py-2 pr-4 font-medium">Voyage rerank</th>
+                <th className="py-2 font-medium">+ clean tables (live)</th>
               </tr>
             </thead>
             <tbody className="font-[family-name:var(--font-mono)] tabular-nums">
@@ -43,32 +44,44 @@ export function ResultsSection() {
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Refused to answer</td>
                 <td className="py-2 pr-4">121</td>
                 <td className="py-2 pr-4">99</td>
-                <td className="py-2 text-[var(--color-grounded)]">55</td>
+                <td className="py-2 pr-4">55</td>
+                <td className="py-2 text-[var(--color-grounded)]">61</td>
               </tr>
               <tr className="border-b border-[var(--color-border)]">
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Right number, among answered (of 110)</td>
                 <td className="py-2 pr-4">15</td>
                 <td className="py-2 pr-4">25</td>
-                <td className="py-2 text-[var(--color-grounded)]">49</td>
+                <td className="py-2 pr-4">49</td>
+                <td className="py-2 text-[var(--color-grounded)]">47</td>
+              </tr>
+              <tr className="border-b border-[var(--color-border)]">
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Wrong number (of 110)</td>
+                <td className="py-2 pr-4">5</td>
+                <td className="py-2 pr-4">10</td>
+                <td className="py-2 pr-4">19</td>
+                <td className="py-2 text-[var(--color-grounded)]">15</td>
               </tr>
               <tr className="border-b border-[var(--color-border)]">
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Evidence passage in the top 5 (of 127)</td>
                 <td className="py-2 pr-4">not measured</td>
                 <td className="py-2 pr-4">13.4%</td>
-                <td className="py-2 text-[var(--color-grounded)]">45.7%</td>
+                <td className="py-2 pr-4">45.7%</td>
+                <td className="py-2 text-[var(--color-grounded)]">46.5%</td>
               </tr>
               <tr>
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Every figure found in its sources</td>
                 <td className="py-2 pr-4">not measured</td>
                 <td className="py-2 pr-4">96.7%</td>
-                <td className="py-2 text-[var(--color-grounded)]">84%</td>
+                <td className="py-2 pr-4">84%</td>
+                <td className="py-2 text-[var(--color-grounded)]">85.3%</td>
               </tr>
             </tbody>
           </table>
           <p className="mt-3 max-w-[65ch] text-sm text-[var(--color-muted)]">
-            It now answers 95 of 150 and refuses 55, still mostly ratio questions that need several statement lines.
-            The figure check fell because more answers compute something: 23 of 95 contain a ratio or a unit
-            conversion (&ldquo;$8.738 billion&rdquo; for 8,738 million) that the check does not convert, by design.
+            Clean tables raised refusals from 55 to 61 and cut wrong answers from 19 to 15: 17 of the 18 answers
+            that became refusals had been wrong, mostly a full-year figure reported as a quarter. A wrong figure is
+            worse than a refusal, so refusals alone are the wrong scoreboard. The figure check is lower than before
+            because more answers compute ratios or convert units, which it does not do by design.
             The charts below are the September pipeline.
           </p>
         </div>

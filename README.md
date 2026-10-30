@@ -76,6 +76,7 @@ sequenceDiagram
 - **No chat model on the server.** Query embeddings use OpenAI `text-embedding-3-small`. If the embedding call fails, search falls back to keyword-only and the result says so.
 - **Full text before ranking.** Pinecone metadata holds only the first 1,000 characters of a chunk. 75% of chunks are longer than that (the average chunk is 3,728 characters), so every hit is swapped for its full text from the keyword index before reranking. Passages sent to the client are capped at 8,000 characters and marked `[... truncated]` past that.
 - **Reranker:** Voyage `rerank-2.5`, a hosted cross-encoder, scores all candidates (up to 40 per search source) against the question and keeps 5. A question that names a fiscal year but no quarter prefers the 10-K over 10-Qs. If Voyage is unreachable, a word-overlap scorer takes over and the search still returns passages. Until 2026-10-30 that word-overlap scorer was all production ever ran: the Lambda never installed the local cross-encoder the code was written for.
+- **Tables are rebuilt before ranking.** 45% of chunks are tables stored as `pandas.read_html` left them: a `0 | 1 | ... | 32` header, merged cells copied into every column they span, empty spacer columns. They are cleaned at serve time to about a quarter of their size without losing a number, so the reranker and the client's model can read which figure belongs to which year.
 - **Verifier:** compares parsed magnitudes, not raw text. A plain substring test would treat a made-up "$1,234" as grounded whenever the source contains "$1,234.56". It does not convert units, so "$1.58 billion" is not grounded by "1,577" (millions), and plain digits like "1577" are not checked.
 
 The full sequence, with every component, is in [diagrams/query-sequence.mmd](diagrams/query-sequence.mmd).
@@ -124,20 +125,23 @@ The 10-K preference alone moved evidence from 13.4% to 22.0%. More candidates on
 
 ### Answer quality on the new server (2026-10-30)
 
-Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py --tag m3`. Results: `evals/results/remeasure_2026-10-30.json` (word-overlap) and `evals/results/remeasure_m3.json` (Voyage).
+Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py --tag <name>`. Results: `evals/results/remeasure_*.json`.
 
-| FinanceBench (150) | September | Word-overlap rerank | Voyage rerank (live) |
-|---|---|---|---|
-| Refused to answer | 121 | 99 | 55 |
-| Stated the right number, among answered questions (of 110 with a numeric answer) | 15 | 25 | 49 |
-| Answers whose every figure is in the retrieved passages | not measured | 145 (96.7%) | 126 (84%) |
+| FinanceBench | September | Word-overlap rerank | Voyage rerank | Voyage + clean tables (live) |
+|---|---|---|---|---|
+| Refused to answer (of 150) | 121 | 99 | 55 | 61 |
+| Right number (of 110 with a numeric answer) | 15 | 25 | 49 | 47 |
+| Wrong number (of 110) | 5 | 10 | 19 | 15 |
+| Right when it answers | 75% | 71% | 72% | 76% |
+| Answers whose every figure is in the passages | not measured | 96.7% | 84% | 85.3% |
 
 How to read these:
 
-- **Better ranking roughly halved refusals and doubled correct answers.** It still refuses 55 of 150. Most remaining refusals are ratio questions (working capital, days payable) that need several statement lines in the same 5 passages.
-- **The figure check fell because more answers compute something.** 23 of the 95 answers contain a figure not found verbatim: mostly ratios the model calculated ("2.1%") or unit conversions ("$8.738 billion" for 8,738 million). `verify_figures` does not convert units or check arithmetic, by design, so it flags these for the client to show.
-- **"Stated the right number" is an automated check** (within 2% of the ground truth) and is not hand-graded. An earlier version counted stray numbers inside refusals as hits; that inflated the September figure to 52, which is why I now count answered questions only.
-- **The 48 hand-verified custom questions:** refusals fell from 42 to 18 with the Voyage reranker. The automated number check matches only 1 of the 48, so whether those answers are right needs hand grading.
+- **Better ranking roughly halved refusals and doubled correct answers.** It also answered more questions wrongly, because it answered more questions.
+- **Clean tables traded 6 refusals for 4 fewer wrong answers.** 17 of the 18 answers that became refusals had been wrong, most often a full-year figure reported as a quarter ("Amazon Q4 2025 revenue $716,924 million", which is the full year; the quarter was $213,386 million). With readable tables the model sees "Year Ended December 31" and declines instead. A wrong figure is worse than a refusal in finance, so this shipped even though refusals went up.
+- **So refusals alone are the wrong scoreboard.** Every run is scored three ways: right, wrong, refused.
+- **"Right number" is an automated check** (within 2% of the ground truth, never counted inside a refusal) and is not hand-graded. Spot checks found it wrong in both directions: it missed a correct "$1,577 million" and accepted a wrong Amcor acquisition answer.
+- **The 48 hand-verified custom questions:** refusals 42, 18, then 29, and wrong answers 29 to 18 with clean tables. Most ask for a fourth quarter, which 10-Qs never report and 10-Ks report only as a full year, so a refusal is often the right answer. Only 1 of 48 is answered correctly; these need hand grading and 8-K earnings releases.
 - **ragas was not re-run.** Its September scores are below.
 
 ### Answer quality (September 2026, before this server)
