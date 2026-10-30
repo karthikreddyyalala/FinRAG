@@ -88,11 +88,11 @@ Measured against the deployed URL by [scripts/live_check.py](scripts/live_check.
 
 | | |
 |---|---|
-| Search, warm, cache miss | 0.92 s median, 1.15 s max (10 questions) |
-| Search, cache hit | 0.34 s median |
+| Search, warm, cache miss | 1.08 s median, 1.25 s max (10 questions, Voyage reranker) |
+| Search, cache hit | 0.37 s median |
 | First call after a deploy (cold) | 14.9 s, mostly loading the 964 MB index |
 | `initialize` / `tools/list` | 0.30 s / 0.24 s (neither loads the index) |
-| Cost per search (estimate) | about $0.00003: 2 GB Lambda for about 1 s, plus one embedding |
+| Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens ($0 within the first 200M free), plus 2 GB Lambda for about 1 s and one embedding |
 
 The old pipeline averaged 24.1 s per question, because it spent most of that time waiting on throttled model calls.
 
