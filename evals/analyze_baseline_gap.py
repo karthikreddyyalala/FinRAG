@@ -49,6 +49,9 @@ def _significant_numbers(text: str, floor: float) -> list[float]:
     return [n for n in _extract_numbers(text) if abs(n) > floor]
 
 
+_SCALES = (1, 1e3, 1e6, 1e9, 1e-3, 1e-6, 1e-9)
+
+
 def states_correct_number(
     answer: str, ground_truth: str, tol: float = 0.02, floor: float = 1.5
 ) -> bool | None:
@@ -65,8 +68,12 @@ def states_correct_number(
     if not truth_numbers:
         return None
     answer_numbers = _significant_numbers(answer, floor)
+    # Answer keys drop the unit ("$94036.00" for USD millions) while answers say it
+    # ("$94,036 million" parses to 94,036,000,000). Until 2026-10-30 that scored
+    # every exact answer written with "million" or "billion" as wrong.
     return any(
-        abs(a - g) / max(abs(g), 1e-9) <= tol for g in truth_numbers for a in answer_numbers
+        abs(a - g * scale) / max(abs(g * scale), 1e-9) <= tol
+        for g in truth_numbers for a in answer_numbers for scale in _SCALES
     )
 
 

@@ -62,3 +62,13 @@ def test_main_scores_a_given_answers_file(tmp_path, capsys):
 def test_a_refusal_that_happens_to_contain_the_number_is_not_correct():
     answer = "The context does not provide 3M's capex, so I cannot confirm $1,577 million."
     assert classify(row(answer, []), Q, CACHE) == "refused_retrieval"
+
+
+def test_answers_with_a_unit_word_match_unitless_answer_keys():
+    """"$94,036 million" is the answer key's "$94036.00" (USD millions), not a miss."""
+    from evals.analyze_baseline_gap import states_correct_number
+
+    assert states_correct_number("Revenue was $94,036 million.", "$94036.00")
+    assert states_correct_number("Net PP&E was $8.738 billion.", "$8.70")
+    assert states_correct_number("Capex was $1,577 million.", "$1577.00")
+    assert not states_correct_number("Revenue was $97,000 million.", "$94036.00")
