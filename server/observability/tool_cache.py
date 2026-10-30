@@ -4,8 +4,8 @@ Keyed by tool name + arguments + a hash of the server's source, so a deploy
 that changes ranking never serves results from the previous build. TTL is
 24 hours, not a week: the weekly corpus refresh may add a filing for exactly
 the company a cached result is about, and 24 hours means a cached result
-never survives into a week where the corpus changed. Best effort throughout: a cache fault is a miss, never
-an error.
+never survives into a week where the corpus changed. Best effort throughout:
+a cache fault is a miss, never an error.
 """
 from __future__ import annotations
 
