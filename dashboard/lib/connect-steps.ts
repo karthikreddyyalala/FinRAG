@@ -20,12 +20,12 @@ export const CONNECT_CLIENTS = [
 
 export const LIMITS = [
   "Shared limit: 30 calls a minute and 1,000 a day, counted across everyone using the server.",
-  "Coverage: 71 companies. Call list_covered_companies for the exact years of each one.",
-  "Evidence only: the server returns cited passages, and your own model writes the answer.",
+  "Coverage: figures for any company with XBRL filings at SEC; passage search for 71 companies (list_covered_companies has the exact years).",
+  "Evidence only: the server returns figures and cited passages, and your own model writes the answer.",
 ] as const;
 
 export const DEPLOY_PREREQUISITES =
-  "You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 or newer, an OpenAI API key and a Pinecone account. Everything deploys to us-east-1.";
+  "You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 or newer, an OpenAI API key, a Pinecone account and a Voyage AI key with a payment method on file. Everything deploys to us-east-1.";
 
 export const DEPLOY_STEPS = [
   {

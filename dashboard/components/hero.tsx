@@ -21,9 +21,9 @@ export function Hero() {
             Financial answers you can check.
           </h1>
           <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-[var(--color-muted)]">
-            FinRAG MCP gives Claude, Cursor, or any MCP client cited passages from{" "}
-            <Cited metric="filings_count" /> SEC filings, plus a tool that checks every figure in the answer against them. Add it
-            to Claude, no sign-in.
+            FinRAG MCP gives Claude, Cursor, or any MCP client exact reported figures for any US-listed company and
+            cited passages from <Cited metric="filings_count" /> SEC filings, plus a tool that checks every figure in the
+            answer. Add it to Claude, no sign-in.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a

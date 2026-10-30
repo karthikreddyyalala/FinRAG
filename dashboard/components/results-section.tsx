@@ -24,7 +24,48 @@ export function ResultsSection() {
 
         <div className="mt-8 overflow-x-auto">
           <p className="max-w-[65ch] text-[var(--color-muted)]">
-            Re-measured on 2026-10-30: the same 150 FinanceBench questions through the live server&apos;s retrieval,
+            End to end, the way a user meets it: a model calls the real tools in a loop, as Claude or Cursor would,
+            and each answer is scored right, wrong or refused against FinanceBench&apos;s answer key. gpt-4o-mini
+            plays the client.
+          </p>
+          <table className="mt-4 w-full min-w-[480px] text-left text-sm">
+            <thead className="text-[var(--color-muted)]">
+              <tr className="border-b border-[var(--color-border)]">
+                <th className="py-2 pr-4 font-medium">Agent test, 2026-10-30</th>
+                <th className="py-2 pr-4 font-medium">Search only</th>
+                <th className="py-2 font-medium">+ exact figures (live)</th>
+              </tr>
+            </thead>
+            <tbody className="font-[family-name:var(--font-mono)] tabular-nums">
+              <tr className="border-b border-[var(--color-border)]">
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">FinanceBench right (of 110)</td>
+                <td className="py-2 pr-4">67</td>
+                <td className="py-2 text-[var(--color-grounded)]">92</td>
+              </tr>
+              <tr className="border-b border-[var(--color-border)]">
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Wrong</td>
+                <td className="py-2 pr-4">21</td>
+                <td className="py-2 text-[var(--color-grounded)]">14</td>
+              </tr>
+              <tr className="border-b border-[var(--color-border)]">
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Refused</td>
+                <td className="py-2 pr-4">22</td>
+                <td className="py-2 text-[var(--color-grounded)]">4</td>
+              </tr>
+              <tr>
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Fourth-quarter set right / wrong (of 48)</td>
+                <td className="py-2 pr-4">13 / 32</td>
+                <td className="py-2 text-[var(--color-grounded)]">39 / 7</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-3 mb-10 max-w-[65ch] text-sm text-[var(--color-muted)]">
+            Exact figures come from the XBRL data in each filing, for any US-listed company. Searching passages, the
+            model had to find one table row among 171,790 chunks; most of its fourth-quarter answers reported the
+            full year, since no filing states a Q4 on its own. The figures tool derives Q4 and says how.
+          </p>
+          <p className="max-w-[65ch] text-[var(--color-muted)]">
+            The one-shot test isolates retrieval: one search, five passages, one answer. Re-measured on 2026-10-30: the same 150 FinanceBench questions through the live server&apos;s retrieval,
             answers written by gpt-4o-mini, September answers re-scored with the same code. Automated checks, not
             hand-graded. &ldquo;Voyage rerank&rdquo; is the same server with a neural reranker over 40 candidates per
             search instead of a word-overlap scorer over 10.
@@ -48,18 +89,18 @@ export function ResultsSection() {
                 <td className="py-2 text-[var(--color-grounded)]">61</td>
               </tr>
               <tr className="border-b border-[var(--color-border)]">
-                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Right number, among answered (of 110)</td>
-                <td className="py-2 pr-4">15</td>
-                <td className="py-2 pr-4">25</td>
-                <td className="py-2 pr-4">49</td>
-                <td className="py-2 text-[var(--color-grounded)]">47</td>
+                <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Right number (of 110)</td>
+                <td className="py-2 pr-4">16</td>
+                <td className="py-2 pr-4">26</td>
+                <td className="py-2 pr-4">54</td>
+                <td className="py-2 text-[var(--color-grounded)]">53</td>
               </tr>
               <tr className="border-b border-[var(--color-border)]">
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Wrong number (of 110)</td>
-                <td className="py-2 pr-4">5</td>
-                <td className="py-2 pr-4">10</td>
-                <td className="py-2 pr-4">19</td>
-                <td className="py-2 text-[var(--color-grounded)]">15</td>
+                <td className="py-2 pr-4">4</td>
+                <td className="py-2 pr-4">9</td>
+                <td className="py-2 pr-4">14</td>
+                <td className="py-2 text-[var(--color-grounded)]">9</td>
               </tr>
               <tr className="border-b border-[var(--color-border)]">
                 <td className="py-2 pr-4 font-[family-name:var(--font-body)]">Evidence passage in the top 5 (of 127)</td>
@@ -78,7 +119,7 @@ export function ResultsSection() {
             </tbody>
           </table>
           <p className="mt-3 max-w-[65ch] text-sm text-[var(--color-muted)]">
-            Clean tables raised refusals from 55 to 61 and cut wrong answers from 19 to 15: 17 of the 18 answers
+            Clean tables raised refusals from 55 to 61 and cut wrong answers from 14 to 9: 17 of the 18 answers
             that became refusals had been wrong, mostly a full-year figure reported as a quarter. A wrong figure is
             worse than a refusal, so refusals alone are the wrong scoreboard. The figure check is lower than before
             because more answers compute ratios or convert units, which it does not do by design.

@@ -5,7 +5,7 @@ import { cabinetGrotesk, satoshi, jetbrainsMono } from "./fonts";
 import { MotionProvider } from "@/components/motion-provider";
 
 const description =
-  "A public MCP server that returns cited passages from SEC filings and checks the figures in an answer against them.";
+  "A public MCP server that returns exact reported figures and cited passages from SEC filings, and checks the figures in an answer against them.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard-weld-nine-28.vercel.app"),
