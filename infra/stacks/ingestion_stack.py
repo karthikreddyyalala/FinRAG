@@ -85,10 +85,10 @@ class IngestionStack(Stack):
         )
 
         log_group = logs.LogGroup(
-            self, "IngestionLogs", retention=logs.RetentionDays.ONE_WEEK
+            self, "IngestionLogs", retention=logs.RetentionDays.ONE_MONTH
         )
 
-        fn = lambda_.Function(
+        self.fn = fn = lambda_.Function(
             self,
             "IngestionFunction",
             function_name="finrag-weekly-refresh",

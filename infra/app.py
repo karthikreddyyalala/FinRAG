@@ -10,6 +10,9 @@ env = cdk.Environment(region="us-east-1")
 app = cdk.App()
 StorageStack(app, "FinragStorageStack")
 mcp_server_stack = McpServerStack(app, "FinragMcpServerStack", env=env)
-IngestionStack(app, "FinragIngestionStack", env=env)
-ObservabilityStack(app, "FinragObservabilityStack", fn=mcp_server_stack.fn, env=env)
+ingestion_stack = IngestionStack(app, "FinragIngestionStack", env=env)
+ObservabilityStack(
+    app, "FinragObservabilityStack",
+    fn=mcp_server_stack.fn, refresh_fn=ingestion_stack.fn, env=env,
+)
 app.synth()

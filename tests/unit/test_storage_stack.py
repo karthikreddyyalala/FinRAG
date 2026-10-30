@@ -5,13 +5,13 @@ from aws_cdk.assertions import Template
 from infra.stacks.storage_stack import StorageStack
 
 
-def test_storage_stack_creates_two_buckets_and_two_tables():
+def test_storage_stack_creates_two_buckets_and_three_tables():
     app = cdk.App()
     stack = StorageStack(app, "TestStorageStack")
     template = Template.from_stack(stack)
 
     template.resource_count_is("AWS::S3::Bucket", 2)
-    template.resource_count_is("AWS::DynamoDB::Table", 2)
+    template.resource_count_is("AWS::DynamoDB::Table", 3)
     template.has_resource_properties(
         "AWS::S3::Bucket", {"BucketName": "finrag-raw-filings"}
     )
@@ -41,3 +41,18 @@ def test_storage_stack_query_cache_table_has_ttl_and_is_destroyable():
         "AWS::DynamoDB::Table",
         {"DeletionPolicy": "Delete", "Properties": {"TableName": "finrag-query-cache"}},
     )
+
+
+def test_rate_limit_table_expires_its_counters():
+    import aws_cdk as cdk
+    from aws_cdk.assertions import Template
+
+    from infra.stacks.storage_stack import StorageStack
+
+    template = Template.from_stack(StorageStack(cdk.App(), "TestStorageForRateLimits"))
+    template.has_resource_properties("AWS::DynamoDB::Table", {
+        "TableName": "finrag-rate-limits",
+        "KeySchema": [{"AttributeName": "bucket", "KeyType": "HASH"}],
+        "TimeToLiveSpecification": {"AttributeName": "expires_at", "Enabled": True},
+        "BillingMode": "PAY_PER_REQUEST",
+    })

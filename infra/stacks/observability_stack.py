@@ -11,8 +11,12 @@ this dashboard can't act on any faster than a DynamoDB scan already does.
 from __future__ import annotations
 
 from aws_cdk import Duration, Stack
+from aws_cdk import aws_budgets as budgets
 from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_cloudwatch_actions as cw_actions
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_sns as sns
+from aws_cdk import aws_sns_subscriptions as subs
 from constructs import Construct
 
 # On-demand price for a 2048 MB arm64 Lambda in us-east-1 (matches
@@ -25,7 +29,8 @@ class ObservabilityStack(Stack):
     """One dashboard: invocations, errors, p50/p99 duration, estimated cost."""
 
     def __init__(
-        self, scope: Construct, construct_id: str, *, fn: lambda_.IFunction, **kwargs
+        self, scope: Construct, construct_id: str, *, fn: lambda_.IFunction,
+        refresh_fn: lambda_.IFunction, **kwargs
     ) -> None:
         """Build the dashboard from the deployed Lambda's own metrics.
 
@@ -33,6 +38,7 @@ class ObservabilityStack(Stack):
             scope: The parent construct.
             construct_id: Logical ID of this stack within the app.
             fn: The MCP server Lambda (from McpServerStack) to graph.
+            refresh_fn: The weekly refresh Lambda (from IngestionStack), alarmed on any error.
             **kwargs: Passed through to `Stack.__init__` (e.g. `env`).
         """
         super().__init__(scope, construct_id, **kwargs)
@@ -76,3 +82,56 @@ class ObservabilityStack(Stack):
                 width=12,
             ),
         )
+
+        # Nothing alerted anyone while the weekly refresh failed every run for
+        # a month (2026-09-30 to 10-28), or when OpenAI ran out of credits.
+        topic = sns.Topic(self, "AlertsTopic", topic_name="finrag-alerts")
+        # cdk deploy -c alert_email=you@example.com; never committed.
+        email = self.node.try_get_context("alert_email")
+        if email:
+            topic.add_subscription(subs.EmailSubscription(email))
+
+        server_errors = cloudwatch.Alarm(
+            self, "McpServerErrors",
+            alarm_name="finrag-mcp-server-errors",
+            # The 5-minute health check fails 3 times in 15 minutes when
+            # retrieval is down; one stray visitor error does not page.
+            metric=fn.metric_errors(period=Duration.minutes(15), statistic="Sum"),
+            threshold=3,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        refresh_errors = cloudwatch.Alarm(
+            self, "RefreshErrors",
+            alarm_name="finrag-weekly-refresh-errors",
+            metric=refresh_fn.metric_errors(period=Duration.hours(1), statistic="Sum"),
+            threshold=1,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+        for alarm in (server_errors, refresh_errors):
+            alarm.add_alarm_action(cw_actions.SnsAction(topic))
+
+        if email:
+            # A public URL can be hammered: 10 concurrent instances nonstop is
+            # about $30/day. Email at 80% of $10/month actual spend.
+            budgets.CfnBudget(
+                self, "MonthlyBudget",
+                budget=budgets.CfnBudget.BudgetDataProperty(
+                    budget_name="finrag-monthly", budget_type="COST", time_unit="MONTHLY",
+                    budget_limit=budgets.CfnBudget.SpendProperty(amount=10, unit="USD"),
+                ),
+                notifications_with_subscribers=[
+                    budgets.CfnBudget.NotificationWithSubscribersProperty(
+                        notification=budgets.CfnBudget.NotificationProperty(
+                            notification_type="ACTUAL", comparison_operator="GREATER_THAN",
+                            threshold=80, threshold_type="PERCENTAGE",
+                        ),
+                        subscribers=[budgets.CfnBudget.SubscriberProperty(
+                            subscription_type="EMAIL", address=email,
+                        )],
+                    )
+                ],
+            )

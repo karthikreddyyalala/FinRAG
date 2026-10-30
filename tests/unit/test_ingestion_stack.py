@@ -102,3 +102,17 @@ def test_tmp_fits_the_keyword_index_and_the_chunk_cache_together():
         "EphemeralStorage": {"Size": 4096},
         "MemorySize": 2048,
     })
+
+
+def test_refresh_logs_kept_30_days_so_failures_can_be_diagnosed():
+    """Retention was 7 days; the causes of the Sep-Oct 2026 refresh failures were lost."""
+    import aws_cdk as cdk
+    from aws_cdk.assertions import Template
+
+    from infra.stacks.ingestion_stack import IngestionStack
+
+    app = cdk.App(context={"aws:cdk:bundling-stacks": []})
+    stack = IngestionStack(app, "TestIngestionRetention",
+                           env=cdk.Environment(account="123456789012", region="us-east-1"))
+    Template.from_stack(stack).has_resource_properties("AWS::Logs::LogGroup",
+                                                       {"RetentionInDays": 30})
