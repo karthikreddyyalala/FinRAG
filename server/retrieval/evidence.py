@@ -16,7 +16,7 @@ from server.retrieval.hybrid_retriever import hybrid_search
 from server.retrieval.query_cleaner import clean_question
 from server.retrieval.query_filters import extract_filters, period_window, wants_annual
 from server.retrieval.query_rewriter import expand_financial_terms
-from server.retrieval.reranker import rerank
+from server.retrieval.reranker import rerank, voyage_tokens
 
 # A large schedule table can run to tens of thousands of characters; one such
 # chunk must not flood the client's context on its own.
@@ -26,6 +26,8 @@ MAX_PASSAGE_CHARS = 8000
 # neural reranker; lexical scoring got worse at 40 (23.6%, number metric down).
 CANDIDATES_PER_SOURCE = 40
 KEYWORD_ONLY_NOTE = "Keyword search only: semantic search is unavailable right now."
+BUDGET_NOTE = ("Ranked by keyword overlap: today's reranking budget is used up, so these "
+               "passages may be less relevant. It resets at 00:00 UTC.")
 NO_MATCH_NOTE = (
     "No passages matched. Try the filing's own wording or a different year, "
     "or call list_covered_companies."
@@ -41,6 +43,7 @@ def find_passages(
     years: tuple[int, int] | None = None,
     top_k: int = 5,
     stage: str = "reranked",
+    voyage_budget: Callable[[int], bool] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Find the chunks that best answer a question.
 
@@ -56,7 +59,9 @@ def find_passages(
         years: (first, last) fiscal years; when None, years in the question.
         top_k: Chunks to keep after reranking.
         stage: "reranked" (default) or "candidates" (everything retrieved,
-            before reranking, for evals).
+            before reranking, for evals and the health check).
+        voyage_budget: Called with the tokens a Voyage rerank would bill;
+            False means rank by keyword overlap instead. None: no cap (evals).
 
     Returns:
         (chunks, note). note is None, or a short message for the client:
@@ -102,14 +107,19 @@ def find_passages(
     if stage == "candidates":
         chunks = candidates
     else:
-        chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=lexical_query)
+        use_voyage = voyage_budget is None or voyage_budget(voyage_tokens(search_query, candidates))
+        chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=lexical_query,
+                        use_voyage=use_voyage)
+        if not use_voyage:
+            note = f"{note} {BUDGET_NOTE}" if note else BUDGET_NOTE
     if not chunks:
         note = f"{note} {NO_MATCH_NOTE}" if note == KEYWORD_ONLY_NOTE else NO_MATCH_NOTE
     elif stage == "reranked" and years and period_range and not any(
         period_range[0] <= (c.get("period") or "") <= period_range[1] for c in chunks
     ):
         span = str(years[0]) if years[0] == years[1] else f"{years[0]}-{years[1]}"
-        note = f"No filings matched {span}; these passages are from other years."
+        year_note = f"No filings matched {span}; these passages are from other years."
+        note = f"{note} {year_note}" if note else year_note
     return chunks, note
 
 

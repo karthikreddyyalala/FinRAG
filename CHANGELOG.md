@@ -2,6 +2,16 @@
 
 What changed, what was broken before, how it was found, and what it measured. Newest first. Every number here was measured on the same index on the same day as its "before", unless it says otherwise. Raw results are in `evals/results/` (gitignored, kept locally); the scripts that produce them are committed.
 
+## 2026-10-30: Voyage spend capped, health check stopped reranking (PR #21)
+
+**What was broken.** Voyage spend passed the $2 budget alert on the day the reranker shipped. The evals were planned on the assumption that the first 200M tokens were free; they were billed at $0.05 per million, and about 40M tokens of evals cost about $2. Reading the code for a fix found a second leak: the health check runs a real search every 5 minutes, and since the reranker shipped each one called Voyage, about 9.5M tokens a day, or roughly $14 a month with no visitors at all. A public endpoint with no cap could also cost about $1.60 a day at the shared limit of 1,000 calls.
+
+**What changed.**
+- The health check retrieves candidates only. It still proves embeddings, Pinecone, the keyword index and the full-text lookup work; ranking adds nothing to that.
+- A daily Voyage budget: `VOYAGE_TOKENS_PER_DAY` = 2M tokens (about $3 a month), counted in the existing rate-limit table with a conditional add, so concurrent calls cannot overshoot. Past it, search ranks by keyword overlap and the result carries a note saying so; noted results are never cached. Unlike the call limit it fails closed: if the counter cannot be read, Voyage is not called.
+- Exact figures never use Voyage, and most numeric questions now go there.
+- Docs no longer claim free tokens.
+
 ## 2026-10-30: Exact figures for any US-listed company, and an end-to-end eval (M2, PR #21)
 
 **What was broken.** After three rounds of retrieval fixes, the one-shot test still refused about 4 in 10 questions with a numeric answer. Comparing with other finance MCP servers showed why: they don't search filing text for numbers at all. They read the XBRL data every 10-K and 10-Q carries, where each figure is a tagged value. FinRAG was asking search to find one table row among 171,790 chunks and asking a model to read it out of HTML tables. Ratio questions needed two or three such rows at once, and fourth-quarter questions asked for a number no filing states.
@@ -97,7 +107,7 @@ The header row is column numbers instead of years, every merged cell is copied i
 - The 10-K preference alone moved evidence in top 5 from 13.4% to 22.0%.
 - 40 candidates helped only with the neural reranker; the word-overlap scorer got slightly worse with them.
 - The figure-check rate fell because more answers now compute ratios or convert units, which `verify_figures` does not do by design.
-- Live: search 1.08 s median, 0.37 s cached. About 33K Voyage tokens per search (first 200M free, then about $0.0016 a search).
+- Live: search 1.08 s median, 0.37 s cached. About 33K Voyage tokens per search, about $0.0016 at $0.05 per million. (The first version of this entry said the first 200M tokens were free; they were not billed that way on this account.)
 
 **Operational notes.** The Voyage key lives in SSM at `/finrag/voyage-api-key` and is required at cold start. Voyage needs a payment method on file: without one it allows 10K tokens a minute, and one search uses about 33K, so every search would fall back.
 

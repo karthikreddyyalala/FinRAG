@@ -116,11 +116,21 @@ def _voyage_order(query: str, chunks: list[dict[str, Any]], top_k: int) -> list[
     return [d["index"] for d in resp.json()["data"]]
 
 
+def voyage_tokens(query: str, chunks: list[dict[str, Any]]) -> int:
+    """Tokens Voyage will bill for one rerank, estimated at 4 characters a token.
+
+    Voyage bills the query once per document plus every document.
+    """
+    docs = sum(len((c.get("text") or "")[:MAX_DOC_CHARS]) for c in chunks)
+    return (docs + len(query) * len(chunks)) // 4 + 1
+
+
 def rerank(
     query: str,
     chunks: list[dict[str, Any]],
     top_k: int = 5,
     lexical_query: str | None = None,
+    use_voyage: bool = True,
 ) -> list[dict[str, Any]]:
     """Rerank candidate chunks by relevance to the query, keeping the top_k.
 
@@ -135,6 +145,7 @@ def rerank(
             found -- "capital expenditure" shares no term with "Purchases of
             property, plant and equipment". Voyage keeps using `query`,
             since it is trained on natural phrasing.
+        use_voyage: False skips Voyage (its daily budget is spent).
 
     Returns:
         Up to top_k chunks, most relevant first.
@@ -142,7 +153,7 @@ def rerank(
     if not chunks:
         return []
 
-    if os.environ.get("VOYAGE_API_KEY"):
+    if use_voyage and os.environ.get("VOYAGE_API_KEY"):
         try:
             return [chunks[i] for i in _voyage_order(query, chunks, top_k)]
         except Exception as exc:

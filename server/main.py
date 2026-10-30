@@ -152,9 +152,10 @@ def run_health_check(deps: Deps) -> dict[str, Any]:
     balance (2026-10-24, 2026-10-28) surfaces within minutes instead of in
     front of a visitor. The schedule also keeps one instance warm.
     """
+    # Candidates only: reranking every 5 minutes cost ~9.5M Voyage tokens a day.
     chunks, note = find_passages(
         HEALTH_CHECK["question"], deps.pinecone_index, deps.keyword_index, deps.embed_fn,
-        ticker=HEALTH_CHECK["ticker"], years=HEALTH_CHECK["years"],
+        ticker=HEALTH_CHECK["ticker"], years=HEALTH_CHECK["years"], stage="candidates",
     )
     if note or not chunks:
         raise RuntimeError(f"health check failed: {len(chunks)} passages, note={note!r}")

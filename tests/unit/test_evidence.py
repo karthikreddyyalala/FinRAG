@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -213,3 +213,21 @@ def test_float_copies_of_a_year_header_merge():
         "Cash | $ | 1115 | $ | 827"
     )
     assert clean_table_text(table) == "As of June 30, | 2026 | 2025\nCash | $1115 | $827"
+
+
+def test_spent_voyage_budget_falls_back_to_keyword_ranking_and_says_so(monkeypatch):
+    monkeypatch.setenv("VOYAGE_API_KEY", "test-key")
+    index = FakeKeywordIndex([chunk("a1", CAPEX_ROW)])
+    asked = []
+
+    def budget(tokens):
+        asked.append(tokens)
+        return False
+
+    with patch("server.retrieval.reranker._voyage_order") as voyage:
+        chunks, note = find_passages("3M capex 2018", pinecone_returning([]), index, _embed,
+                                     voyage_budget=budget)
+    voyage.assert_not_called()
+    assert asked and asked[0] > 0
+    assert [c["chunk_id"] for c in chunks] == ["a1"]
+    assert "reranking budget" in note

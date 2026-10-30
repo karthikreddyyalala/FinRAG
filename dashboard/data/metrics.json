@@ -135,6 +135,6 @@
     "value": 0.0017,
     "display": "$0.0017",
     "source_file": "estimate",
-    "source_detail": "Estimate, not a bill: about 32,600 Voyage rerank-2.5 tokens at $0.05 per million (the first 200M tokens are free), plus 2 GB Lambda arm64 x about 1 s and one text-embedding-3-small query embedding"
+    "source_detail": "Estimate, not a bill: about 32,600 Voyage rerank-2.5 tokens at $0.05 per million, plus 2 GB Lambda arm64 x about 1 s and one text-embedding-3-small query embedding. Voyage spend is capped at 2M tokens a day."
   }
 }

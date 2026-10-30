@@ -90,6 +90,8 @@ def test_health_check_runs_one_real_retrieval():
         assert main.handler({"finrag_health_check": True}, MagicMock()) == {
             "ok": True, "passages": 1}
     assert fp.call_args.kwargs["ticker"] == "MMM"
+    # Every 5 minutes, around the clock: reranking it cost ~9.5M Voyage tokens a day.
+    assert fp.call_args.kwargs["stage"] == "candidates"
 
 
 @pytest.mark.parametrize("found", [([], None), ([{"chunk_id": "a1"}], "Keyword search only")])

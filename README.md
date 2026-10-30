@@ -123,7 +123,7 @@ Measured against the deployed URL by [scripts/live_check.py](scripts/live_check.
 | Search, cache hit | 0.37 s median |
 | First call after a deploy (cold) | 14.9 s, mostly loading the 964 MB index |
 | `initialize` / `tools/list` | 0.30 s / 0.24 s (neither loads the index) |
-| Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens ($0 within the first 200M free), plus 2 GB Lambda for about 1 s and one embedding |
+| Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens at $0.05 per million, plus 2 GB Lambda for about 1 s and one embedding. Voyage spend is capped at 2M tokens a day (about $3 a month); past it, search ranks by keyword overlap and says so. A figures call costs only the Lambda time |
 
 The old pipeline averaged 24.1 s per question, because it spent most of that time waiting on throttled model calls.
 
@@ -251,7 +251,7 @@ You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 o
    aws ssm put-parameter --region us-east-1 --name /finrag/pinecone-api-key --type SecureString --value <your-pinecone-key>
    aws ssm put-parameter --region us-east-1 --name /finrag/voyage-api-key --type SecureString --value <your-voyage-key>
    ```
-   All three are required: a Lambda fails its cold start if one is missing. Voyage needs a payment method on file; without one it allows 10K tokens a minute and a single search uses about 33K. The first 200M tokens are free.
+   All three are required: a Lambda fails its cold start if one is missing. Voyage needs a payment method on file; without one it allows 10K tokens a minute and a single search uses about 33K. Voyage bills $0.05 per million tokens; `VOYAGE_TOKENS_PER_DAY` in `server/rate_limit.py` caps the daily spend.
 5. Deploy. `cdk.json` already points at the app, and `bootstrap` is needed once per account and region:
 
    ```bash
