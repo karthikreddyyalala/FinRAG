@@ -119,8 +119,9 @@ Measured against the deployed URL by [scripts/live_check.py](scripts/live_check.
 
 | | |
 |---|---|
-| Search, warm, cache miss | 1.08 s median, 1.25 s max (10 questions, Voyage reranker) |
-| Search, cache hit | 0.37 s median |
+| Search, warm, cache miss | 0.98 s median, 1.43 s max (10 questions, Voyage reranker) |
+| Figures, warm | 2.8 to 3.7 s the first time a company is asked for (its SEC data is fetched), 0.28 s after |
+| Search, cache hit | 0.38 s median |
 | First call after a deploy (cold) | 14.9 s, mostly loading the 964 MB index |
 | `initialize` / `tools/list` | 0.30 s / 0.24 s (neither loads the index) |
 | Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens at $0.05 per million, plus 2 GB Lambda for about 1 s and one embedding. Voyage spend is capped at 2M tokens a day (about $3 a month); past it, search ranks by keyword overlap and says so. A figures call costs only the Lambda time |
