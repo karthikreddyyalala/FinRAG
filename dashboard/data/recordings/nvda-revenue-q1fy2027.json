@@ -1,0 +1,62 @@
+{
+  "id": "nvda-revenue-q1fy2027",
+  "question": "What was Nvidia's total revenue for the three months ended April 26, 2026?",
+  "tool": "search_sec_filings",
+  "arguments": {
+    "question": "NVDA total revenue for the three months ended April 2026",
+    "ticker": "NVDA",
+    "fiscal_year": 2026
+  },
+  "tool_ms": 443,
+  "passages": [
+    {
+      "id": "baebf2c1453425abaaa351a97f536542",
+      "citation": "[NVDA 10-Q 2026-05-20]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-05-20",
+      "excerpt": "Three Months Ended | Apr 26, 2026 | Apr 27, 2025 | Revenue | 100.0 | % | 100.0 | % | Cost of revenue | 25.1 | 39.5 | Gross profit | 74.9 | 60.5 | Operating expenses | Research and development | 7.7 | 9.1 | Sales, general and administrative | 1.6 | 2.4 | Total operating expenses | 9.3 | 11.5 | Operat"
+    },
+    {
+      "id": "3d391e2cc556b45b37b61e7810c1cfa5",
+      "citation": "[NVDA 10-Q 2026-05-20]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-05-20",
+      "excerpt": "Three Months Ended | Apr 26, 2026 | Apr 27, 2025 | Revenue | $ | 81615 | $ | 44062 | Cost of revenue | 20458 | 17394 | Gross profit | 61157 | 26668 | Operating expenses | Research and development | 6321 | 3989 | Sales, general and administrative | 1300 | 1041 | Total operating expenses | 7621 | 5030"
+    },
+    {
+      "id": "1bde11a66b831b1c15676a8dca786f50",
+      "citation": "[NVDA 10-Q 2026-08-26]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-08-26",
+      "excerpt": "Three Months Ended | Six Months Ended | Jul 26, 2026 | Jul 27, 2025 | Jul 26, 2026 | Jul 27, 2025 | Revenue | 100.0 | % | 100.0 | % | 100.0 | % | 100.0 | % | Cost of revenue | 25.0 | 27.6 | 25.0 | 33.4 | Gross profit | 75.0 | 72.4 | 75.0 | 66.6 | Operating expenses | Research and development | 7.4 |"
+    },
+    {
+      "id": "bf9bbda74216435c67f5396f5b2e39cf",
+      "citation": "[NVDA 10-Q 2026-08-26]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-08-26",
+      "excerpt": "Three Months Ended | Six Months Ended | Jul 26, 2026 | Jul 27, 2025 | Jul 26, 2026 | Jul 27, 2025 | Revenue | $ | 96221 | $ | 46743 | $ | 177837 | $ | 90805 | Cost of revenue | 24079 | 12890 | 44538 | 30284 | Gross profit | 72142 | 33853 | 133299 | 60521 | Operating expenses | Research and developme"
+    },
+    {
+      "id": "189a7f9c84d606a30326eaad583be020",
+      "citation": "[NVDA 10-Q 2026-05-20]",
+      "ticker": "NVDA",
+      "form": "10-Q",
+      "filed": "2026-05-20",
+      "excerpt": "0001045810 1/31 2027 Q1 FALSE http://fasb.org/us-gaap/2025#AccruedLiabilitiesCurrent 590 xbrli:shares iso4217:USD iso4217:USD xbrli:shares xbrli:pure nvda:segment 0001045810 2026-01-26 2026-04-26 0001045810 2026-05-15 0001045810 2025-01-27 2025-04-27 0001045810 2026-04-26 0001045810 2026-01-25 00010"
+    }
+  ],
+  "answer": "Nvidia's total revenue for the three months ended April 26, 2026, was $81,615 million [NVDA 10-Q 2026-05-20].",
+  "model": "gpt-4o-mini",
+  "verify": {
+    "grounded": [
+      "$81,615 million"
+    ],
+    "not_found": []
+  },
+  "recorded_at": "2026-10-30T14:14:13Z"
+}

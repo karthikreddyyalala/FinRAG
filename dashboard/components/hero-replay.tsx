@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CheckCircleIcon, PlayIcon } from "@phosphor-icons/react";
-import { RECORDINGS, type Recording } from "@/lib/recordings";
+import { CheckCircleIcon, PlayIcon, WarningIcon } from "@phosphor-icons/react";
+import { RECORDINGS, citationLabels, type Recording } from "@/lib/recordings";
 import { PipelineRail, PIPELINE_STAGES } from "@/components/pipeline-rail";
 
 type Phase = "typing" | "pipeline" | "streaming" | "done";
@@ -71,6 +71,9 @@ function ReplayPlayer({ recording }: { recording: Recording }) {
 
       {(phase === "pipeline" || phase === "streaming" || phase === "done") && (
         <div className="mt-4">
+          <p className="mb-2 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-muted)]">
+            {recording.tool} returned {recording.passages.length} passages in {recording.tool_ms} ms
+          </p>
           <PipelineRail activeIndex={stageIndex} />
         </div>
       )}
@@ -79,6 +82,11 @@ function ReplayPlayer({ recording }: { recording: Recording }) {
         <div className="mt-4 whitespace-pre-line text-sm leading-relaxed text-[var(--color-text)]">
           {recording.answer.slice(0, streamedChars)}
         </div>
+      )}
+      {phase === "done" && (
+        <p className="mt-2 text-[11px] text-[var(--color-muted)]">
+          Answer by {recording.model} (eval client). In Claude, your own model writes it.
+        </p>
       )}
 
       <AnimatePresence>
@@ -89,16 +97,26 @@ function ReplayPlayer({ recording }: { recording: Recording }) {
             transition={{ type: "spring", stiffness: 100, damping: 20 }}
             className="mt-4 flex flex-wrap gap-2"
           >
-            {Array.from(new Set(recording.citations.map((c) => `${c.ticker} ${c.filing_type} ${c.period}`))).map(
-              (label) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center gap-1 rounded-full border border-[var(--color-grounded)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-grounded)]"
-                >
-                  <CheckCircleIcon size={12} weight="fill" />
-                  {label}
-                </span>
-              )
+            {citationLabels(recording).map((label) => (
+              <span
+                key={label}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--color-grounded)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-grounded)]"
+              >
+                <CheckCircleIcon size={12} weight="fill" />
+                {label}
+              </span>
+            ))}
+            {recording.verify.grounded.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-grounded)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-grounded)]">
+                <CheckCircleIcon size={12} weight="fill" />
+                {recording.verify.grounded.length} figures grounded
+              </span>
+            )}
+            {recording.verify.not_found.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-flagged)] px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-flagged)]">
+                <WarningIcon size={12} weight="fill" />
+                not_found: {recording.verify.not_found.join(", ")}
+              </span>
             )}
           </motion.div>
         )}
@@ -116,7 +134,7 @@ export function HeroReplay() {
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-card)] [box-shadow:var(--shadow-card),inset_0_1px_0_rgba(255,255,255,0.06)]">
       <div className="flex items-center justify-between gap-2">
         <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-wide text-[var(--color-muted)]">
-          Recorded from the production pipeline
+          Recorded from the live server
         </span>
         <button
           type="button"
@@ -145,7 +163,7 @@ export function HeroReplay() {
                 : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]"
             }`}
           >
-            {r.id === "mmm-capex-fy2018" ? "3M capex" : r.id === "nvda-revenue-q1fy2026" ? "NVDA revenue" : "TSLA vs F"}
+            {r.id === "mmm-capex-fy2018" ? "3M capex" : r.id === "nvda-revenue-q1fy2027" ? "NVDA revenue" : "TSLA vs F"}
           </button>
         ))}
       </div>

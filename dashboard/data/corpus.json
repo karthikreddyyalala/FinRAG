@@ -1,0 +1,12 @@
+{
+  "companies": 71,
+  "filings": 1082,
+  "chunks": 171790,
+  "by_form": {
+    "10-K": 299,
+    "10-Q": 519,
+    "8-K": 264
+  },
+  "generated_at": "2026-10-30T14:11:49Z",
+  "source": "evals/results/keyword_index.sqlite coverage table"
+}

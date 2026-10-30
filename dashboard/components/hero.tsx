@@ -1,4 +1,5 @@
 import { HeroReplay } from "@/components/hero-replay";
+import { GITHUB_URL } from "@/lib/constants";
 import { Cited } from "@/components/cited";
 
 export function Hero() {
@@ -20,23 +21,24 @@ export function Hero() {
             Financial answers you can check.
           </h1>
           <p className="mt-6 max-w-[52ch] text-lg leading-relaxed text-[var(--color-muted)]">
-            FinRAG MCP gives Claude, Cursor, or any MCP client answers grounded in{" "}
-            <Cited metric="filings_count" /> SEC filings, and flags any number it can&apos;t find in the source.
+            FinRAG MCP gives Claude, Cursor, or any MCP client cited passages from{" "}
+            <Cited metric="filings_count" /> SEC filings, and checks every figure in the answer against them. Add it
+            to Claude, no sign-in.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
-              href="https://github.com/karthikreddyyalala/FinRAG"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#connect"
               className="flex cursor-pointer items-center justify-center rounded-full bg-[var(--color-grounded)] px-6 py-3 text-sm font-semibold text-[var(--color-bg)] transition-transform duration-200 active:translate-y-[1px] active:scale-[0.98]"
             >
-              Read the code
+              Add to Claude
             </a>
             <a
-              href="#deploy"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex cursor-pointer items-center justify-center rounded-full border border-[var(--color-border)] px-6 py-3 text-sm font-semibold text-[var(--color-text)] transition-transform duration-200 active:translate-y-[1px] active:scale-[0.98]"
             >
-              Deploy your own
+              Read the code
             </a>
           </div>
         </div>

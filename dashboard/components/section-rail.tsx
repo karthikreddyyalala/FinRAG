@@ -8,7 +8,7 @@ const RAIL_SECTIONS = [
   { id: "tools", icon: DatabaseIcon, label: "Tools" },
   { id: "results", icon: ChartBarIcon, label: "Results" },
   { id: "incidents", icon: BugIcon, label: "Incidents" },
-  { id: "deploy", icon: CloudArrowUpIcon, label: "Deploy" },
+  { id: "connect", icon: CloudArrowUpIcon, label: "Connect" },
 ] as const;
 
 export function SectionRail() {
