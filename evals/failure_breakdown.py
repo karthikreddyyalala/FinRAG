@@ -130,10 +130,12 @@ def classify(row: dict, question: dict, cache: dict) -> str:
     verdict = states_correct_number(row["answer"], row["ground_truth"])
     if verdict is None:
         return "no_numeric_truth"
-    if verdict:
+    refused = is_refusal(row["answer"])
+    # A refusal is never correct: "cannot determine ... 2022 ... 1.5" used to
+    # match a ground truth by accident (11 of 55 M3 refusals, 2026-10-30).
+    if verdict and not refused:
         return "correct"
     retrieved = truth_in_contexts(row["ground_truth"], row["contexts"])
-    refused = is_refusal(row["answer"])
     if refused:
         return "refused_data_in_ctx" if retrieved else "refused_retrieval"
     return "wrong_in_ctx" if retrieved else "wrong_retrieval"

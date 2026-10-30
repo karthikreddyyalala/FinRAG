@@ -57,3 +57,8 @@ def test_main_scores_a_given_answers_file(tmp_path, capsys):
     fb.main(["--answers", str(path)])
     out = capsys.readouterr().out
     assert "out_of_scope" in out and "total" in out
+
+
+def test_a_refusal_that_happens_to_contain_the_number_is_not_correct():
+    answer = "The context does not provide 3M's capex, so I cannot confirm $1,577 million."
+    assert classify(row(answer, []), Q, CACHE) == "refused_retrieval"
