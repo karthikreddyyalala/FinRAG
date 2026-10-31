@@ -6,6 +6,10 @@ Plug it into Claude, Cursor or any MCP client. Ask "What was Netflix's revenue i
 
 **Site:** [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app)
 
+
+https://github.com/user-attachments/assets/89bbf8e2-70b0-4cb8-ab02-e99512226f85
+
+
 ## Connect
 
 No sign-in needed. Server URL:
