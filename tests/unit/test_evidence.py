@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -150,3 +150,84 @@ def test_fiscal_year_argument_also_prefers_the_annual_report():
         "Netflix revenue", pinecone_returning([]), index, _embed, ticker="NFLX", years=(2023, 2023)
     )
     assert [c["chunk_id"] for c in chunks] == ["k1"]
+
+
+# pd.read_html serialization, as stored for 45% of chunks (Amcor FY2020 10-K).
+RAW_TABLE = "\n".join([
+    "0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8",
+    " |  |  |  |  |  |  |  | ",
+    "(In millions) | (In millions) |  | 2020 | 2020 |  | 2019 | 2019 | ",
+    "Net sales | Net sales |  | $ | 12467.5 |  | $ | 9458.2 | ",
+    "Dividends per share | Dividends per share |  | 0.20 |  |  | 0.20 |  | ",
+    "Other | Other |  | (17 | ) |  | 3.5 | % | ",
+])
+
+
+def test_table_text_drops_column_numbers_spacers_and_colspan_copies():
+    from server.retrieval.evidence import clean_table_text
+
+    assert clean_table_text(RAW_TABLE) == "\n".join([
+        "(In millions) | 2020 | 2019",
+        "Net sales | $12467.5 | $9458.2",
+        "Dividends per share | 0.20 | 0.20",
+        "Other | (17) | 3.5%",
+    ])
+
+
+def test_equal_values_in_neighbouring_columns_are_kept():
+    """Collapsing 0.20 | 0.20 across two years would shift every column after it."""
+    from server.retrieval.evidence import clean_table_text
+
+    table = "0 | 1 | 2\n | 2020 | 2019\nEPS | 0.20 | 0.20"
+    assert clean_table_text(table) == " | 2020 | 2019\nEPS | 0.20 | 0.20"
+
+
+def test_an_empty_cell_keeps_its_column():
+    """Dropping a blank 2020 cell would put the 2019 value under 2020."""
+    from server.retrieval.evidence import clean_table_text
+
+    table = "0 | 1 | 2\n | 2020 | 2019\nGoodwill impairment |  | 41"
+    assert clean_table_text(table).splitlines()[1] == "Goodwill impairment |  | 41"
+
+
+def test_prose_and_real_numeric_headers_are_untouched():
+    from server.retrieval.evidence import clean_table_text
+
+    prose = "Revenue grew 4% | driven by cloud."
+    assert clean_table_text(prose) == prose
+    assert clean_table_text("2020 | 2019\nRevenue | 5 | 4").startswith("2020 | 2019")
+
+
+def test_passages_reach_the_reranker_and_client_cleaned():
+    index = FakeKeywordIndex([chunk("t1", RAW_TABLE)])
+    chunks, _ = find_passages("Amcor net sales 2020", pinecone_returning([]), index, _embed)
+    assert chunks[0]["text"].startswith("(In millions) | 2020 | 2019")
+
+
+def test_float_copies_of_a_year_header_merge():
+    from server.retrieval.evidence import clean_table_text
+
+    table = (
+        "0 | 1 | 2 | 3 | 4\n"
+        "As of June 30, | 2026 | 2026.0 | 2025 | 2025.0\n"
+        "Cash | $ | 1115 | $ | 827"
+    )
+    assert clean_table_text(table) == "As of June 30, | 2026 | 2025\nCash | $1115 | $827"
+
+
+def test_spent_voyage_budget_falls_back_to_keyword_ranking_and_says_so(monkeypatch):
+    monkeypatch.setenv("VOYAGE_API_KEY", "test-key")
+    index = FakeKeywordIndex([chunk("a1", CAPEX_ROW)])
+    asked = []
+
+    def budget(tokens):
+        asked.append(tokens)
+        return False
+
+    with patch("server.retrieval.reranker._voyage_order") as voyage:
+        chunks, note = find_passages("3M capex 2018", pinecone_returning([]), index, _embed,
+                                     voyage_budget=budget)
+    voyage.assert_not_called()
+    assert asked and asked[0] > 0
+    assert [c["chunk_id"] for c in chunks] == ["a1"]
+    assert "reranking budget" in note

@@ -7,24 +7,8 @@
     "ticker": "MMM",
     "fiscal_year": 2018
   },
-  "tool_ms": 340,
+  "tool_ms": 1436,
   "passages": [
-    {
-      "id": "2de78345fbe37e5e122fe84deaa4b8e7",
-      "citation": "[MMM 10-K 2019-02-07]",
-      "ticker": "MMM",
-      "form": "10-K",
-      "filed": "2019-02-07",
-      "excerpt": "...rovided by operating activities | $ | 6439 | $ | 6240 | $ | 6662 | Purchases of property, plant and equipment (PP&E) | (1,577) | (1,373) | (1,420) | Free cash flow | $ | 4862 | $ | 4867 | $ | 5242 | Net income attributable to 3M | $ | 5349 | $ | 4858 | $ | 5050 | Free cash flow conversion | 91 | % |"
-    },
-    {
-      "id": "dd73d7b90db05fb25e0afad9af01cf0d",
-      "citation": "[MMM 10-K 2019-02-07]",
-      "ticker": "MMM",
-      "form": "10-K",
-      "filed": "2019-02-07",
-      "excerpt": "Years ended December 31 | (Millions) | 2018 | 2017 | 2016 | Purchases of property, plant and equipment (PP&E) | $ | (1,577) | $ | (1,373) | $ | (1,420) | Proceeds from sale of PP&E and other assets | 262 | 49 | 58 | Acquisitions, net of cash acquired | 13 | (2,023) | (16) | Purchases and proceeds fr"
-    },
     {
       "id": "5d44fe78114e18919005a0d70ddd24e4",
       "citation": "[MMM 10-K 2019-02-07]",
@@ -34,30 +18,45 @@
       "excerpt": "Company pension and postretirement contributions Company pension and postretirement expense Income taxes (deferred and accrued income taxes) Net cash provided by operating activities Cash flows from operating activities can fluctuate significantly from period to period, as pension funding decisions,"
     },
     {
-      "id": "b61e029f993f64aa61aec9106958b8da",
+      "id": "92b3ab0ae49e688caee769614bc6c911",
       "citation": "[MMM 10-K 2019-02-07]",
       "ticker": "MMM",
       "form": "10-K",
       "filed": "2019-02-07",
-      "excerpt": "Earnings per share attributable to 3M common shareholders — basic Weighted average 3M common shares outstanding — diluted Earnings per share attributable to 3M common shareholders — diluted The accompanying Notes to Consolidated Financial Statements are an integral part of this statement. Consolidat"
+      "excerpt": "Refer to the “Overview” section for a summary of net sales by geographic area and business segment. Geographic Area Supplemental Information Employment increased 1,980 positions in 2018 and decreased by 48 positions in 2017. Capital Spending/Net Property, Plant and Equipment: Investments in property"
     },
     {
-      "id": "0455ee57db4735d95cb11648821ebcdb",
+      "id": "2de78345fbe37e5e122fe84deaa4b8e7",
       "citation": "[MMM 10-K 2019-02-07]",
       "ticker": "MMM",
       "form": "10-K",
       "filed": "2019-02-07",
-      "excerpt": "In 2018, free cash flow conversion was impacted by the $176 million measurement period adjustment to the tax expense recorded in December 2017 from the enactment of the TCJA, the $897 million pre-tax impact related to the resolution of the Minnesota natural resource damages (NRD), and the $381 milli"
+      "excerpt": "...et cash provided by operating activities | $6439 | $6240 | $6662 | Purchases of property, plant and equipment (PP&E) | (1,577) | (1,373) | (1,420) | Free cash flow | $4862 | $4867 | $5242 | Net income attributable to 3M | $5349 | $4858 | $5050 | Free cash flow conversion | 91% | 100% | 104%"
+    },
+    {
+      "id": "c906d99835da7f010bb33f26f4331a91",
+      "citation": "[MMM 10-K 2019-02-07]",
+      "ticker": "MMM",
+      "form": "10-K",
+      "filed": "2019-02-07",
+      "excerpt": "The Company believes that its patents provide an important competitive advantage in many of its businesses. In general, no single patent or group of related patents is in itself essential to the Company as a whole or to any of the Company’s business segments. In 2018, the Company experienced raw mat"
+    },
+    {
+      "id": "10902d5151e3d30be10c1f771890a01c",
+      "citation": "[MMM 10-K 2019-02-07]",
+      "ticker": "MMM",
+      "form": "10-K",
+      "filed": "2019-02-07",
+      "excerpt": "The Company believes that its patents provide an important competitive advantage in many of its businesses. In general, no single patent or group of related patents is in itself essential to the Company as a whole or to any of the Company’s business segments. In 2018, the Company experienced raw mat"
     }
   ],
-  "answer": "3M's capital expenditure in fiscal year 2018 was $(1,577) million, indicating spending of $1,577 million on purchases of property, plant and equipment (PP&E) [MMM 10-K 2019-02-07].",
+  "answer": "3M's capital expenditure in fiscal year 2018 was $(1,577) million [MMM 10-K 2019-02-07].",
   "model": "gpt-4o-mini",
   "verify": {
     "grounded": [
-      "1,577",
-      "$1,577 million"
+      "1,577"
     ],
     "not_found": []
   },
-  "recorded_at": "2026-10-30T14:14:06Z"
+  "recorded_at": "2026-10-30T20:48:28Z"
 }

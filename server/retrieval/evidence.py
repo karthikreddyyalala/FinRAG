@@ -8,6 +8,7 @@ waiting on throttles before silently falling back to OpenAI, and timed out at
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -15,7 +16,7 @@ from server.retrieval.hybrid_retriever import hybrid_search
 from server.retrieval.query_cleaner import clean_question
 from server.retrieval.query_filters import extract_filters, period_window, wants_annual
 from server.retrieval.query_rewriter import expand_financial_terms
-from server.retrieval.reranker import rerank
+from server.retrieval.reranker import rerank, voyage_tokens
 
 # A large schedule table can run to tens of thousands of characters; one such
 # chunk must not flood the client's context on its own.
@@ -25,6 +26,8 @@ MAX_PASSAGE_CHARS = 8000
 # neural reranker; lexical scoring got worse at 40 (23.6%, number metric down).
 CANDIDATES_PER_SOURCE = 40
 KEYWORD_ONLY_NOTE = "Keyword search only: semantic search is unavailable right now."
+BUDGET_NOTE = ("Ranked by keyword overlap: today's reranking budget is used up, so these "
+               "passages may be less relevant. It resets at 00:00 UTC.")
 NO_MATCH_NOTE = (
     "No passages matched. Try the filing's own wording or a different year, "
     "or call list_covered_companies."
@@ -40,6 +43,7 @@ def find_passages(
     years: tuple[int, int] | None = None,
     top_k: int = 5,
     stage: str = "reranked",
+    voyage_budget: Callable[[int], bool] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Find the chunks that best answer a question.
 
@@ -55,7 +59,9 @@ def find_passages(
         years: (first, last) fiscal years; when None, years in the question.
         top_k: Chunks to keep after reranking.
         stage: "reranked" (default) or "candidates" (everything retrieved,
-            before reranking, for evals).
+            before reranking, for evals and the health check).
+        voyage_budget: Called with the tokens a Voyage rerank would bill;
+            False means rank by keyword overlap instead. None: no cap (evals).
 
     Returns:
         (chunks, note). note is None, or a short message for the client:
@@ -101,14 +107,19 @@ def find_passages(
     if stage == "candidates":
         chunks = candidates
     else:
-        chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=lexical_query)
+        use_voyage = voyage_budget is None or voyage_budget(voyage_tokens(search_query, candidates))
+        chunks = rerank(search_query, candidates, top_k=top_k, lexical_query=lexical_query,
+                        use_voyage=use_voyage)
+        if not use_voyage:
+            note = f"{note} {BUDGET_NOTE}" if note else BUDGET_NOTE
     if not chunks:
         note = f"{note} {NO_MATCH_NOTE}" if note == KEYWORD_ONLY_NOTE else NO_MATCH_NOTE
     elif stage == "reranked" and years and period_range and not any(
         period_range[0] <= (c.get("period") or "") <= period_range[1] for c in chunks
     ):
         span = str(years[0]) if years[0] == years[1] else f"{years[0]}-{years[1]}"
-        note = f"No filings matched {span}; these passages are from other years."
+        year_note = f"No filings matched {span}; these passages are from other years."
+        note = f"{note} {year_note}" if note else year_note
     return chunks, note
 
 
@@ -125,15 +136,90 @@ def _keyword_only(
     return keyword_index.search(query, CANDIDATES_PER_SOURCE)
 
 
+# Cells that belong to the number next to them: "$ | 1,577", "(17 | )", "3.5 | %".
+_SYMBOLS = frozenset({"$", "(", ")", "%", ")%"})
+_FLOAT_INT = re.compile(r"^(-?\d+)\.0$")
+
+
+def clean_table_text(text: str) -> str:
+    """Undo pd.read_html's serialization of a filing table, keeping every value.
+
+    45% of chunks are tables stored as read_html left them: a "0 | 1 | ... | 32"
+    header, every merged cell copied into each column it spans, empty spacer
+    columns. About 75% of their characters are noise, 3,599 of them overflow the
+    8,000-character passage cap, and the model refused on tables whose figures
+    it had been given (Amcor FY2020 net receivables, 2026-10-30).
+
+    Two columns are one logical column only if no row holds two different
+    values in them, so real neighbouring years (0.20 | 0.20) stay apart: their
+    header row differs. Empty cells inside a row are kept to hold alignment.
+    """
+    lines = text.split("\n")
+    header = [c.strip() for c in lines[0].split(" | ")]
+    if len(header) < 2 or header != [str(i) for i in range(len(header))]:
+        return text
+    # read_html stores a merged year header once as "2026" and once as "2026.0".
+    rows = [[_FLOAT_INT.sub(r"\1", c.strip()) for c in line.split(" | ")] for line in lines[1:]]
+    width = max(len(r) for r in rows) if rows else 0
+    rows = [r + [""] * (width - len(r)) for r in rows]
+
+    def value(cell: str) -> str:
+        return "" if cell in _SYMBOLS else cell
+
+    groups: list[list[int]] = []
+    for col in range(width):
+        if not any(r[col] for r in rows):
+            continue  # spacer column
+        if groups and _same_column(rows, groups[-1], col, value):
+            groups[-1].append(col)
+        else:
+            groups.append([col])
+
+    out = []
+    for r in rows:
+        cells = []
+        for group in groups:
+            parts: list[str] = []
+            for col in group:
+                if r[col] and not (parts and r[col] == parts[-1]):
+                    parts.append(r[col])
+            cells.append("".join(parts))
+        while cells and not cells[-1]:
+            cells.pop()
+        if cells:
+            out.append(" | ".join(cells))
+    return "\n".join(out)
+
+
+def _same_column(rows: list[list[str]], group: list[int], col: int, value: Any) -> bool:
+    """Is `col` a copy of (or the $ / % beside) the logical column `group`?
+
+    Never when a row holds two different values. Otherwise only on evidence:
+    one side is symbols only, or some row repeats the same value in both, as
+    a merged cell's copies always do. Blank cells alone prove nothing.
+    """
+    group_vals = [{value(r[g]) for g in group} - {""} for r in rows]
+    col_vals = [value(r[col]) for r in rows]
+    if any(v and gv and gv != {v} for v, gv in zip(col_vals, group_vals)):
+        return False
+    return (
+        not any(col_vals)
+        or not any(group_vals)
+        or any(v and gv == {v} for v, gv in zip(col_vals, group_vals))
+    )
+
+
 def _with_full_text(chunks: list[dict[str, Any]], keyword_index: Any) -> list[dict[str, Any]]:
     """Swap each chunk for its full text from the keyword index.
 
     Dense hits come from Pinecone metadata, which keeps only the first 1,000
     characters. 75% of chunks are longer (3,728 on average), so a figure
-    further down a table never reached the answer.
+    further down a table never reached the answer. Tables are cleaned here,
+    before the reranker and the client see them.
     """
     full = keyword_index.get_by_ids([c["chunk_id"] for c in chunks])
-    return [full.get(c["chunk_id"], c) for c in chunks]
+    hydrated = [full.get(c["chunk_id"], c) for c in chunks]
+    return [{**c, "text": clean_table_text(c.get("text") or "")} for c in hydrated]
 
 
 def format_citation(chunk: dict[str, Any]) -> str:

@@ -67,8 +67,10 @@ def test_compare_result_with_a_noted_entry_is_not_cached():
     assert not _stored({"results": {"A": {"passages": []}, "B": {"passages": [], "note": "n"}}})
 
 
-def test_clean_and_error_results_are_cached():
-    assert _stored({"results": {"A": {"passages": [{"id": "a"}]}, "B": {"error": "not covered"}}})
+def test_clean_results_are_cached_but_not_ones_with_an_error_entry():
+    """An error entry can be a passing SEC outage; caching it would last 24 h."""
+    assert _stored({"results": {"A": {"passages": [{"id": "a"}]}}})
+    assert not _stored({"results": {"A": {"passages": [{"id": "a"}]}, "B": {"error": "SEC down"}}})
 
 
 def test_dependency_failure_is_logged_and_reraised():

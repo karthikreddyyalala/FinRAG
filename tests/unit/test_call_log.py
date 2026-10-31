@@ -4,19 +4,19 @@ from unittest.mock import MagicMock
 from server.observability.call_log import log_call
 
 RESULT = {"results": {
-    "MMM": {"passages": [{"ticker": "MMM"}, {"ticker": "MMM"}]},
-    "AMD": {"error": "not covered"},
+    "MMM": {"results": [{"value": 1}, {"value": 2}, {"metric": "x", "error": "none"}]},
+    "AMD": {"error": "SEC down"},
 }}
 
 
-def test_writes_one_record_with_passage_count_and_tickers(capsys):
+def test_writes_one_record_with_figure_count_and_tickers(capsys):
     dynamodb = MagicMock()
     log_call(dynamodb, "finrag-query-logs", tool="compare_companies",
              arguments={"tickers": ["MMM", "AMD"]}, latency_ms=812, result=RESULT)
 
     item = dynamodb.Table.return_value.put_item.call_args.kwargs["Item"]
     assert item["tool"] == "compare_companies"
-    assert item["n_passages"] == 2
+    assert item["n_figures"] == 2
     assert item["tickers"] == ["MMM"]
     assert item["latency_ms"] == 812
     line = capsys.readouterr().out.strip()
@@ -49,3 +49,11 @@ def test_dynamodb_item_expires_in_90_days_but_cloudwatch_line_does_not(capsys):
     item = dynamodb.Table.return_value.put_item.call_args.kwargs["Item"]
     assert abs(item["expires_at"] - (time.time() + 90 * 24 * 3600)) < 60
     assert "expires_at" not in capsys.readouterr().out
+
+
+def test_search_results_count_passages():
+    dynamodb = MagicMock()
+    log_call(dynamodb, "t", tool="search_sec_filings", arguments={}, latency_ms=1,
+             result={"passages": [{"ticker": "MMM"}, {"ticker": "MMM"}]})
+    item = dynamodb.Table.return_value.put_item.call_args.kwargs["Item"]
+    assert (item["n_passages"], item["n_figures"], item["tickers"]) == (2, 0, ["MMM"])

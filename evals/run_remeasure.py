@@ -60,6 +60,9 @@ def summarize(rows: list[dict], check: bool) -> dict:
     # states_correct_number is crude: it also fires on numbers inside refusals (years etc.)
     out["states_true_number_in_non_refusals"] = sum(
         bool(v) for r, v in pairs if v is not None and not is_refusal(r["answer"]))
+    # Three-way score: a wrong number is worse than a refusal, so neither count stands alone.
+    out["wrong_in_non_refusals"] = sum(
+        v is False for r, v in pairs if not is_refusal(r["answer"]))
     out["states_true_number"] = {"hits": sum(verdicts), "denominator": len(verdicts),
                                  "rate": sum(verdicts) / len(verdicts) if verdicts else 0.0}
     if check:

@@ -61,3 +61,37 @@ def check_rate_limit(dynamodb_resource: Any, now: float | None = None) -> None:
     except Exception as exc:
         print(f"finrag: rate limiter unavailable ({type(exc).__name__}); allowing call",
               flush=True)
+
+
+# About $3 a month of Voyage rerank-2.5 ($0.05 per million tokens); a search uses
+# 10K to 35K tokens. Past it, search ranks by keyword overlap until the UTC day ends.
+VOYAGE_TOKENS_PER_DAY = 2_000_000
+
+
+def spend_voyage_tokens(dynamodb_resource: Any, tokens: int, now: float | None = None) -> bool:
+    """Reserve tokens from today's Voyage budget; False if they would cross it.
+
+    Fails closed, unlike check_rate_limit: a cost cap that cannot be read
+    must not spend. The search still answers, ranked by keyword overlap.
+    """
+    now = time.time() if now is None else now
+    key = f"voyage#{time.strftime('%Y-%m-%d', time.gmtime(now))}"
+    try:
+        dynamodb_resource.Table(TABLE).update_item(
+            Key={"bucket": key},
+            UpdateExpression="SET expires_at = :expires ADD tokens :n",
+            ConditionExpression="attribute_not_exists(tokens) OR tokens <= :room",
+            ExpressionAttributeValues={
+                ":n": tokens, ":room": VOYAGE_TOKENS_PER_DAY - tokens,
+                ":expires": (int(now // 86400) + 2) * 86400,
+            },
+        )
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            print(f"finrag: Voyage budget unavailable ({e}); keyword ranking", flush=True)
+        return False
+    except Exception as exc:
+        print(f"finrag: Voyage budget unavailable ({type(exc).__name__}); keyword ranking",
+              flush=True)
+        return False

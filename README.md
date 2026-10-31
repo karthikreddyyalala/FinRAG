@@ -1,8 +1,13 @@
 # FinRAG MCP
 
-A public MCP server that gives Claude, Cursor or any MCP client cited passages from real SEC filings, plus a tool that checks every figure in the answer against those passages.
+A public MCP server that gives Claude, Cursor or any MCP client exact, cited figures and passages from real SEC filings, plus a tool that checks every figure in the answer.
 
-Ask a chatbot for a company's revenue and it may give you stale data or a number it made up. FinRAG searches 10-K, 10-Q and 8-K filings from SEC EDGAR and returns the five best passages, each with a citation. Your own model writes the answer from them, then calls `verify_figures`, which lists every dollar amount, percentage and comma-grouped number it can't find in the cited passages. If nothing matches, the tools say so instead of guessing.
+Ask a chatbot for a company's revenue and it may give you stale data or a number it made up. FinRAG answers from the filings themselves, two ways:
+
+- **Exact figures for any US-listed company.** `get_company_financials` reads the XBRL data every 10-K and 10-Q carries, so "Netflix revenue FY2023" returns $33,723.3 million with its period, filing, link and citation. It handles the traps: comparative years inside a 10-K, amendments, a fourth quarter that no filing reports on its own, and year-to-date cash flows.
+- **Cited passages for everything else.** `search_sec_filings` searches the full text of 10-K, 10-Q and 8-K filings for 71 large companies (why margins fell, what risks management names) and returns the five best passages, ranked by a neural reranker.
+
+Your own model writes the answer, then calls `verify_figures`, which lists every figure it can't find in the cited passages and figures. If the data isn't there, the tools say so instead of guessing.
 
 **Live site:** [dashboard-weld-nine-28.vercel.app](https://dashboard-weld-nine-28.vercel.app)
 
@@ -28,7 +33,7 @@ https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp
 
 **Limits:**
 - Everyone shares 30 tool calls a minute and 1,000 a day.
-- It covers 71 companies. `list_covered_companies` shows the exact forms and years.
+- Figures cover any company with XBRL filings at SEC (fiscal years since about 2009). Passage search covers 71 companies; `list_covered_companies` shows the exact forms and years.
 - It returns evidence only. Your client's model writes the answer.
 
 [WALKTHROUGH.md](WALKTHROUGH.md) has a step-by-step test of every tool.
@@ -38,11 +43,11 @@ https://ecvsxkeqdpyj5hkal7wplm2b4q0gacfh.lambda-url.us-east-1.on.aws/mcp
 | Tool | What it returns |
 |---|---|
 | `search_sec_filings(question, ticker?, fiscal_year?)` | The 5 best passages for a free-text question, with citations |
-| `get_company_financials(ticker, metric, period)` | Passages for one company, one metric, one period |
-| `compare_companies(tickers, metric, period)` | Passages per company, 2 to 5 tickers, searched in parallel |
+| `get_company_financials(ticker, metrics, period?)` | Exact reported figures for any US-listed company (1 to 10 metrics, e.g. revenue, net income, capex, total assets) for a fiscal year or quarter, with unit, period dates, source filing, link and citation. Q4 is labelled when derived; an unknown metric returns the company's own matching line items |
+| `compare_companies(tickers, metrics, period?)` | The same figures for 2 to 5 companies side by side |
 | `get_latest_filing(ticker, filing_type?)` | The newest filing of a form (default 10-K) straight from EDGAR, for any company SEC lists, with a link and whether it's in the corpus |
 | `list_covered_companies()` | Every company, form and date range that can be searched |
-| `verify_figures(answer, passage_ids)` | Each dollar amount, percentage and comma-grouped number in the answer, sorted into `grounded` or `not_found`, plus any `unknown_ids` |
+| `verify_figures(answer, passage_ids)` | Each dollar amount, percentage and comma-grouped number in the answer, sorted into `grounded` or `not_found`, plus any `unknown_ids`. Takes passage ids and figure ids (`xbrl:...`); against a figure, units convert and rounding to the precision written is accepted ("$33.7 billion") |
 
 ## How it works
 
@@ -54,7 +59,12 @@ sequenceDiagram
     participant E as evidence.py
     participant BM as SQLite FTS5
     participant PC as Pinecone
+    participant SEC as SEC XBRL API
 
+    C->>T: get_company_financials(ticker, metrics, period)
+    T->>SEC: company facts (cached per instance)
+    SEC-->>T: every tagged value the company filed
+    T-->>C: exact figures with period, filing, link, citation
     C->>T: search_sec_filings(question)
     T->>T: shared rate limit, then 24 h cache
     T->>E: find_passages
@@ -68,7 +78,7 @@ sequenceDiagram
     E->>E: Voyage rerank-2.5, keep top 5
     T-->>C: passages with citations
     C->>C: client's model writes the answer
-    C->>T: verify_figures(answer, passage_ids)
+    C->>T: verify_figures(answer, passage and figure ids)
     T-->>C: grounded / not_found
 ```
 
@@ -76,11 +86,32 @@ sequenceDiagram
 - **No chat model on the server.** Query embeddings use OpenAI `text-embedding-3-small`. If the embedding call fails, search falls back to keyword-only and the result says so.
 - **Full text before ranking.** Pinecone metadata holds only the first 1,000 characters of a chunk. 75% of chunks are longer than that (the average chunk is 3,728 characters), so every hit is swapped for its full text from the keyword index before reranking. Passages sent to the client are capped at 8,000 characters and marked `[... truncated]` past that.
 - **Reranker:** Voyage `rerank-2.5`, a hosted cross-encoder, scores all candidates (up to 40 per search source) against the question and keeps 5. A question that names a fiscal year but no quarter prefers the 10-K over 10-Qs. If Voyage is unreachable, a word-overlap scorer takes over and the search still returns passages. Until 2026-10-30 that word-overlap scorer was all production ever ran: the Lambda never installed the local cross-encoder the code was written for.
-- **Verifier:** compares parsed magnitudes, not raw text. A plain substring test would treat a made-up "$1,234" as grounded whenever the source contains "$1,234.56". It does not convert units, so "$1.58 billion" is not grounded by "1,577" (millions), and plain digits like "1577" are not checked.
+- **Tables are rebuilt before ranking.** 45% of chunks are tables stored as `pandas.read_html` left them: a `0 | 1 | ... | 32` header, merged cells copied into every column they span, empty spacer columns. They are cleaned at serve time to about a quarter of their size without losing a number, so the reranker and the client's model can read which figure belongs to which year.
+- **Figures from XBRL.** `server/retrieval/xbrl_facts.py` reads SEC's company facts (free, no key) and picks the value a filing reports for its own period: a 10-K's comparative years and later amendments are skipped, a fourth quarter is the 10-K's tagged figure or full year minus nine months (labelled), and a 10-Q cash flow figure says when it is year-to-date. Names like "capex" or "net sales" map to the XBRL concepts companies use; an unknown name returns the company's own line items that have a value for that period. Total liabilities is derived when a company tags none.
+- **Verifier:** compares parsed magnitudes, not raw text. Against passages it does not convert units, so "$1.58 billion" is not grounded by "1,577" (millions); a plain substring test would also treat a made-up "$1,234" as grounded whenever the source contains "$1,234.56". Against figure ids it converts units and accepts rounding to the precision written. Computed ratios are never grounded; the answer should show their inputs.
 
 The full sequence, with every component, is in [diagrams/query-sequence.mmd](diagrams/query-sequence.mmd).
 
 ## Results
+
+### End to end, the way a user meets it (2026-10-30)
+
+A model calls the real MCP tools in a loop, as Claude or Cursor would: same tool schemas, descriptions, errors and server instructions as production, live Pinecone, Voyage and SEC. gpt-4o-mini plays the client (temperature 0). Each answer is scored right, wrong or refused against the answer key. Script: `evals/run_agentic.py`. Results: `evals/results/agentic_*.json`.
+
+| | Search only | Search + exact figures (live) |
+|---|---|---|
+| FinanceBench right (of 110 with a numeric answer) | 67 | **92** |
+| FinanceBench wrong | 21 | **14** |
+| FinanceBench refused | 22 | **4** |
+| Right when it answers | 76% | **87%** |
+| Custom set right / wrong / refused (of 48) | 13 / 32 / 3 | **39 / 7 / 2** |
+| Tool calls per question | 5.8 | 3.3 |
+| Eval cost | $1.44 | $0.35 |
+
+- **Exact figures are what moved it.** Searching passages, the model has to find one table row among 171,790 chunks and read it from a filing table. With `get_company_financials` it asks for the tagged value and gets it, so it answers more, answers right more often, and calls fewer tools.
+- **The custom set shows why.** Most of its questions ask for a fourth quarter, which no filing reports on its own. Search-only answers mostly reported the full year as the quarter (32 wrong); the figures tool derives Q4 and says how.
+- **What is left:** 14 wrong answers are mostly judgment questions scored by a number in a sentence ("is Verizon capital intensive?"), the model's own formula choices (a quick ratio without short-term investments), and segment questions that live in passages. 4 refusals: bank segment tables the model could not find, and one adjusted (non-GAAP) EBITDA, which XBRL does not carry.
+- The search-only run hit Voyage's rate limit on 36 of about 1,100 searches (4 parallel workers), which fell back to word-overlap ranking; the final run had none.
 
 ### Live server (2026-10-30)
 
@@ -88,11 +119,12 @@ Measured against the deployed URL by [scripts/live_check.py](scripts/live_check.
 
 | | |
 |---|---|
-| Search, warm, cache miss | 1.08 s median, 1.25 s max (10 questions, Voyage reranker) |
-| Search, cache hit | 0.37 s median |
+| Search, warm, cache miss | 0.98 s median, 1.43 s max (10 questions, Voyage reranker) |
+| Figures, warm | 2.8 to 3.7 s the first time a company is asked for (its SEC data is fetched), 0.28 s after |
+| Search, cache hit | 0.38 s median |
 | First call after a deploy (cold) | 14.9 s, mostly loading the 964 MB index |
 | `initialize` / `tools/list` | 0.30 s / 0.24 s (neither loads the index) |
-| Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens ($0 within the first 200M free), plus 2 GB Lambda for about 1 s and one embedding |
+| Cost per search (estimate) | about $0.0017: about 32,600 Voyage rerank tokens at $0.05 per million, plus 2 GB Lambda for about 1 s and one embedding. Voyage spend is capped at 2M tokens a day (about $3 a month); past it, search ranks by keyword overlap and says so. A figures call costs only the Lambda time |
 
 The old pipeline averaged 24.1 s per question, because it spent most of that time waiting on throttled model calls.
 
@@ -124,20 +156,25 @@ The 10-K preference alone moved evidence from 13.4% to 22.0%. More candidates on
 
 ### Answer quality on the new server (2026-10-30)
 
-Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py --tag m3`. Results: `evals/results/remeasure_2026-10-30.json` (word-overlap) and `evals/results/remeasure_m3.json` (Voyage).
+Same 150 FinanceBench questions, same retrieval code and index as the live server. gpt-4o-mini plays the client and writes the answers (temperature 0, recorded on every row). The September answers were re-scored with the same code. Script: `evals/run_remeasure.py --tag <name>`. Results: `evals/results/remeasure_*.json`.
 
-| FinanceBench (150) | September | Word-overlap rerank | Voyage rerank (live) |
-|---|---|---|---|
-| Refused to answer | 121 | 99 | 55 |
-| Stated the right number, among answered questions (of 110 with a numeric answer) | 15 | 25 | 49 |
-| Answers whose every figure is in the retrieved passages | not measured | 145 (96.7%) | 126 (84%) |
+| FinanceBench | September | Word-overlap rerank | Voyage rerank | Voyage + clean tables (live) |
+|---|---|---|---|---|
+| Refused to answer (of 150) | 121 | 99 | 55 | 61 |
+| Right number (of 110 with a numeric answer) | 16 | 26 | 54 | 53 |
+| Wrong number (of 110) | 4 | 9 | 14 | 9 |
+| Right when it answers | 80% | 74% | 79% | 85% |
+| Answers whose every figure is in the passages | not measured | 96.7% | 84% | 85.3% |
+
+This is the one-shot test: one search, five passages, one answer. It isolates retrieval; the agent test above is what a user sees.
 
 How to read these:
 
-- **Better ranking roughly halved refusals and doubled correct answers.** It still refuses 55 of 150. Most remaining refusals are ratio questions (working capital, days payable) that need several statement lines in the same 5 passages.
-- **The figure check fell because more answers compute something.** 23 of the 95 answers contain a figure not found verbatim: mostly ratios the model calculated ("2.1%") or unit conversions ("$8.738 billion" for 8,738 million). `verify_figures` does not convert units or check arithmetic, by design, so it flags these for the client to show.
-- **"Stated the right number" is an automated check** (within 2% of the ground truth) and is not hand-graded. An earlier version counted stray numbers inside refusals as hits; that inflated the September figure to 52, which is why I now count answered questions only.
-- **The 48 hand-verified custom questions:** refusals fell from 42 to 18 with the Voyage reranker. The automated number check matches only 1 of the 48, so whether those answers are right needs hand grading.
+- **Better ranking roughly halved refusals and doubled correct answers.** It also answered more questions wrongly, because it answered more questions.
+- **Clean tables traded 6 refusals for 5 fewer wrong answers.** 17 of the 18 answers that became refusals had been wrong, most often a full-year figure reported as a quarter ("Amazon Q4 2025 revenue $716,924 million", which is the full year; the quarter was $213,386 million). With readable tables the model sees "Year Ended December 31" and declines instead. A wrong figure is worse than a refusal in finance, so this shipped even though refusals went up.
+- **So refusals alone are the wrong scoreboard.** Every run is scored three ways: right, wrong, refused.
+- **"Right number" is an automated check** (within 2% of the ground truth, never counted inside a refusal) and is not hand-graded. Until 2026-10-30 it also marked exact answers wrong whenever they said "million" or "billion", because the answer keys omit the unit ("$94036.00" for USD millions). Every number on this page is re-scored with the fixed check.
+- **The 48 hand-verified custom questions** (right / wrong / refused): word-overlap 3/3/42, Voyage 13/17/18, clean tables 12/7/29. Most ask for a fourth quarter, which no filing reports on its own; the figures tool fixes that (39/7/2 above).
 - **ragas was not re-run.** Its September scores are below.
 
 ### Answer quality (September 2026, before this server)
@@ -215,7 +252,7 @@ You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 o
    aws ssm put-parameter --region us-east-1 --name /finrag/pinecone-api-key --type SecureString --value <your-pinecone-key>
    aws ssm put-parameter --region us-east-1 --name /finrag/voyage-api-key --type SecureString --value <your-voyage-key>
    ```
-   All three are required: a Lambda fails its cold start if one is missing. Voyage needs a payment method on file; without one it allows 10K tokens a minute and a single search uses about 33K. The first 200M tokens are free.
+   All three are required: a Lambda fails its cold start if one is missing. Voyage needs a payment method on file; without one it allows 10K tokens a minute and a single search uses about 33K. Voyage bills $0.05 per million tokens; `VOYAGE_TOKENS_PER_DAY` in `server/rate_limit.py` caps the daily spend.
 5. Deploy. `cdk.json` already points at the app, and `bootstrap` is needed once per account and region:
 
    ```bash
@@ -235,8 +272,10 @@ You need an AWS account with the CLI configured, Node 20 or newer, Python 3.12 o
 
 ## Status
 
-Done: ingestion, hybrid retrieval with full-text hydration, neural reranking (Voyage), figure verifier, six evidence tools, public deployment with rate limits, caching, logging, health checks and alarms, weekly refresh, eval harness, public site.
+Done: ingestion, hybrid retrieval with full-text hydration, neural reranking (Voyage), clean table text, exact XBRL figures for any US-listed company, figure verifier, six tools, public deployment with rate limits, caching, logging, health checks and alarms, weekly refresh, one-shot and agent eval harnesses, public site.
 
-Next: XBRL facts for any public company, multi-line retrieval for ratio questions, hand-graded answers for the custom set.
+Next: segment figures (XBRL dimensions), hand-graded answers for judgment questions, an eval with Claude as the client.
+
+What changed, what was broken before, and what each change measured: [CHANGELOG.md](CHANGELOG.md).
 
 Other diagrams are in `diagrams/`. `ingestion-sequence.mmd` is current; `week1-sequence.mmd` and `week3-eval-sequence.mmd` show earlier designs, kept as history.

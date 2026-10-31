@@ -15,6 +15,7 @@ from server.mcp_tools.common import (
     require_covered,
     run_tool,
 )
+from server.rate_limit import spend_voyage_tokens
 from server.retrieval.evidence import find_passages
 
 MAX_QUESTION_CHARS = 500
@@ -51,9 +52,13 @@ def register_search_filings_tool(mcp: MCPServer, get_deps: GetDeps) -> None:
             if symbol:
                 require_covered(symbol, deps.keyword_index)
             years = (fiscal_year, fiscal_year) if fiscal_year else None
+            budget = None
+            if deps.dynamodb is not None:
+                def budget(tokens):
+                    return spend_voyage_tokens(deps.dynamodb, tokens)
             return passages_result(*find_passages(
                 question, deps.pinecone_index, deps.keyword_index, deps.embed_fn,
-                ticker=symbol, years=years,
+                ticker=symbol, years=years, voyage_budget=budget,
             ))
 
         arguments = {"question": question, "ticker": symbol, "fiscal_year": fiscal_year}

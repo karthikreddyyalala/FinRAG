@@ -69,7 +69,9 @@ def _cacheable(result: dict[str, Any]) -> bool:
         return False
     entries = result.get("results")
     if isinstance(entries, dict):
-        return not any(isinstance(e, dict) and e.get("note") for e in entries.values())
+        # An error entry may be a passing SEC outage; never keep it for 24 h.
+        return not any(isinstance(e, dict) and (e.get("note") or e.get("error"))
+                       for e in entries.values())
     return True
 
 

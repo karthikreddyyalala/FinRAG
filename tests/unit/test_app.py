@@ -90,6 +90,8 @@ def test_health_check_runs_one_real_retrieval():
         assert main.handler({"finrag_health_check": True}, MagicMock()) == {
             "ok": True, "passages": 1}
     assert fp.call_args.kwargs["ticker"] == "MMM"
+    # Every 5 minutes, around the clock: reranking it cost ~9.5M Voyage tokens a day.
+    assert fp.call_args.kwargs["stage"] == "candidates"
 
 
 @pytest.mark.parametrize("found", [([], None), ([{"chunk_id": "a1"}], "Keyword search only")])
@@ -117,7 +119,7 @@ def test_instructions_state_the_real_company_count_and_citation_format():
     from server.retrieval.evidence import format_citation
 
     corpus = json.loads((Path(__file__).parents[2] / "dashboard/data/corpus.json").read_text())
-    assert f"{corpus['companies']} large US-listed companies" in INSTRUCTIONS
+    assert f"filings of {corpus['companies']} large companies" in " ".join(INSTRUCTIONS.split())
     # EDGAR filings are HTML, so no chunk has a page number and no citation shows one.
     example = format_citation({"ticker": "MMM", "filing_type": "10-K",
                                "period": "2019-02-07", "page_number": None})

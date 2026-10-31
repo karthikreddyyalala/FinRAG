@@ -67,8 +67,9 @@ Ask these one at a time:
 | Tool | Try | Expect |
 |---|---|---|
 | `search_sec_filings` | `{"question": "3M capital expenditure", "ticker": "MMM", "fiscal_year": 2018}` | 5 passages from the MMM 10-K filed 2019-02-07 |
-| `get_company_financials` | `{"ticker": "MMM", "metric": "capital expenditure", "period": "FY2018"}` | The first passage holds the PP&E line with `(1,577)` |
-| `compare_companies` | `{"tickers": ["TSLA", "F"], "metric": "revenue", "period": "2024"}` | Passages for each ticker, including `[TSLA 10-K 2025-01-30]` |
+| `get_company_financials` | `{"ticker": "MMM", "metrics": ["capital expenditure"], "period": "FY2018"}` | `$1,577.0 million`, `[MMM 10-K 2019-02-07]`, a sec.gov link and the id `xbrl:MMM:us-gaap:PaymentsToAcquirePropertyPlantAndEquipment:FY2018` |
+| `get_company_financials` | `{"ticker": "AMZN", "metrics": ["revenue"], "period": "Q4 2025"}` | `$213,386.0 million` with `derived` explaining full year minus nine months |
+| `compare_companies` | `{"tickers": ["TSLA", "F"], "metrics": ["revenue"], "period": "FY2024"}` | Tesla `$97,690.0 million`, Ford `$184,992.0 million`, each with its 10-K citation |
 | `get_latest_filing` | `{"ticker": "AAPL", "filing_type": "10-Q"}` | The newest Apple 10-Q from EDGAR (on 2026-10-30: filed 2026-07-31), an `sec_url`, and `in_corpus: true` |
 | `list_covered_companies` | `{}` | 71 companies, each with forms and first and last filing dates |
 | `verify_figures` | `{"answer": "3M spent $1,577 million on capex in 2018.", "passage_ids": [<ids from the first search>]}` | `grounded: ["$1,577 million"]`, `not_found: []`, `unknown_ids: []`, `checked_against: 5` |
@@ -86,7 +87,8 @@ Each of these should fail cleanly, with a message that tells the client what to 
 | `compare_companies` with 6 tickers | Error: `Compare 2 to 5 companies.` |
 | `search_sec_filings` for Apple with `"fiscal_year": 2012` | Passages from other years, plus the note `No filings matched 2012; these passages are from other years.` |
 | `verify_figures` with "$9,999 million" against the 3M passages | `not_found: ["$9,999 million"]` |
-| `verify_figures` with "$1.58 billion" against the 3M passages | `not_found: ["$1.58 billion"]`: units are not converted, so write `$1,577 million` |
+| `verify_figures` with "$1.58 billion" against the 3M passages | `not_found: ["$1.58 billion"]`: against passages, units are not converted, so write `$1,577 million` |
+| `verify_figures` with "$1.58 billion" against the 3M capex figure id | `grounded: ["$1.58 billion"]`: against a figure, units convert and rounding to the precision written is accepted |
 
 ## 6. Fixed weakness worth checking
 

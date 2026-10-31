@@ -7,102 +7,38 @@
       "TSLA",
       "F"
     ],
-    "metric": "revenue",
-    "period": "2024"
+    "metrics": [
+      "revenue"
+    ],
+    "period": "FY2024"
   },
-  "tool_ms": 408,
+  "tool_ms": 972,
   "passages": [
     {
-      "id": "f79a1886f4d1f8690f68a983967a1e5a",
-      "citation": "[F 10-K 2025-02-06]",
-      "ticker": "F",
-      "form": "10-K",
-      "filed": "2025-02-06",
-      "excerpt": "... 4217 | 4431 | Financing income | — | 7819 | Insurance income | — | 146 | Total revenues | $ | 172706 | $ | 12286 | $ | 184992"
-    },
-    {
-      "id": "ee3ef3946e075008c4f5e64618ff5930",
-      "citation": "[F 10-K 2025-02-06]",
-      "ticker": "F",
-      "form": "10-K",
-      "filed": "2025-02-06",
-      "excerpt": "2022 | 2022.0 | 2022 | 2022.0 | 2022 | Company excluding Ford Credit | Ford Credit | Consolidated | Vehicles, parts, and accessories | $ | 144471 | $ | — | $ | 144471 | Used vehicles | 1719 | — | 1719 | Services and other revenue (a) | 2688 | 100 | 2788 | Revenues from sales and services | 148878 | "
-    },
-    {
-      "id": "81ea6fc131925b9ef8b2bbac00816058",
-      "citation": "[F 10-K 2025-02-06]",
-      "ticker": "F",
-      "form": "10-K",
-      "filed": "2025-02-06",
-      "excerpt": "2023 | 2023.0 | 2023 | 2023.0 | 2023 | Company excluding Ford Credit | Ford Credit | Consolidated | Vehicles, parts, and accessories | $ | 161052 | $ | — | $ | 161052 | Used vehicles | 1873 | — | 1873 | Services and other revenue (a) | 2797 | 105 | 2902 | Revenues from sales and services | 165722 | "
-    },
-    {
-      "id": "761a80d554cacc82f233bd1f40d61985",
-      "citation": "[F 10-Q 2025-07-31]",
-      "ticker": "F",
-      "form": "10-Q",
-      "filed": "2025-07-31",
-      "excerpt": "Includes Ford and Lincoln brand and JMC brand vehicles produced and sold in China by our unconsolidated affiliates (about 105,000 units in Q2 2024 and 97,000 units in Q2 2025). Change in EBIT by Causal Factor (in millions) In the second quarter of 2025, Ford Blue’s wholesales decreased 6% from a yea"
-    },
-    {
-      "id": "54ba015d6b151b1401effba2d2210c73",
-      "citation": "[F 10-Q 2025-07-31]",
-      "ticker": "F",
-      "form": "10-Q",
-      "filed": "2025-07-31",
-      "excerpt": "Ford Blue | Ford Model e | Ford Pro | Ford Credit | Unallocated Amounts and Eliminations (a) | Total | First Half 2024 | External revenues | $ | 48424 | $ | 1266 | $ | 35007 | $ | 5884 | $ | 4 | $ | 90585 | Intersegment revenues (b) | 23047 | 133 | — | (23,180) | — | Total revenues | $ | 71471 | $ |"
-    },
-    {
-      "id": "14d5e34a2dc6d914e96390a13d4a59e0",
+      "id": "xbrl:TSLA:us-gaap:Revenues:FY2024",
       "citation": "[TSLA 10-K 2025-01-30]",
       "ticker": "TSLA",
       "form": "10-K",
       "filed": "2025-01-30",
-      "excerpt": "Year Ended December 31, | 2024 | 2023 | 2022 | Automotive sales | $ | 72480 | $ | 78509 | $ | 67210 | Automotive regulatory credits | 2763 | 1790 | 1776 | Energy generation and storage sales | 9564 | 5515 | 3376 | Services and other | 10534 | 8319 | 6091 | Total revenues from sales and services | 95"
+      "excerpt": "TSLA Revenues FY 2024 (period ended 2024-12-31): $97,690.0 million"
     },
     {
-      "id": "73a9403da77cbf157edc3e6aa33cc0e3",
-      "citation": "[TSLA 10-K 2025-01-30]",
-      "ticker": "TSLA",
+      "id": "xbrl:F:us-gaap:Revenues:FY2024",
+      "citation": "[F 10-K 2025-02-06]",
+      "ticker": "F",
       "form": "10-K",
-      "filed": "2025-01-30",
-      "excerpt": "Total automotive & services and other segment revenue Energy generation and storage segment revenue Automotive sales revenue includes revenues related to cash and financing deliveries of new vehicles, including access to our FSD (Supervised) features and their ongoing maintenance, internet connectiv"
-    },
-    {
-      "id": "ddb8bdf251f4b709cca9783248923e3c",
-      "citation": "[TSLA 10-K 2025-01-30]",
-      "ticker": "TSLA",
-      "form": "10-K",
-      "filed": "2025-01-30",
-      "excerpt": "In 2024, we recognized total revenues of $97.69 billion, representing an increase of $917 million compared to the prior year. In 2024, our net income attributable to common stockholders was $7.09 billion, representing a decrease of $7.91 billion compared to the prior year, primarily due to the impac"
-    },
-    {
-      "id": "5d4e21655f1884db7de9ea417eba8c7f",
-      "citation": "[TSLA 10-Q 2025-10-23]",
-      "ticker": "TSLA",
-      "form": "10-Q",
-      "filed": "2025-10-23",
-      "excerpt": "Net increase in cash and cash equivalents and restricted cash Cash and cash equivalents and restricted cash, beginning of period Cash and cash equivalents and restricted cash, end of period Supplemental Non-Cash Investing and Financing Activities Acquisitions of property and equipment included in li"
-    },
-    {
-      "id": "0f5c9f5c2c34d11209564f336a7d98ab",
-      "citation": "[TSLA 10-Q 2025-07-24]",
-      "ticker": "TSLA",
-      "form": "10-Q",
-      "filed": "2025-07-24",
-      "excerpt": "Net decrease in cash and cash equivalents and restricted cash Cash and cash equivalents and restricted cash, beginning of period Cash and cash equivalents and restricted cash, end of period Supplemental Non-Cash Investing and Financing Activities Acquisitions of property and equipment included in li"
+      "filed": "2025-02-06",
+      "excerpt": "F Revenues FY 2024 (period ended 2024-12-31): $184,992.0 million"
     }
   ],
-  "answer": "In 2024, Tesla's total revenues were $97.69 billion [TSLA 10-K 2025-01-30], while Ford's total revenues were $184,992 million, which is equivalent to $184.99 billion [F 10-K 2025-02-06]. Therefore, Ford's total revenue was higher than Tesla's in 2024.",
+  "answer": "Tesla's total revenue in 2024 was $97,690.0 million [TSLA 10-K 2025-01-30], while Ford's total revenue in the same year was $184,992.0 million [F 10-K 2025-02-06].",
   "model": "gpt-4o-mini",
   "verify": {
     "grounded": [
-      "$97.69 billion",
-      "$184,992 million"
+      "$97,690.0 million",
+      "$184,992.0 million"
     ],
-    "not_found": [
-      "$184.99 billion"
-    ]
+    "not_found": []
   },
-  "recorded_at": "2026-10-30T14:14:20Z"
+  "recorded_at": "2026-10-30T20:48:44Z"
 }

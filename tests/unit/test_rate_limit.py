@@ -52,3 +52,21 @@ def test_a_dynamodb_fault_lets_the_call_through():
     broken = MagicMock()
     broken.Table.return_value.update_item.side_effect = RuntimeError("table down")
     check_rate_limit(broken, now=NOW)  # must not raise
+
+
+def test_voyage_budget_allows_spend_until_the_daily_cap(dynamodb):
+    from server.rate_limit import VOYAGE_TOKENS_PER_DAY, spend_voyage_tokens
+
+    assert spend_voyage_tokens(dynamodb, VOYAGE_TOKENS_PER_DAY - 10, now=NOW)
+    assert not spend_voyage_tokens(dynamodb, 100, now=NOW)  # would cross the cap
+    assert spend_voyage_tokens(dynamodb, 10, now=NOW)       # exactly fills it
+    assert spend_voyage_tokens(dynamodb, 100, now=NOW + 86_400)  # next UTC day
+
+
+def test_voyage_budget_fails_closed():
+    """A cost cap that cannot be read must not spend: unlike the call limit, it fails closed."""
+    from server.rate_limit import spend_voyage_tokens
+
+    broken = MagicMock()
+    broken.Table.return_value.update_item.side_effect = RuntimeError("dynamodb down")
+    assert not spend_voyage_tokens(broken, 100, now=NOW)

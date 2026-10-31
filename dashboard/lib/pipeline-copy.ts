@@ -6,7 +6,7 @@ export const PIPELINE_COPY = [
     id: "pick",
     rail: "Pick tool",
     stage: "Claude picks a tool",
-    technical: "The client's model reads the six tool descriptions over MCP streamable HTTP and calls one, for example search_sec_filings. No sign-in is involved.",
+    technical: "The client's model reads the six tool descriptions over MCP streamable HTTP and calls one: get_company_financials for a reported figure (exact XBRL values for any company), search_sec_filings for anything written in a filing. No sign-in is involved.",
     simple: "Your AI assistant decides which of the six tools fits your question.",
   },
   {
