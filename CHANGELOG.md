@@ -2,6 +2,14 @@
 
 What changed, what was broken before, how it was found, and what it measured. Newest first. Every number here was measured on the same index on the same day as its "before", unless it says otherwise. Raw results are in `evals/results/` (gitignored, kept locally); the scripts that produce them are committed.
 
+## 2026-10-31: README rewritten for people, launch video re-cut
+
+**What was wrong.** The README had grown to 281 lines: every past measurement, superseded tables and long caveats sat above the parts a visitor needs (what it is, how to connect, what it scores). The launch video was recorded the morning before the figures deploy, so it showed passage search for 3M capex, Tesla vs Ford as passages, and 10.2% to 13.4% evidence in top 5 as the proof.
+
+**What changed.**
+- README cut to about 120 lines: what it is, connect, tools, how it works, one results table (the agent eval), testing, run your own, limits. The history stays here in the changelog.
+- Video v3, same timeline and soundtrack: 3M capex from `get_company_financials` (exact XBRL figure, 0.91 s) grounded by `verify_figures`, $9,999 million NOT FOUND against that figure, Tesla vs Ford as exact figures, an XBRL branch on the pipeline board, and the proof beat now shows 45.7% evidence in top 5 and 92 of 110 right (up from 67). Every value on screen is a live call from 2026-10-31 or a README number.
+
 ## 2026-10-30: Voyage spend capped, health check stopped reranking (PR #21)
 
 **What was broken.** Voyage spend passed the $2 budget alert on the day the reranker shipped. The evals were planned on the assumption that the first 200M tokens were free; they were billed at $0.05 per million, and about 40M tokens of evals cost about $2. Reading the code for a fix found a second leak: the health check runs a real search every 5 minutes, and since the reranker shipped each one called Voyage, about 9.5M tokens a day, or roughly $14 a month with no visitors at all. A public endpoint with no cap could also cost about $1.60 a day at the shared limit of 1,000 calls.
